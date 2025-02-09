@@ -1,33 +1,30 @@
 package main
 
-import "net/mail"
-
-type UserResponse struct {
-	ID   int          `json:"id"`
-	Name string       `json:"name"`
-	Role string       `json:"role"`
-	Mail mail.Address `json:"mail"`
+type User struct {
+	ID       int
+	Role     Role
+	Name     string
+	Mail     string
+	Password string
 }
 
-func GenerateDummyUsers() []UserResponse {
-	return []UserResponse{
-		{
-			ID:   1,
-			Name: "Alice",
-			Role: "admin",
-			Mail: mail.Address{
-				Name:    "Alice",
-				Address: "alice@mail.com",
-			},
-		},
-		{
-			ID:   2,
-			Name: "Bob",
-			Role: "student",
-			Mail: mail.Address{
-				Name:    "Bob",
-				Address: "bob@mail.com",
-			},
-		},
-	}
+type Role string
+
+const (
+	Admin     Role = "admin"
+	Professor Role = "professor"
+	Student   Role = "student"
+)
+
+type UserResponse struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+	Role string `json:"role"`
+	Mail string `json:"mail"`
+}
+
+type CreateUserRequest struct {
+	Name     string `json:"name"`
+	Mail     string `json:"mail"`
+	Password string `json:"password"`
 }
