@@ -1,7 +1,7 @@
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
-import { Button } from "@/components/ui/button"
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -9,27 +9,31 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-
-// Define the form schema for listing all users of a given subject
-const listAllUsersOfSubjectFormSchema = z.object({
-  subjectId: z.string().min(1, {
-    message: "Subject ID must be at least 1 character.",
-  }),
-})
+} from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
+import { useTranslation } from 'react-i18next'
 
 const ListAllUsersOfSubjectForm = () => {
+  const { t } = useTranslation()
+
+  // Define the form schema
+  const listAllUsersOfSubjectFormSchema = z.object({
+    subjectId: z
+      .string()
+      .nonempty(t('Subject ID must be at least 1 character')),
+  })
   // Define the form
   const form = useForm<z.infer<typeof listAllUsersOfSubjectFormSchema>>({
     resolver: zodResolver(listAllUsersOfSubjectFormSchema),
     defaultValues: {
-      subjectId: "",
+      subjectId: '',
     },
   })
 
   // Define the submit handler for listing all users of a given subject
-  async function onSubmit(values: z.infer<typeof listAllUsersOfSubjectFormSchema>) {
+  async function onSubmit(
+    values: z.infer<typeof listAllUsersOfSubjectFormSchema>
+  ) {
     try {
       const response = await fetch(`/subjects/${values.subjectId}/users`, {
         method: 'GET',
@@ -48,8 +52,10 @@ const ListAllUsersOfSubjectForm = () => {
   }
 
   return (
-    <div className="bg-card p-8 rounded shadow-md w-full max-w-md">
-      <h1 className="text-2xl font-bold mb-6 text-card-foreground">List All Users of a Given Subject</h1>
+    <div className="w-full max-w-md rounded bg-card p-8 shadow-md">
+      <h1 className="mb-6 text-2xl font-bold text-card-foreground">
+        {t('List all users of a subject')}
+      </h1>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <FormField
@@ -57,19 +63,19 @@ const ListAllUsersOfSubjectForm = () => {
             name="subjectId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Subject ID</FormLabel>
+                <FormLabel>{t('Subject ID')}</FormLabel>
                 <FormControl>
-                  <Input placeholder="Subject ID" {...field} />
+                  <Input placeholder={t('Subject ID')} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-          <Button type="submit">List Users</Button>
+          <Button type="submit">{t('List Subjects')}</Button>
         </form>
       </Form>
     </div>
   )
 }
 
-export default ListAllUsersOfSubjectForm;
+export default ListAllUsersOfSubjectForm

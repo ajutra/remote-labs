@@ -1,7 +1,7 @@
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
-import { Button } from "@/components/ui/button"
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -10,26 +10,24 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-
-// Define the form schema for validating user credentials
-const validateUserFormSchema = z.object({
-  mail: z.string().email({
-    message: "Invalid email address.",
-  }),
-  password: z.string().min(6, {
-    message: "Password must be at least 6 characters.",
-  }),
-})
+} from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
+import { useTranslation } from 'react-i18next'
 
 const ValidateUserForm = () => {
+  const { t } = useTranslation()
+
+  // Define the form schema
+  const validateUserFormSchema = z.object({
+    mail: z.string().email(t('Invalid email address.')),
+    password: z.string().min(8, t('Password must be at least 6 characters.')),
+  })
   // Define the form
   const form = useForm<z.infer<typeof validateUserFormSchema>>({
     resolver: zodResolver(validateUserFormSchema),
     defaultValues: {
-      mail: "",
-      password: "",
+      mail: '',
+      password: '',
     },
   })
 
@@ -54,8 +52,10 @@ const ValidateUserForm = () => {
   }
 
   return (
-    <div className="bg-card p-8 rounded shadow-md w-full max-w-md">
-      <h1 className="text-2xl font-bold mb-6 text-card-foreground">Validate User Credentials</h1>
+    <div className="w-full max-w-md rounded bg-card p-8 shadow-md">
+      <h1 className="mb-6 text-2xl font-bold text-card-foreground">
+        {t('Validate User Credentials')}
+      </h1>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <FormField
@@ -63,12 +63,15 @@ const ValidateUserForm = () => {
             name="mail"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Email</FormLabel>
+                <FormLabel>{t('Email')}</FormLabel>
                 <FormControl>
-                  <Input placeholder="john.doe@example.com" {...field} />
+                  <Input
+                    placeholder={t('user@edu.tecnocampus.cat')}
+                    {...field}
+                  />
                 </FormControl>
                 <FormDescription>
-                  This is your email address.
+                  {t('This is your email address.')}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -79,22 +82,20 @@ const ValidateUserForm = () => {
             name="password"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Password</FormLabel>
+                <FormLabel>{t('Password')}</FormLabel>
                 <FormControl>
                   <Input type="password" placeholder="******" {...field} />
                 </FormControl>
-                <FormDescription>
-                  This is your password.
-                </FormDescription>
+                <FormDescription>{t('This is your password.')}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
-          <Button type="submit">Validate User</Button>
+          <Button type="submit">{t('Validate User Credentials')}</Button>
         </form>
       </Form>
     </div>
   )
 }
 
-export default ValidateUserForm;
+export default ValidateUserForm

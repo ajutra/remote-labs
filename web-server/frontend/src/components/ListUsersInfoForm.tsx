@@ -1,7 +1,7 @@
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
-import { Button } from "@/components/ui/button"
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -9,22 +9,22 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-
-// Define the form schema for listing user info
-const listUserInfoFormSchema = z.object({
-  userId: z.string().min(1, {
-    message: "User ID must be at least 1 character.",
-  }),
-})
+} from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
+import { useTranslation } from 'react-i18next'
 
 const ListUserInfoForm = () => {
+  const { t } = useTranslation()
+
+  // Define the form schema
+  const listUserInfoFormSchema = z.object({
+    userId: z.string().nonempty(t('User ID must be at least 1 character')),
+  })
   // Define the form
   const form = useForm<z.infer<typeof listUserInfoFormSchema>>({
     resolver: zodResolver(listUserInfoFormSchema),
     defaultValues: {
-      userId: "",
+      userId: '',
     },
   })
 
@@ -48,8 +48,10 @@ const ListUserInfoForm = () => {
   }
 
   return (
-    <div className="bg-card p-8 rounded shadow-md w-full max-w-md">
-      <h1 className="text-2xl font-bold mb-6 text-card-foreground">List User Info</h1>
+    <div className="w-full max-w-md rounded bg-card p-8 shadow-md">
+      <h1 className="mb-6 text-2xl font-bold text-card-foreground">
+        {t('List Users Info')}
+      </h1>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <FormField
@@ -57,19 +59,19 @@ const ListUserInfoForm = () => {
             name="userId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>User ID</FormLabel>
+                <FormLabel>{t('User ID')}</FormLabel>
                 <FormControl>
-                  <Input placeholder="User ID" {...field} />
+                  <Input placeholder={t('User ID')} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-          <Button type="submit">List User Info</Button>
+          <Button type="submit">{t('List Users Info')}</Button>
         </form>
       </Form>
     </div>
   )
 }
 
-export default ListUserInfoForm;
+export default ListUserInfoForm
