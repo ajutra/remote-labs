@@ -1,10 +1,15 @@
-import { Button } from '@/components/ui/button'
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
+import Home from './pages/Home'
 import '@/index.css'
-function App() {
+import '@/i18n'
+
+const App: React.FC = () => {
   return (
-    <>
-      <Button>Click me</Button>
-    </>
+    <Router>
+      <Routes>
+        <Route path="/" element={<Home />} />
+      </Routes>
+    </Router>
   )
 }
 
