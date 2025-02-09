@@ -48,5 +48,11 @@ func (server *ApiServer) Run() {
 
 func (server *ApiServer) handleGetAllUsers(w http.ResponseWriter, r *http.Request) error {
 	users := GenerateDummyUsers()
-	return writeResponse(w, http.StatusOK, users)
+
+	if err := writeResponse(w, http.StatusOK, users); err != nil {
+		return writeResponse(w, http.StatusInternalServerError, ApiError{Error: err.Error()})
+	}
+
+	// Return nil to indicate success
+	return nil
 }
