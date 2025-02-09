@@ -1,7 +1,9 @@
 package main
 
+import "github.com/google/uuid"
+
 type User struct {
-	ID       int
+	ID       uuid.UUID
 	Role     Role
 	Name     string
 	Mail     string
@@ -17,10 +19,10 @@ const (
 )
 
 type UserResponse struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-	Role string `json:"role"`
-	Mail string `json:"mail"`
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+	Role string    `json:"role"`
+	Mail string    `json:"mail"`
 }
 
 type CreateUserRequest struct {
