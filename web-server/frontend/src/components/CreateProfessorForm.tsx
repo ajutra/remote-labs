@@ -1,7 +1,7 @@
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
-import { Button } from "@/components/ui/button"
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -10,26 +10,31 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-
-// Define the form schema for creating a professor
-const professorFormSchema = z.object({
-  name: z.string().min(2, {
-    message: "Name must be at least 2 characters.",
-  }),
-  mail: z.string().email({
-    message: "Invalid email address.",
-  }),
-})
+} from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
+import { useTranslation } from 'react-i18next'
 
 const CreateProfessorForm = () => {
+  const { t } = useTranslation()
+
+  // Define the form schema for creating a user
+  const professorFormSchema = z.object({
+    name: z.string().min(2, {
+      message: t('Name must be at least 2 characters.'),
+    }),
+    mail: z.string().email({
+      message: t('Invalid email address.'),
+    }),
+    password: z.string().min(6, {
+      message: t('Password must be at least 6 characters.'),
+    }),
+  })
   // Define the form
   const form = useForm<z.infer<typeof professorFormSchema>>({
     resolver: zodResolver(professorFormSchema),
     defaultValues: {
-      name: "",
-      mail: "",
+      name: '',
+      mail: '',
     },
   })
 
@@ -54,8 +59,10 @@ const CreateProfessorForm = () => {
   }
 
   return (
-    <div className="bg-card p-8 rounded shadow-md w-full max-w-md">
-      <h1 className="text-2xl font-bold mb-6 text-card-foreground">Create Professor</h1>
+    <div className="w-full max-w-md rounded bg-card p-8 shadow-md">
+      <h1 className="mb-6 text-2xl font-bold text-card-foreground">
+        {t('Create Proffesor')}
+      </h1>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <FormField
@@ -63,12 +70,12 @@ const CreateProfessorForm = () => {
             name="name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Name</FormLabel>
+                <FormLabel>{t('Name')}</FormLabel>
                 <FormControl>
-                  <Input placeholder="Jane Doe" {...field} />
+                  <Input placeholder={t('Name Surname')} {...field} />
                 </FormControl>
                 <FormDescription>
-                  This is the full name of the professor.
+                  {t('This is the name of the professor.')}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -79,22 +86,25 @@ const CreateProfessorForm = () => {
             name="mail"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Email</FormLabel>
+                <FormLabel>{t('Email')}</FormLabel>
                 <FormControl>
-                  <Input placeholder="jane.doe@example.com" {...field} />
+                  <Input
+                    placeholder={t('professsor@tecnocampus.cat')}
+                    {...field}
+                  />
                 </FormControl>
                 <FormDescription>
-                  This is the email address of the professor.
+                  {t('This is the email of the professor.')}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
-          <Button type="submit">Create Professor</Button>
+          <Button type="submit">{t('Create Proffesor')}</Button>
         </form>
       </Form>
     </div>
   )
 }
 
-export default CreateProfessorForm;
+export default CreateProfessorForm
