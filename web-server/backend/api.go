@@ -40,19 +40,33 @@ func NewApiServer(listenAddr string) *ApiServer {
 func (server *ApiServer) Run() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /users", createHttpHandler(server.handleGetAllUsers))
+	mux.HandleFunc("POST /users", createHttpHandler(server.handleCreateUser))
 
 	log.Println("Starting server on port", server.listenAddr)
 
 	http.ListenAndServe(server.listenAddr, mux)
 }
 
-func (server *ApiServer) handleGetAllUsers(w http.ResponseWriter, r *http.Request) error {
-	users := GetAllUsers()
+func (server *ApiServer) handleCreateUser(w http.ResponseWriter, r *http.Request) error {
+	var request CreateUserRequest
 
-	if err := writeResponse(w, http.StatusOK, users); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return writeResponse(w, http.StatusBadRequest, ApiError{Error: err.Error()})
+	}
+
+	if err := CreateUser(request); err != nil {
 		return writeResponse(w, http.StatusInternalServerError, ApiError{Error: err.Error()})
 	}
 
-	// Return nil to indicate success
-	return nil
+	return writeResponse(w, http.StatusCreated, "User created successfully")
+}
+
+func (server *ApiServer) handleGetAllUsers(w http.ResponseWriter, r *http.Request) error {
+	users, err := GetAllUsers()
+
+	if err != nil {
+		return writeResponse(w, http.StatusInternalServerError, ApiError{Error: err.Error()})
+	}
+
+	return writeResponse(w, http.StatusOK, users)
 }
