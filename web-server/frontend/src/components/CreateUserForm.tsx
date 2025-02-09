@@ -1,6 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
-import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -13,52 +10,12 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import '@/index.css'
-import { useTranslation } from 'react-i18next'
+import useCreateUserForm from '@/hooks/useCreateUserForm'
+
 
 const CreateUserForm = () => {
-  const { t } = useTranslation()
-  // Define the form schema for creating a user
-  const userFormSchema = z.object({
-    name: z.string().min(2, {
-      message: t('Name must be at least 2 characters.'),
-    }),
-    mail: z.string().email({
-      message: t('Invalid email address.'),
-    }),
-    password: z.string().min(6, {
-      message: t('Password must be at least 6 characters.'),
-    }),
-  })
-
-  // Define the form
-  const form = useForm<z.infer<typeof userFormSchema>>({
-    resolver: zodResolver(userFormSchema),
-    defaultValues: {
-      name: '',
-      mail: '',
-      password: '',
-    },
-  })
-
-  // Define the submit handler for creating a user
-  async function onSubmit(values: z.infer<typeof userFormSchema>) {
-    try {
-      const response = await fetch('/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(values),
-      })
-      if (!response.ok) {
-        throw new Error('Network response was not ok')
-      }
-      const data = await response.json()
-      console.log('User created:', data)
-    } catch (error) {
-      console.error('Error creating user:', error)
-    }
-  }
+  
+  const { form, onSubmit, t } = useCreateUserForm()
 
   return (
     <div className="w-full max-w-md rounded bg-card p-8 shadow-md">
