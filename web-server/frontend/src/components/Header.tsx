@@ -4,18 +4,18 @@ import ModeToggle from '@/components/mode-toggle'
 
 const Header: React.FC = () => {
   return (
-    <header className="flex h-20 items-center justify-between bg-card p-4 text-card-foreground">
-      <div className="flex h-full items-center">
+    <header className="flex flex-wrap items-center justify-between bg-card p-4 text-card-foreground">
+      <div className="flex items-center">
         <img
           src="/src/assets/logo.png"
           alt="Logo"
-          className="h-full max-h-full object-contain"
+          className="h-12 w-auto object-contain"
         />
       </div>
-      <span className="absolute left-1/2 -translate-x-1/2 transform text-xl font-bold">
-        Remote Labs
-      </span>
-      <div className="flex items-center space-x-4">
+      <div className="order-2 flex flex-1 justify-center md:order-1">
+        <span className="whitespace-nowrap text-xl font-bold">Remote Labs</span>
+      </div>
+      <div className="order-1 flex items-center space-x-4 md:order-2">
         <LanguageSelector />
         <ModeToggle />
       </div>
