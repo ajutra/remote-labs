@@ -18,39 +18,39 @@ function Home() {
     <div>
       <Header />
       <PhotoCarousel />
-      <div className="mt-8 flex min-h-screen overflow-x-auto">
-        <div className="flex min-w-max flex-row items-start gap-4">
-          <div className="min-w-[300px]">
+      <div className="mt-8 flex min-h-screen flex-wrap gap-4">
+        <div className="flex w-full flex-wrap items-start gap-4">
+          <div className="min-w-[300px] flex-1">
             <CreateUserForm />
           </div>
-          <div className="min-w-[300px]">
+          <div className="min-w-[300px] flex-1">
             <CreateSubjectForm />
           </div>
-          <div className="min-w-[300px]">
+          <div className="min-w-[300px] flex-1">
             <CreateProfessorForm />
           </div>
-          <div className="min-w-[300px]">
+          <div className="min-w-[300px] flex-1">
             <ListAllSubjectsByUserForm />
           </div>
-          <div className="min-w-[300px]">
+          <div className="min-w-[300px] flex-1">
             <ListAllUsersOfSubjectForm />
           </div>
-          <div className="min-w-[300px]">
+          <div className="min-w-[300px] flex-1">
             <ValidateUserForm />
           </div>
-          <div className="min-w-[300px]">
+          <div className="min-w-[300px] flex-1">
             <ListUserInfoForm />
           </div>
-          <div className="min-w-[300px]">
+          <div className="min-w-[300px] flex-1">
             <AddUserToSubjectForm />
           </div>
-          <div className="min-w-[300px]">
+          <div className="min-w-[300px] flex-1">
             <RemoveUserFromSubjectForm />
           </div>
-          <div className="min-w-[300px]">
+          <div className="min-w-[300px] flex-1">
             <DeleteSubjectForm />
           </div>
-          <div className="min-w-[300px]">
+          <div className="min-w-[300px] flex-1">
             <DeleteUserForm />
           </div>
         </div>
