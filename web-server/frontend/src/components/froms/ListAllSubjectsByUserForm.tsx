@@ -8,26 +8,26 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import useListAllUsersOfSubjectForm from '@/hooks/useListAllUsersOfSubjectForm'
+import useListAllSubjectsByUserForm from '@/hooks/forms/useListAllSubjectsByUserForm'
 
-const ListAllUsersOfSubjectForm = () => {
-  const { form, onSubmit, t } = useListAllUsersOfSubjectForm()
+const ListAllSubjectsByUserForm = () => {
+  const { form, onSubmit, t } = useListAllSubjectsByUserForm()
 
   return (
     <div className="w-full max-w-md rounded bg-card p-8 shadow-md">
       <h1 className="mb-6 text-2xl font-bold text-card-foreground">
-        {t('List all users of a subject')}
+        {t('List all Subjects by User')}
       </h1>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <FormField
             control={form.control}
-            name="subjectId"
+            name="userId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('Subject ID')}</FormLabel>
+                <FormLabel>{t('User ID')}</FormLabel>
                 <FormControl>
-                  <Input placeholder={t('Subject ID')} {...field} />
+                  <Input placeholder={t('User ID')} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -40,4 +40,4 @@ const ListAllUsersOfSubjectForm = () => {
   )
 }
 
-export default ListAllUsersOfSubjectForm
+export default ListAllSubjectsByUserForm

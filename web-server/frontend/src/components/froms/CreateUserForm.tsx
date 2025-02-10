@@ -9,18 +9,35 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import useValidateUserForm from '@/hooks/useValidateUserForm'
+import '@/index.css'
+import useCreateUserForm from '@/hooks/forms/useCreateUserForm'
 
-const ValidateUserForm = () => {
-  const { form, onSubmit, t } = useValidateUserForm()
+const CreateUserForm = () => {
+  const { form, onSubmit, t } = useCreateUserForm()
 
   return (
     <div className="w-full max-w-md rounded bg-card p-8 shadow-md">
       <h1 className="mb-6 text-2xl font-bold text-card-foreground">
-        {t('Validate User Credentials')}
+        {t('Create User')}
       </h1>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Name')}</FormLabel>
+                <FormControl>
+                  <Input placeholder={t('Name Surname')} {...field} />
+                </FormControl>
+                <FormDescription>
+                  {t('This is your full name.')}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
           <FormField
             control={form.control}
             name="mail"
@@ -47,18 +64,18 @@ const ValidateUserForm = () => {
               <FormItem>
                 <FormLabel>{t('Password')}</FormLabel>
                 <FormControl>
-                  <Input type="password" placeholder="******" {...field} />
+                  <Input type="password" placeholder={t('******')} {...field} />
                 </FormControl>
                 <FormDescription>{t('This is your password.')}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
-          <Button type="submit">{t('Validate User Credentials')}</Button>
+          <Button type="submit">{t('Create User')}</Button>
         </form>
       </Form>
     </div>
   )
 }
 
-export default ValidateUserForm
+export default CreateUserForm

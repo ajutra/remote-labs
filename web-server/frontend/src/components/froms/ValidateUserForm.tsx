@@ -9,34 +9,18 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import useCreateProfessorForm from '@/hooks/useCreateProfessorFrom'
+import useValidateUserForm from '@/hooks/forms/useValidateUserForm'
 
-const CreateProfessorForm = () => {
-  const { form, onSubmit, t } = useCreateProfessorForm()
+const ValidateUserForm = () => {
+  const { form, onSubmit, t } = useValidateUserForm()
 
   return (
     <div className="w-full max-w-md rounded bg-card p-8 shadow-md">
       <h1 className="mb-6 text-2xl font-bold text-card-foreground">
-        {t('Create Proffesor')}
+        {t('Validate User Credentials')}
       </h1>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <FormField
-            control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('Name')}</FormLabel>
-                <FormControl>
-                  <Input placeholder={t('Name Surname')} {...field} />
-                </FormControl>
-                <FormDescription>
-                  {t('This is the name of the professor.')}
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
           <FormField
             control={form.control}
             name="mail"
@@ -45,22 +29,36 @@ const CreateProfessorForm = () => {
                 <FormLabel>{t('Email')}</FormLabel>
                 <FormControl>
                   <Input
-                    placeholder={t('professsor@tecnocampus.cat')}
+                    placeholder={t('user@edu.tecnocampus.cat')}
                     {...field}
                   />
                 </FormControl>
                 <FormDescription>
-                  {t('This is the email of the professor.')}
+                  {t('This is your email address.')}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
-          <Button type="submit">{t('Create Proffesor')}</Button>
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Password')}</FormLabel>
+                <FormControl>
+                  <Input type="password" placeholder="******" {...field} />
+                </FormControl>
+                <FormDescription>{t('This is your password.')}</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <Button type="submit">{t('Validate User Credentials')}</Button>
         </form>
       </Form>
     </div>
   )
 }
 
-export default CreateProfessorForm
+export default ValidateUserForm
