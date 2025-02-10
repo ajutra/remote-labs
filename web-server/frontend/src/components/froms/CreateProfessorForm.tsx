@@ -9,15 +9,15 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import useCreateSubjectForm from '@/hooks/useCreateSubjectForm'
+import useCreateProfessorForm from '@/hooks/forms/useCreateProfessorFrom'
 
-const CreateSubjectForm = () => {
-  const { form, onSubmit, t } = useCreateSubjectForm()
+const CreateProfessorForm = () => {
+  const { form, onSubmit, t } = useCreateProfessorForm()
 
   return (
     <div className="w-full max-w-md rounded bg-card p-8 shadow-md">
       <h1 className="mb-6 text-2xl font-bold text-card-foreground">
-        {t('Create Subject')}
+        {t('Create Proffesor')}
       </h1>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -28,13 +28,10 @@ const CreateSubjectForm = () => {
               <FormItem>
                 <FormLabel>{t('Name')}</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder={t('Programming Fundamentals')}
-                    {...field}
-                  />
+                  <Input placeholder={t('Name Surname')} {...field} />
                 </FormControl>
                 <FormDescription>
-                  {t('This is the name of the subject.')}
+                  {t('This is the name of the professor.')}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -42,26 +39,10 @@ const CreateSubjectForm = () => {
           />
           <FormField
             control={form.control}
-            name="code"
+            name="mail"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('Code')}</FormLabel>
-                <FormControl>
-                  <Input placeholder={t('103111')} {...field} />
-                </FormControl>
-                <FormDescription>
-                  {t('This is the code of the subject.')}
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="professorMail"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('Professor Email')}</FormLabel>
+                <FormLabel>{t('Email')}</FormLabel>
                 <FormControl>
                   <Input
                     placeholder={t('professsor@tecnocampus.cat')}
@@ -75,11 +56,11 @@ const CreateSubjectForm = () => {
               </FormItem>
             )}
           />
-          <Button type="submit">{t('Create Subject')}</Button>
+          <Button type="submit">{t('Create Proffesor')}</Button>
         </form>
       </Form>
     </div>
   )
 }
 
-export default CreateSubjectForm
+export default CreateProfessorForm

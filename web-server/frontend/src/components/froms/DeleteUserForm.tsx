@@ -8,31 +8,18 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import useAddUserToSubjectForm from '@/hooks/useAddUserToSubjectForm'
+import useDeleteUserForm from '@/hooks/forms/useDeleteUserForm'
 
-const AddUserToSubjectForm = () => {
-  const { form, onSubmit, t } = useAddUserToSubjectForm()
+const DeleteUserForm = () => {
+  const { form, onSubmit, t } = useDeleteUserForm()
 
   return (
     <div className="w-full max-w-md rounded bg-card p-8 shadow-md">
       <h1 className="mb-6 text-2xl font-bold text-card-foreground">
-        {t('Add User to Subject')}
+        {t('Delete User')}
       </h1>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <FormField
-            control={form.control}
-            name="subjectId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('Subject ID')}</FormLabel>
-                <FormControl>
-                  <Input placeholder={t('Subject ID')} {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
           <FormField
             control={form.control}
             name="userId"
@@ -46,11 +33,11 @@ const AddUserToSubjectForm = () => {
               </FormItem>
             )}
           />
-          <Button type="submit">{t('Add User to Subject')}</Button>
+          <Button type="submit">{t('Delete User')}</Button>
         </form>
       </Form>
     </div>
   )
 }
 
-export default AddUserToSubjectForm
+export default DeleteUserForm

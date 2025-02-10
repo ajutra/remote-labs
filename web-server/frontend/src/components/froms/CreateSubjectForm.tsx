@@ -9,18 +9,15 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import '@/index.css'
-import useCreateUserForm from '@/hooks/useCreateUserForm'
+import useCreateSubjectForm from '@/hooks/forms/useCreateSubjectForm'
 
-
-const CreateUserForm = () => {
-  
-  const { form, onSubmit, t } = useCreateUserForm()
+const CreateSubjectForm = () => {
+  const { form, onSubmit, t } = useCreateSubjectForm()
 
   return (
     <div className="w-full max-w-md rounded bg-card p-8 shadow-md">
       <h1 className="mb-6 text-2xl font-bold text-card-foreground">
-        {t('Create User')}
+        {t('Create Subject')}
       </h1>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -31,29 +28,13 @@ const CreateUserForm = () => {
               <FormItem>
                 <FormLabel>{t('Name')}</FormLabel>
                 <FormControl>
-                  <Input placeholder={t('Name Surname')} {...field} />
-                </FormControl>
-                <FormDescription>
-                  {t('This is your full name.')}
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="mail"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('Email')}</FormLabel>
-                <FormControl>
                   <Input
-                    placeholder={t('user@edu.tecnocampus.cat')}
+                    placeholder={t('Programming Fundamentals')}
                     {...field}
                   />
                 </FormControl>
                 <FormDescription>
-                  {t('This is your email address.')}
+                  {t('This is the name of the subject.')}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -61,23 +42,44 @@ const CreateUserForm = () => {
           />
           <FormField
             control={form.control}
-            name="password"
+            name="code"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('Password')}</FormLabel>
+                <FormLabel>{t('Code')}</FormLabel>
                 <FormControl>
-                  <Input type="password" placeholder={t('******')} {...field} />
+                  <Input placeholder={t('103111')} {...field} />
                 </FormControl>
-                <FormDescription>{t('This is your password.')}</FormDescription>
+                <FormDescription>
+                  {t('This is the code of the subject.')}
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
-          <Button type="submit">{t('Create User')}</Button>
+          <FormField
+            control={form.control}
+            name="professorMail"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Professor Email')}</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder={t('professsor@tecnocampus.cat')}
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t('This is the email of the professor.')}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <Button type="submit">{t('Create Subject')}</Button>
         </form>
       </Form>
     </div>
   )
 }
 
-export default CreateUserForm
+export default CreateSubjectForm

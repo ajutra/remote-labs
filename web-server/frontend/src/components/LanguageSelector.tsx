@@ -1,4 +1,11 @@
 import { useTranslation } from 'react-i18next'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const LanguageSelector: React.FC = () => {
   const { i18n } = useTranslation()
@@ -9,24 +16,16 @@ const LanguageSelector: React.FC = () => {
 
   return (
     <div className="language-selector">
-      <button
-        onClick={() => changeLanguage('en')}
-        className="m-2 rounded bg-primary px-4 py-2 text-primary-foreground"
-      >
-        English
-      </button>
-      <button
-        onClick={() => changeLanguage('es')}
-        className="m-2 rounded bg-primary px-4 py-2 text-primary-foreground"
-      >
-        Español
-      </button>
-      <button
-        onClick={() => changeLanguage('ca')}
-        className="m-2 rounded bg-primary px-4 py-2 text-primary-foreground"
-      >
-        Català
-      </button>
+      <Select onValueChange={changeLanguage}>
+        <SelectTrigger className="w-[180px]">
+          <SelectValue placeholder="Select Language" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="en">English</SelectItem>
+          <SelectItem value="es">Español</SelectItem>
+          <SelectItem value="ca">Català</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   )
 }

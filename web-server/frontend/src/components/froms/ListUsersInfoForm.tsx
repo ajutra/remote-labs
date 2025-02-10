@@ -8,36 +8,36 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import useDeleteSubjectForm from '@/hooks/useDeleteSubjectForm'
+import useListUsersInfoForm from '@/hooks/forms/useListUsersInfoForm'
 
-const DeleteSubjectForm = () => {
-  const { form, onSubmit, t } = useDeleteSubjectForm()
+const ListUsersInfoForm = () => {
+  const { form, onSubmit, t } = useListUsersInfoForm()
 
   return (
     <div className="w-full max-w-md rounded bg-card p-8 shadow-md">
       <h1 className="mb-6 text-2xl font-bold text-card-foreground">
-        {t('Delete Subject')}
+        {t('List Users Info')}
       </h1>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <FormField
             control={form.control}
-            name="subjectId"
+            name="userId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('Subject ID')}</FormLabel>
+                <FormLabel>{t('User ID')}</FormLabel>
                 <FormControl>
-                  <Input placeholder={t('Subject ID')} {...field} />
+                  <Input placeholder={t('User ID')} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-          <Button type="submit">{t('Delete Subject')}</Button>
+          <Button type="submit">{t('List Users Info')}</Button>
         </form>
       </Form>
     </div>
   )
 }
 
-export default DeleteSubjectForm
+export default ListUsersInfoForm

@@ -8,7 +8,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import useRemoveUserFromSubjectForm from '@/hooks/useRemoveUserFromSubjectForm'
+import useRemoveUserFromSubjectForm from '@/hooks/forms/useRemoveUserFromSubjectForm'
 
 const RemoveUserFromSubjectForm = () => {
   const { form, onSubmit, t } = useRemoveUserFromSubjectForm()
