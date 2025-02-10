@@ -7,22 +7,22 @@ type UserService interface {
 	CreateProfessor(request CreateProfessorRequest) error
 }
 
-type Service struct {
+type UsrService struct {
 	db Database
 }
 
 func NewUserService(db Database) UserService {
-	return &Service{
+	return &UsrService{
 		db: db,
 	}
 }
 
-func (s *Service) CreateUser(request CreateUserRequest) error {
+func (s *UsrService) CreateUser(request CreateUserRequest) error {
 	user := request.toUser()
 	return s.db.CreateUser(user)
 }
 
-func (s *Service) CreateProfessor(request CreateProfessorRequest) error {
+func (s *UsrService) CreateProfessor(request CreateProfessorRequest) error {
 	user := request.toUser()
 	return s.db.CreateUser(user)
 }
