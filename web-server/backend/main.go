@@ -7,9 +7,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	defer database.Close()
 
-	server := NewApiServer(":8080")
+	userService := NewUserService(database)
+
+	server := NewApiServer(":8080", userService)
 	server.Run()
 }

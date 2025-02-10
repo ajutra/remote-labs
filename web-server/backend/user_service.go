@@ -2,50 +2,31 @@ package main
 
 import "github.com/google/uuid"
 
-var users []User = GenerateDummyUsers()
+type UserService interface {
+	CreateUser(request CreateUserRequest) error
+}
 
-func GenerateDummyUsers() []User {
-	return []User{
-		{
-			ID:       uuid.New(),
-			Role:     Admin,
-			Name:     "Alice",
-			Mail:     "alice@mail.com",
-			Password: "password",
-		},
-		{
-			ID:       uuid.New(),
-			Role:     Student,
-			Name:     "Bob",
-			Mail:     "bob@mail.com",
-			Password: "password",
-		},
+type Service struct {
+	db Database
+}
+
+func NewUserService(db Database) UserService {
+	return &Service{
+		db: db,
 	}
 }
 
-func GetAllUsers() ([]UserResponse, error) {
-	var userResponses []UserResponse
-
-	for _, user := range users {
-		userResponses = append(userResponses, UserResponse{
-			ID:   user.ID,
-			Name: user.Name,
-			Role: string(user.Role),
-			Mail: user.Mail,
-		})
-	}
-
-	return userResponses, nil
+func (s *Service) CreateUser(request CreateUserRequest) error {
+	user := request.toUser()
+	return s.db.CreateUser(user)
 }
 
-func CreateUser(request CreateUserRequest) error {
-	users = append(users, User{
+func (createUsrReq *CreateUserRequest) toUser() User {
+	return User{
 		ID:       uuid.New(),
 		Role:     Student,
-		Name:     request.Name,
-		Mail:     request.Mail,
-		Password: request.Password,
-	})
-
-	return nil
+		Name:     createUsrReq.Name,
+		Mail:     createUsrReq.Mail,
+		Password: createUsrReq.Password,
+	}
 }
