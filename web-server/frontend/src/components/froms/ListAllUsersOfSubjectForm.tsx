@@ -16,7 +16,7 @@ const ListAllUsersOfSubjectForm = () => {
   return (
     <div className="w-full max-w-md rounded bg-card p-8 shadow-md">
       <h1 className="mb-6 text-2xl font-bold text-card-foreground">
-        {t('List all users of a subject')}
+        {t('List all Users of a Subject')}
       </h1>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
