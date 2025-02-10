@@ -30,3 +30,8 @@ type CreateUserRequest struct {
 	Mail     string `json:"mail"`
 	Password string `json:"password"`
 }
+
+type CreateProfessorRequest struct {
+	Name string `json:"name"`
+	Mail string `json:"mail"`
+}
