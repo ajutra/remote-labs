@@ -13,7 +13,7 @@ type ApiServer struct {
 }
 
 type ApiError struct {
-	Error string
+	Error string `json:"error"`
 }
 
 func writeResponse(w http.ResponseWriter, status int, value any) error {
@@ -25,8 +25,13 @@ func writeResponse(w http.ResponseWriter, status int, value any) error {
 func createHttpHandler(fn apiFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := fn(w, r); err != nil {
-			//TODO: check error from handlers and return appropriate status code
-			writeResponse(w, http.StatusBadRequest, ApiError{Error: err.Error()})
+			var status int
+			if httpErr, ok := err.(*HttpError); ok {
+				status = httpErr.StatusCode
+			} else {
+				status = http.StatusInternalServerError
+			}
+			writeResponse(w, status, ApiError{Error: err.Error()})
 		}
 	}
 }
@@ -51,11 +56,11 @@ func (server *ApiServer) handleCreateUser(w http.ResponseWriter, r *http.Request
 	var request CreateUserRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		return writeResponse(w, http.StatusBadRequest, ApiError{Error: err.Error()})
+		return NewHttpError(http.StatusBadRequest, err)
 	}
 
 	if err := CreateUser(request); err != nil {
-		return writeResponse(w, http.StatusInternalServerError, ApiError{Error: err.Error()})
+		return err
 	}
 
 	return writeResponse(w, http.StatusCreated, "User created successfully")
@@ -65,7 +70,7 @@ func (server *ApiServer) handleGetAllUsers(w http.ResponseWriter, r *http.Reques
 	users, err := GetAllUsers()
 
 	if err != nil {
-		return writeResponse(w, http.StatusInternalServerError, ApiError{Error: err.Error()})
+		return err
 	}
 
 	return writeResponse(w, http.StatusOK, users)
