@@ -10,7 +10,8 @@ func main() {
 	defer database.Close()
 
 	userService := NewUserService(database)
+	subjectService := NewSubjectService(database)
 
-	server := NewApiServer(":8080", userService)
+	server := NewApiServer(":8080", userService, subjectService)
 	server.Run()
 }

@@ -18,6 +18,13 @@ const (
 	Student   Role = "student"
 )
 
+type Subject struct {
+	ID            uuid.UUID
+	Name          string
+	Code          string
+	ProfessorMail string
+}
+
 type UserResponse struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
@@ -34,4 +41,10 @@ type CreateUserRequest struct {
 type CreateProfessorRequest struct {
 	Name string `json:"name"`
 	Mail string `json:"mail"`
+}
+
+type CreateSubjectRequest struct {
+	Name          string `json:"name"`
+	Code          string `json:"code"`
+	MainProfessor string `json:"professorMail"`
 }

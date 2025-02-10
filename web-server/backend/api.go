@@ -9,8 +9,9 @@ import (
 type apiFunc func(w http.ResponseWriter, r *http.Request) error
 
 type ApiServer struct {
-	listenAddr  string
-	userService UserService
+	listenAddr     string
+	userService    UserService
+	subjectService SubjectService
 }
 
 type ApiError struct {
@@ -45,6 +46,20 @@ func (server *ApiServer) handleCreateProfessor(w http.ResponseWriter, r *http.Re
 	return writeResponse(w, http.StatusOK, "Professor created successfully")
 }
 
+func (server *ApiServer) handleCreateSubject(w http.ResponseWriter, r *http.Request) error {
+	var request CreateSubjectRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return NewHttpError(http.StatusBadRequest, err)
+	}
+
+	if err := server.subjectService.CreateSubject(request); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, "Subject created successfully")
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -65,10 +80,11 @@ func createHttpHandler(fn apiFunc) http.HandlerFunc {
 	}
 }
 
-func NewApiServer(listenAddr string, userService UserService) *ApiServer {
+func NewApiServer(listenAddr string, userService UserService, subjectService SubjectService) *ApiServer {
 	return &ApiServer{
-		listenAddr:  listenAddr,
-		userService: userService,
+		listenAddr:     listenAddr,
+		userService:    userService,
+		subjectService: subjectService,
 	}
 }
 
@@ -76,6 +92,7 @@ func (server *ApiServer) Run() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /users", createHttpHandler(server.handleCreateUser))
 	mux.HandleFunc("POST /users/professors", createHttpHandler(server.handleCreateProfessor))
+	mux.HandleFunc("POST /subjects", createHttpHandler(server.handleCreateSubject))
 
 	log.Println("Starting server on port", server.listenAddr)
 

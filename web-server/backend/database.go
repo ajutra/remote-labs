@@ -14,6 +14,8 @@ import (
 type Database interface {
 	Close()
 	CreateUser(user User) error
+	UserExistsByMail(mail string) error
+	CreateSubject(subject Subject) error
 }
 
 type PostgresDatabase struct {
@@ -32,7 +34,7 @@ type DatabaseSubject struct {
 	ID            uuid.UUID
 	Name          string
 	Code          string
-	MainProfessor DatabaseUser
+	ProfessorMail string
 }
 
 func (postgres *PostgresDatabase) CreateUser(user User) error {
@@ -61,6 +63,46 @@ func (postgres *PostgresDatabase) CreateUser(user User) error {
 	return nil
 }
 
+func (postgres *PostgresDatabase) UserExistsByMail(mail string) error {
+	query := "SELECT EXISTS(SELECT 1 FROM users WHERE mail = @mail)"
+	args := pgx.NamedArgs{"mail": mail}
+
+	var exists bool
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
+		return fmt.Errorf("error checking if user exists: %w", err)
+	}
+
+	if !exists {
+		return fmt.Errorf("user with mail %s does not exist", mail)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) CreateSubject(subject Subject) error {
+	dbSubject := subject.toDatabaseSubject()
+	query := `
+	INSERT INTO subjects (id, name, code, main_professor_id)
+	VALUES (
+		@id, 
+		@name, 
+		@code, 
+		(SELECT id FROM users WHERE mail = @professor_mail))`
+	args := pgx.NamedArgs{
+		"id":             dbSubject.ID,
+		"name":           dbSubject.Name,
+		"code":           dbSubject.Code,
+		"professor_mail": dbSubject.ProfessorMail,
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error creating subject: %w", err)
+	}
+
+	return nil
+}
+
 func (user *User) toDatabaseUser() DatabaseUser {
 	return DatabaseUser{
 		ID:       user.ID,
@@ -68,6 +110,15 @@ func (user *User) toDatabaseUser() DatabaseUser {
 		Name:     user.Name,
 		Mail:     user.Mail,
 		Password: user.Password,
+	}
+}
+
+func (subject *Subject) toDatabaseSubject() DatabaseSubject {
+	return DatabaseSubject{
+		ID:            subject.ID,
+		Name:          subject.Name,
+		Code:          subject.Code,
+		ProfessorMail: subject.ProfessorMail,
 	}
 }
 
