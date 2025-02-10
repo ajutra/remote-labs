@@ -1,6 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
-import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -11,41 +8,10 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { useTranslation } from 'react-i18next'
+import useListUsersInfoForm from '@/hooks/useListUsersInfoForm'
 
-const ListUserInfoForm = () => {
-  const { t } = useTranslation()
-
-  // Define the form schema
-  const listUserInfoFormSchema = z.object({
-    userId: z.string().nonempty(t('User ID must be at least 1 character')),
-  })
-  // Define the form
-  const form = useForm<z.infer<typeof listUserInfoFormSchema>>({
-    resolver: zodResolver(listUserInfoFormSchema),
-    defaultValues: {
-      userId: '',
-    },
-  })
-
-  // Define the submit handler for listing user info
-  async function onSubmit(values: z.infer<typeof listUserInfoFormSchema>) {
-    try {
-      const response = await fetch(`/users/${values.userId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      if (!response.ok) {
-        throw new Error('Network response was not ok')
-      }
-      const data = await response.json()
-      console.log('User info:', data)
-    } catch (error) {
-      console.error('Error listing user info:', error)
-    }
-  }
+const ListUsersInfoForm = () => {
+  const { form, onSubmit, t } = useListUsersInfoForm()
 
   return (
     <div className="w-full max-w-md rounded bg-card p-8 shadow-md">
@@ -74,4 +40,4 @@ const ListUserInfoForm = () => {
   )
 }
 
-export default ListUserInfoForm
+export default ListUsersInfoForm

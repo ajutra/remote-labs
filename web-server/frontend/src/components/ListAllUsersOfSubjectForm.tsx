@@ -1,6 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
-import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -11,45 +8,10 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { useTranslation } from 'react-i18next'
+import useListAllUsersOfSubjectForm from '@/hooks/useListAllUsersOfSubjectForm'
 
 const ListAllUsersOfSubjectForm = () => {
-  const { t } = useTranslation()
-
-  // Define the form schema
-  const listAllUsersOfSubjectFormSchema = z.object({
-    subjectId: z
-      .string()
-      .nonempty(t('Subject ID must be at least 1 character')),
-  })
-  // Define the form
-  const form = useForm<z.infer<typeof listAllUsersOfSubjectFormSchema>>({
-    resolver: zodResolver(listAllUsersOfSubjectFormSchema),
-    defaultValues: {
-      subjectId: '',
-    },
-  })
-
-  // Define the submit handler for listing all users of a given subject
-  async function onSubmit(
-    values: z.infer<typeof listAllUsersOfSubjectFormSchema>
-  ) {
-    try {
-      const response = await fetch(`/subjects/${values.subjectId}/users`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      if (!response.ok) {
-        throw new Error('Network response was not ok')
-      }
-      const data = await response.json()
-      console.log('Users:', data)
-    } catch (error) {
-      console.error('Error listing users:', error)
-    }
-  }
+  const { form, onSubmit, t } = useListAllUsersOfSubjectForm()
 
   return (
     <div className="w-full max-w-md rounded bg-card p-8 shadow-md">

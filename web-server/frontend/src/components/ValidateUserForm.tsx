@@ -1,6 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
-import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -12,44 +9,10 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { useTranslation } from 'react-i18next'
+import useValidateUserForm from '@/hooks/useValidateUserForm'
 
 const ValidateUserForm = () => {
-  const { t } = useTranslation()
-
-  // Define the form schema
-  const validateUserFormSchema = z.object({
-    mail: z.string().email(t('Invalid email address.')),
-    password: z.string().min(8, t('Password must be at least 6 characters.')),
-  })
-  // Define the form
-  const form = useForm<z.infer<typeof validateUserFormSchema>>({
-    resolver: zodResolver(validateUserFormSchema),
-    defaultValues: {
-      mail: '',
-      password: '',
-    },
-  })
-
-  // Define the submit handler for validating user credentials
-  async function onSubmit(values: z.infer<typeof validateUserFormSchema>) {
-    try {
-      const response = await fetch('/users/validate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(values),
-      })
-      if (!response.ok) {
-        throw new Error('Network response was not ok')
-      }
-      const data = await response.json()
-      console.log('User validated:', data)
-    } catch (error) {
-      console.error('Error validating user:', error)
-    }
-  }
+  const { form, onSubmit, t } = useValidateUserForm()
 
   return (
     <div className="w-full max-w-md rounded bg-card p-8 shadow-md">

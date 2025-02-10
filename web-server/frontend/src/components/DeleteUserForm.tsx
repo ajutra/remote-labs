@@ -1,6 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
-import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -11,42 +8,10 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { useTranslation } from 'react-i18next'
+import useDeleteUserForm from '@/hooks/useDeleteUserForm'
 
 const DeleteUserForm = () => {
-  const { t } = useTranslation()
-
-  // Define the form schema for deleting a user
-  const deleteUserFormSchema = z.object({
-    userId: z.string().min(1, {
-      message: t('User ID must be at least 1 character.'),
-    }),
-  })
-  // Define the form
-  const form = useForm<z.infer<typeof deleteUserFormSchema>>({
-    resolver: zodResolver(deleteUserFormSchema),
-    defaultValues: {
-      userId: '',
-    },
-  })
-
-  // Define the submit handler for deleting a user
-  async function onSubmit(values: z.infer<typeof deleteUserFormSchema>) {
-    try {
-      const response = await fetch(`/users/${values.userId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      if (!response.ok) {
-        throw new Error('Network response was not ok')
-      }
-      console.log('User deleted')
-    } catch (error) {
-      console.error('Error deleting user:', error)
-    }
-  }
+  const { form, onSubmit, t } = useDeleteUserForm()
 
   return (
     <div className="w-full max-w-md rounded bg-card p-8 shadow-md">
