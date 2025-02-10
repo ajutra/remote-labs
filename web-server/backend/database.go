@@ -6,12 +6,14 @@ import (
 	"os"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
 type Database interface {
 	Close()
+	CreateUser(user User) error
 }
 
 type PostgresDatabase struct {
@@ -32,6 +34,52 @@ type DatabaseSubject struct {
 	Code          string
 	MainProfessor DatabaseUser
 }
+
+func (postgres *PostgresDatabase) CreateUser(user User) error {
+	dbUser := user.toDatabaseUser()
+	query := `
+	INSERT INTO users (id, role_id, name, mail, password)
+	VALUES (
+		@id, 
+		(SELECT id FROM roles WHERE role = @role), 
+		@name, 
+		@mail, 
+		@password)`
+	args := pgx.NamedArgs{
+		"id":       dbUser.ID,
+		"role":     dbUser.Role,
+		"name":     dbUser.Name,
+		"mail":     dbUser.Mail,
+		"password": dbUser.Password,
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error creating user: %w", err)
+	}
+
+	return nil
+}
+
+func (user *User) toDatabaseUser() DatabaseUser {
+	return DatabaseUser{
+		ID:       user.ID,
+		Role:     user.Role,
+		Name:     user.Name,
+		Mail:     user.Mail,
+		Password: user.Password,
+	}
+}
+
+// This will be used in the future
+/*func (dbUser *DatabaseUser) toUserResponse() UserResponse {
+	return UserResponse{
+		ID:   dbUser.ID,
+		Name: dbUser.Name,
+		Role: string(dbUser.Role),
+		Mail: dbUser.Mail,
+	}
+}*/
 
 func NewDatabase() (Database, error) {
 	if err := godotenv.Load(".backend.env"); err != nil {
