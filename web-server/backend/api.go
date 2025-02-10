@@ -28,7 +28,21 @@ func (server *ApiServer) handleCreateUser(w http.ResponseWriter, r *http.Request
 		return err
 	}
 
-	return writeResponse(w, http.StatusCreated, "User created successfully")
+	return writeResponse(w, http.StatusOK, "User created successfully")
+}
+
+func (server *ApiServer) handleCreateProfessor(w http.ResponseWriter, r *http.Request) error {
+	var request CreateProfessorRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return NewHttpError(http.StatusBadRequest, err)
+	}
+
+	if err := server.userService.CreateProfessor(request); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, "Professor created successfully")
 }
 
 func writeResponse(w http.ResponseWriter, status int, value any) error {
@@ -61,6 +75,7 @@ func NewApiServer(listenAddr string, userService UserService) *ApiServer {
 func (server *ApiServer) Run() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /users", createHttpHandler(server.handleCreateUser))
+	mux.HandleFunc("POST /users/professors", createHttpHandler(server.handleCreateProfessor))
 
 	log.Println("Starting server on port", server.listenAddr)
 

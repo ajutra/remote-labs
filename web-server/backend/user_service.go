@@ -4,6 +4,7 @@ import "github.com/google/uuid"
 
 type UserService interface {
 	CreateUser(request CreateUserRequest) error
+	CreateProfessor(request CreateProfessorRequest) error
 }
 
 type Service struct {
@@ -21,6 +22,11 @@ func (s *Service) CreateUser(request CreateUserRequest) error {
 	return s.db.CreateUser(user)
 }
 
+func (s *Service) CreateProfessor(request CreateProfessorRequest) error {
+	user := request.toUser()
+	return s.db.CreateUser(user)
+}
+
 func (createUsrReq *CreateUserRequest) toUser() User {
 	return User{
 		ID:       uuid.New(),
@@ -28,5 +34,16 @@ func (createUsrReq *CreateUserRequest) toUser() User {
 		Name:     createUsrReq.Name,
 		Mail:     createUsrReq.Mail,
 		Password: createUsrReq.Password,
+	}
+}
+
+func (createProfReq *CreateProfessorRequest) toUser() User {
+	return User{
+		ID:   uuid.New(),
+		Role: Professor,
+		Name: createProfReq.Name,
+		Mail: createProfReq.Mail,
+		// TODO: Generate random password
+		Password: "randomPassword",
 	}
 }
