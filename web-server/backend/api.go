@@ -133,6 +133,21 @@ func (server *ApiServer) handleEnrollUserInSubject(w http.ResponseWriter, r *htt
 	return writeResponse(w, http.StatusOK, "User enrolled in subject successfully")
 }
 
+func (server *ApiServer) handleRemoveUserFromSubject(w http.ResponseWriter, r *http.Request) error {
+	subjectId := r.PathValue("subjectId")
+	userId := r.PathValue("userId")
+
+	if subjectId == "" || userId == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing subject or user id"))
+	}
+
+	if err := server.subjectService.RemoveUserFromSubject(userId, subjectId); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, "User removed from subject successfully")
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -170,7 +185,8 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("GET /subjects/{id}/users", createHttpHandler(server.handleListAllUsersBySubjectId))
 	mux.HandleFunc("POST /users/validate", createHttpHandler(server.handleValidateUserCredentials))
 	mux.HandleFunc("GET /users/{id}", createHttpHandler(server.handleGetUserInfo))
-	mux.HandleFunc("PUT /subjects/{subjectId}/users/{userId}", createHttpHandler(server.handleEnrollUserInSubject))
+	mux.HandleFunc("PUT /subjects/{subjectId}/add/users/{userId}", createHttpHandler(server.handleEnrollUserInSubject))
+	mux.HandleFunc("DELETE /subjects/{subjectId}/remove/users/{userId}", createHttpHandler(server.handleRemoveUserFromSubject))
 
 	log.Println("Starting server on port", server.listenAddr)
 
