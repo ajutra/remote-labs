@@ -163,10 +163,10 @@ func (postgres *PostgresDatabase) ListAllSubjectsByUserId(userId string) ([]Subj
 }
 
 func (postgres *PostgresDatabase) ListAllUsersBySubjectId(subjectId string) ([]User, error) {
-	//TODO: return role name instead of id
 	query := `
-	SELECT u.id, u.role_id, u.name, u.mail, u.password
+	SELECT u.id, r.role, u.name, u.mail, u.password
 	FROM users u
+	JOIN roles r ON u.role_id = r.id
 	JOIN user_subjects us ON u.id = us.user_id
 	WHERE us.subject_id = @id`
 	args := pgx.NamedArgs{"id": subjectId}
