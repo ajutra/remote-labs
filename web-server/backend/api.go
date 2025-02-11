@@ -202,6 +202,23 @@ func NewApiServer(listenAddr string, userService UserService, subjectService Sub
 	}
 }
 
+func enableCors(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		enableCors(w)
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (server *ApiServer) Run() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /users", createHttpHandler(server.handleCreateUser))
@@ -218,5 +235,5 @@ func (server *ApiServer) Run() {
 
 	log.Println("Starting server on port", server.listenAddr)
 
-	http.ListenAndServe(server.listenAddr, mux)
+	http.ListenAndServe(server.listenAddr, corsMiddleware(mux))
 }

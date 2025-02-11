@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/google/uuid"
@@ -80,7 +81,11 @@ func (postgres *PostgresDatabase) UserExistsByMail(mail string) error {
 
 	var exists bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
-		return fmt.Errorf("user with mail %s does not exist: %w", mail, err)
+		return fmt.Errorf("error checking if user exists: %w", err)
+	}
+
+	if !exists {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with mail %s does not exist", mail))
 	}
 
 	return nil
@@ -116,7 +121,11 @@ func (postgres *PostgresDatabase) UserExistsById(userId string) error {
 
 	var exists bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
-		return fmt.Errorf("user with id %s does not exist: %w", userId, err)
+		return fmt.Errorf("error checking if user exists: %w", err)
+	}
+
+	if !exists {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with id %s does not exist", userId))
 	}
 
 	return nil
@@ -214,7 +223,11 @@ func (postgres *PostgresDatabase) SubjectExistsById(subjectId string) error {
 
 	var exists bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
-		return fmt.Errorf("subject with id %s does not exist: %w", subjectId, err)
+		return fmt.Errorf("error checking if subject exists: %w", err)
+	}
+
+	if !exists {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("subject with id %s does not exist", subjectId))
 	}
 
 	return nil

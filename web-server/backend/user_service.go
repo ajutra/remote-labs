@@ -71,7 +71,7 @@ func (s *UsrService) GetUser(userId string) (UserResponse, error) {
 func (s *UsrService) DeleteUser(userId string) error {
 	// Check if user exists
 	if err := s.db.UserExistsById(userId); err != nil {
-		return NewHttpError(http.StatusBadRequest, err)
+		return err
 	}
 
 	// Check if user is enrolled in any subject
