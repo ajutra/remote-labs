@@ -25,6 +25,7 @@ type Database interface {
 	EnrollUserInSubject(userId, subjectId string) error
 	IsMainProfessorOfSubject(userId, subjectId string) bool
 	RemoveUserFromSubject(userId, subjectId string) error
+	DeleteSubject(subjectId string) error
 }
 
 type PostgresDatabase struct {
@@ -253,6 +254,18 @@ func (postgres *PostgresDatabase) RemoveUserFromSubject(userId, subjectId string
 	_, err := postgres.db.Exec(context.Background(), query, args)
 	if err != nil {
 		return fmt.Errorf("error removing user from subject: %w", err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) DeleteSubject(subjectId string) error {
+	query := "DELETE FROM subjects WHERE id = @id"
+	args := pgx.NamedArgs{"id": subjectId}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error deleting subject: %w", err)
 	}
 
 	return nil

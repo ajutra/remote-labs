@@ -12,6 +12,7 @@ type SubjectService interface {
 	ListAllSubjectsByUserId(userId string) ([]SubjectResponse, error)
 	EnrollUserInSubject(userId, subjectId string) error
 	RemoveUserFromSubject(userId, subjectId string) error
+	DeleteSubject(subjectId string) error
 }
 
 type SubjService struct {
@@ -85,6 +86,21 @@ func (s *SubjService) RemoveUserFromSubject(userId, subjectId string) error {
 	}
 
 	return s.db.RemoveUserFromSubject(userId, subjectId)
+}
+
+func (s *SubjService) DeleteSubject(subjectId string) error {
+	// Check if subject exists
+	if err := s.db.SubjectExistsById(subjectId); err != nil {
+		return NewHttpError(http.StatusBadRequest, err)
+	}
+
+	// Check if there are users enrolled in the subject
+	// An error means there are no users enrolled in the subject
+	if _, err := s.db.ListAllUsersBySubjectId(subjectId); err != nil {
+		return s.db.DeleteSubject(subjectId)
+	}
+
+	return NewHttpError(http.StatusBadRequest, fmt.Errorf("cannot delete subject with users enrolled"))
 }
 
 func (createSubjReq *CreateSubjectRequest) toSubject() Subject {

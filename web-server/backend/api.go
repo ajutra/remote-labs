@@ -148,6 +148,19 @@ func (server *ApiServer) handleRemoveUserFromSubject(w http.ResponseWriter, r *h
 	return writeResponse(w, http.StatusOK, "User removed from subject successfully")
 }
 
+func (server *ApiServer) handleDeleteSubject(w http.ResponseWriter, r *http.Request) error {
+	subjectId := r.PathValue("id")
+	if subjectId == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing subject id"))
+	}
+
+	if err := server.subjectService.DeleteSubject(subjectId); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, "Subject deleted successfully")
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -187,6 +200,7 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("GET /users/{id}", createHttpHandler(server.handleGetUserInfo))
 	mux.HandleFunc("PUT /subjects/{subjectId}/add/users/{userId}", createHttpHandler(server.handleEnrollUserInSubject))
 	mux.HandleFunc("DELETE /subjects/{subjectId}/remove/users/{userId}", createHttpHandler(server.handleRemoveUserFromSubject))
+	mux.HandleFunc("DELETE /subjects/{id}", createHttpHandler(server.handleDeleteSubject))
 
 	log.Println("Starting server on port", server.listenAddr)
 
