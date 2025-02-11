@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -12,6 +13,7 @@ type UserService interface {
 	ListAllUsersBySubjectId(subjectId string) ([]UserResponse, error)
 	ValidateUser(request ValidateUserRequest) (ValidateUserResponse, error)
 	GetUser(userId string) (UserResponse, error)
+	DeleteUser(userId string) error
 }
 
 type UsrService struct {
@@ -64,6 +66,21 @@ func (s *UsrService) GetUser(userId string) (UserResponse, error) {
 	}
 
 	return user.toUserResponse(), nil
+}
+
+func (s *UsrService) DeleteUser(userId string) error {
+	// Check if user exists
+	if err := s.db.UserExistsById(userId); err != nil {
+		return NewHttpError(http.StatusBadRequest, err)
+	}
+
+	// Check if user is enrolled in any subject
+	// An error means the user is not enrolled in any subject
+	if _, err := s.db.ListAllSubjectsByUserId(userId); err != nil {
+		return s.db.DeleteUser(userId)
+	}
+
+	return NewHttpError(http.StatusBadRequest, fmt.Errorf("user is enrolled in subjects"))
 }
 
 func (createUsrReq *CreateUserRequest) toUser() User {
