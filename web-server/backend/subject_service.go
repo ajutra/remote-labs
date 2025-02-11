@@ -30,7 +30,7 @@ func (s *SubjService) CreateSubject(request CreateSubjectRequest) error {
 
 	// Check if professor exists
 	if err := s.db.UserExistsByMail(subject.ProfessorMail); err != nil {
-		return NewHttpError(http.StatusBadRequest, err)
+		return err
 	}
 
 	return s.db.CreateSubject(subject)
@@ -39,7 +39,7 @@ func (s *SubjService) CreateSubject(request CreateSubjectRequest) error {
 func (s *SubjService) ListAllSubjectsByUserId(userId string) ([]SubjectResponse, error) {
 	// Check if user exists
 	if err := s.db.UserExistsById(userId); err != nil {
-		return nil, NewHttpError(http.StatusBadRequest, err)
+		return nil, err
 	}
 
 	subjects, err := s.db.ListAllSubjectsByUserId(userId)
@@ -58,12 +58,12 @@ func (s *SubjService) ListAllSubjectsByUserId(userId string) ([]SubjectResponse,
 func (s *SubjService) EnrollUserInSubject(userId, subjectId string) error {
 	// Check if user exists
 	if err := s.db.UserExistsById(userId); err != nil {
-		return NewHttpError(http.StatusBadRequest, err)
+		return err
 	}
 
 	// Check if subject exists
 	if err := s.db.SubjectExistsById(subjectId); err != nil {
-		return NewHttpError(http.StatusBadRequest, err)
+		return err
 	}
 
 	return s.db.EnrollUserInSubject(userId, subjectId)
@@ -72,12 +72,12 @@ func (s *SubjService) EnrollUserInSubject(userId, subjectId string) error {
 func (s *SubjService) RemoveUserFromSubject(userId, subjectId string) error {
 	// Check if user exists
 	if err := s.db.UserExistsById(userId); err != nil {
-		return NewHttpError(http.StatusBadRequest, err)
+		return err
 	}
 
 	// Check if subject exists
 	if err := s.db.SubjectExistsById(subjectId); err != nil {
-		return NewHttpError(http.StatusBadRequest, err)
+		return err
 	}
 
 	// Check if user is main professor of the subject
@@ -91,7 +91,7 @@ func (s *SubjService) RemoveUserFromSubject(userId, subjectId string) error {
 func (s *SubjService) DeleteSubject(subjectId string) error {
 	// Check if subject exists
 	if err := s.db.SubjectExistsById(subjectId); err != nil {
-		return NewHttpError(http.StatusBadRequest, err)
+		return err
 	}
 
 	// Check if there are users enrolled in the subject
