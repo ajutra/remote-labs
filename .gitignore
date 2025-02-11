@@ -23,3 +23,6 @@ go.work.sum
 
 # env file
 .env
+
+# Docker database data
+web-server/backend/docker-postgres/
