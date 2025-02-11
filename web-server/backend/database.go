@@ -155,10 +155,15 @@ func (postgres *PostgresDatabase) ListAllSubjectsByUserId(userId string) ([]Subj
 		subjects = append(subjects, dbSubject.toSubject())
 	}
 
+	if len(subjects) == 0 {
+		return nil, NewHttpError(http.StatusBadRequest, fmt.Errorf("no subjects found for user with id %s", userId))
+	}
+
 	return subjects, nil
 }
 
 func (postgres *PostgresDatabase) ListAllUsersBySubjectId(subjectId string) ([]User, error) {
+	//TODO: return role name instead of id
 	query := `
 	SELECT u.id, u.role_id, u.name, u.mail, u.password
 	FROM users u
@@ -180,6 +185,10 @@ func (postgres *PostgresDatabase) ListAllUsersBySubjectId(subjectId string) ([]U
 		}
 
 		users = append(users, dbUser.toUser())
+	}
+
+	if len(users) == 0 {
+		return nil, NewHttpError(http.StatusBadRequest, fmt.Errorf("no users enrolled in subject with id %s", subjectId))
 	}
 
 	return users, nil
