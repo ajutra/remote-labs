@@ -19,6 +19,7 @@ type Database interface {
 	CreateSubject(subject Subject) error
 	UserExistsById(userId string) error
 	ListAllSubjectsByUserId(userId string) ([]Subject, error)
+	ListAllUsersBySubjectId(subjectId string) ([]User, error)
 }
 
 type PostgresDatabase struct {
@@ -149,6 +150,33 @@ func (postgres *PostgresDatabase) ListAllSubjectsByUserId(userId string) ([]Subj
 	return subjects, nil
 }
 
+func (postgres *PostgresDatabase) ListAllUsersBySubjectId(subjectId string) ([]User, error) {
+	query := `
+	SELECT u.id, u.role_id, u.name, u.mail, u.password
+	FROM users u
+	JOIN user_subjects us ON u.id = us.user_id
+	WHERE us.subject_id = @id`
+	args := pgx.NamedArgs{"id": subjectId}
+
+	rows, err := postgres.db.Query(context.Background(), query, args)
+	if err != nil {
+		return nil, fmt.Errorf("error listing users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var dbUser DatabaseUser
+		if err := rows.Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password); err != nil {
+			return nil, fmt.Errorf("error scanning user: %w", err)
+		}
+
+		users = append(users, dbUser.toUser())
+	}
+
+	return users, nil
+}
+
 func (user *User) toDatabaseUser() DatabaseUser {
 	return DatabaseUser{
 		ID:       user.ID,
@@ -177,15 +205,15 @@ func (dbSubject *DatabaseSubject) toSubject() Subject {
 	}
 }
 
-// This will be used in the future
-/*func (dbUser *DatabaseUser) toUserResponse() UserResponse {
-	return UserResponse{
-		ID:   dbUser.ID,
-		Name: dbUser.Name,
-		Role: string(dbUser.Role),
-		Mail: dbUser.Mail,
+func (dbUser *DatabaseUser) toUser() User {
+	return User{
+		ID:       dbUser.ID,
+		Role:     dbUser.Role,
+		Name:     dbUser.Name,
+		Mail:     dbUser.Mail,
+		Password: dbUser.Password,
 	}
-}*/
+}
 
 func NewDatabase() (Database, error) {
 	if err := godotenv.Load(".backend.env"); err != nil {

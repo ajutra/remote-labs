@@ -75,6 +75,20 @@ func (server *ApiServer) handleListAllSubjectsByUserId(w http.ResponseWriter, r 
 	return writeResponse(w, http.StatusOK, subjects)
 }
 
+func (server *ApiServer) handleListAllUsersBySubjectId(w http.ResponseWriter, r *http.Request) error {
+	subjectId := r.PathValue("id")
+	if subjectId == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing subject id"))
+	}
+
+	users, err := server.userService.ListAllUsersBySubjectId(subjectId)
+	if err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, users)
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -109,6 +123,7 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("POST /users/professors", createHttpHandler(server.handleCreateProfessor))
 	mux.HandleFunc("POST /subjects", createHttpHandler(server.handleCreateSubject))
 	mux.HandleFunc("GET /users/{id}/subjects", createHttpHandler(server.handleListAllSubjectsByUserId))
+	mux.HandleFunc("GET /subjects/{id}/users", createHttpHandler(server.handleListAllUsersBySubjectId))
 
 	log.Println("Starting server on port", server.listenAddr)
 
