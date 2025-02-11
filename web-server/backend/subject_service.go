@@ -8,6 +8,7 @@ import (
 
 type SubjectService interface {
 	CreateSubject(request CreateSubjectRequest) error
+	ListAllSubjectsByUserId(userId string) ([]SubjectResponse, error)
 }
 
 type SubjService struct {
@@ -29,6 +30,25 @@ func (s *SubjService) CreateSubject(request CreateSubjectRequest) error {
 	}
 
 	return s.db.CreateSubject(subject)
+}
+
+func (s *SubjService) ListAllSubjectsByUserId(userId string) ([]SubjectResponse, error) {
+	// Check if user exists
+	if err := s.db.UserExistsById(userId); err != nil {
+		return nil, NewHttpError(http.StatusBadRequest, err)
+	}
+
+	subjects, err := s.db.ListAllSubjectsByUserId(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	var subjectsResponse []SubjectResponse
+	for _, subject := range subjects {
+		subjectsResponse = append(subjectsResponse, subject.toSubjectResponse())
+	}
+
+	return subjectsResponse, nil
 }
 
 func (createSubjReq *CreateSubjectRequest) toSubject() Subject {

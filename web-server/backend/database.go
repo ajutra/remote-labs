@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/google/uuid"
@@ -16,6 +17,8 @@ type Database interface {
 	CreateUser(user User) error
 	UserExistsByMail(mail string) error
 	CreateSubject(subject Subject) error
+	UserExistsById(userId string) error
+	ListAllSubjectsByUserId(userId string) ([]Subject, error)
 }
 
 type PostgresDatabase struct {
@@ -103,6 +106,49 @@ func (postgres *PostgresDatabase) CreateSubject(subject Subject) error {
 	return nil
 }
 
+func (postgres *PostgresDatabase) UserExistsById(userId string) error {
+	query := "SELECT EXISTS(SELECT 1 FROM users WHERE id = @id)"
+	args := pgx.NamedArgs{"id": userId}
+
+	var exists bool
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
+		return fmt.Errorf("error checking if user exists: %w", err)
+	}
+
+	if !exists {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with id %s does not exist", userId))
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) ListAllSubjectsByUserId(userId string) ([]Subject, error) {
+	query := `
+	SELECT s.id, s.name, s.code, s.main_professor_id
+	FROM subjects s
+	JOIN user_subjects us ON s.id = us.subject_id
+	WHERE us.user_id = @id`
+	args := pgx.NamedArgs{"id": userId}
+
+	rows, err := postgres.db.Query(context.Background(), query, args)
+	if err != nil {
+		return nil, fmt.Errorf("error listing subjects: %w", err)
+	}
+	defer rows.Close()
+
+	var subjects []Subject
+	for rows.Next() {
+		var dbSubject DatabaseSubject
+		if err := rows.Scan(&dbSubject.ID, &dbSubject.Name, &dbSubject.Code, &dbSubject.ProfessorMail); err != nil {
+			return nil, fmt.Errorf("error scanning subject: %w", err)
+		}
+
+		subjects = append(subjects, dbSubject.toSubject())
+	}
+
+	return subjects, nil
+}
+
 func (user *User) toDatabaseUser() DatabaseUser {
 	return DatabaseUser{
 		ID:       user.ID,
@@ -119,6 +165,15 @@ func (subject *Subject) toDatabaseSubject() DatabaseSubject {
 		Name:          subject.Name,
 		Code:          subject.Code,
 		ProfessorMail: subject.ProfessorMail,
+	}
+}
+
+func (dbSubject *DatabaseSubject) toSubject() Subject {
+	return Subject{
+		ID:            dbSubject.ID,
+		Name:          dbSubject.Name,
+		Code:          dbSubject.Code,
+		ProfessorMail: dbSubject.ProfessorMail,
 	}
 }
 
