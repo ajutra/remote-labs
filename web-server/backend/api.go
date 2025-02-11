@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -60,6 +61,20 @@ func (server *ApiServer) handleCreateSubject(w http.ResponseWriter, r *http.Requ
 	return writeResponse(w, http.StatusOK, "Subject created successfully")
 }
 
+func (server *ApiServer) handleListAllSubjectsByUserId(w http.ResponseWriter, r *http.Request) error {
+	userId := r.PathValue("id")
+	if userId == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing user id"))
+	}
+
+	subjects, err := server.subjectService.ListAllSubjectsByUserId(userId)
+	if err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, subjects)
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -93,6 +108,7 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("POST /users", createHttpHandler(server.handleCreateUser))
 	mux.HandleFunc("POST /users/professors", createHttpHandler(server.handleCreateProfessor))
 	mux.HandleFunc("POST /subjects", createHttpHandler(server.handleCreateSubject))
+	mux.HandleFunc("GET /users/{id}/subjects", createHttpHandler(server.handleListAllSubjectsByUserId))
 
 	log.Println("Starting server on port", server.listenAddr)
 

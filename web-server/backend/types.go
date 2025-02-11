@@ -48,3 +48,19 @@ type CreateSubjectRequest struct {
 	Code          string `json:"code"`
 	MainProfessor string `json:"professorMail"`
 }
+
+type SubjectResponse struct {
+	ID            uuid.UUID `json:"id"`
+	Name          string    `json:"name"`
+	Code          string    `json:"code"`
+	ProfessorMail string    `json:"professorMail"`
+}
+
+func (subject Subject) toSubjectResponse() SubjectResponse {
+	return SubjectResponse{
+		ID:            subject.ID,
+		Name:          subject.Name,
+		Code:          subject.Code,
+		ProfessorMail: subject.ProfessorMail,
+	}
+}
