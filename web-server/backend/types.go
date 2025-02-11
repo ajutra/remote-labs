@@ -55,12 +55,3 @@ type SubjectResponse struct {
 	Code          string    `json:"code"`
 	ProfessorMail string    `json:"professorMail"`
 }
-
-func (subject Subject) toSubjectResponse() SubjectResponse {
-	return SubjectResponse{
-		ID:            subject.ID,
-		Name:          subject.Name,
-		Code:          subject.Code,
-		ProfessorMail: subject.ProfessorMail,
-	}
-}

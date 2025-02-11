@@ -47,3 +47,12 @@ func (createProfReq *CreateProfessorRequest) toUser() User {
 		Password: "randomPassword",
 	}
 }
+
+func (subject Subject) toSubjectResponse() SubjectResponse {
+	return SubjectResponse{
+		ID:            subject.ID,
+		Name:          subject.Name,
+		Code:          subject.Code,
+		ProfessorMail: subject.ProfessorMail,
+	}
+}
