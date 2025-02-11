@@ -55,3 +55,12 @@ type SubjectResponse struct {
 	Code          string    `json:"code"`
 	ProfessorMail string    `json:"professorMail"`
 }
+
+type ValidateUserRequest struct {
+	Mail     string `json:"mail"`
+	Password string `json:"password"`
+}
+
+type ValidateUserResponse struct {
+	ID uuid.UUID `json:"id"`
+}

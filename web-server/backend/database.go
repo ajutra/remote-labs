@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 
 	"github.com/google/uuid"
@@ -20,6 +19,10 @@ type Database interface {
 	UserExistsById(userId string) error
 	ListAllSubjectsByUserId(userId string) ([]Subject, error)
 	ListAllUsersBySubjectId(subjectId string) ([]User, error)
+	ValidateUser(mail, password string) (User, error)
+	GetUser(userId string) (User, error)
+	SubjectExistsById(subjectId string) error
+	EnrollUserInSubject(userId, subjectId string) error
 }
 
 type PostgresDatabase struct {
@@ -73,11 +76,7 @@ func (postgres *PostgresDatabase) UserExistsByMail(mail string) error {
 
 	var exists bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
-		return fmt.Errorf("error checking if user exists: %w", err)
-	}
-
-	if !exists {
-		return fmt.Errorf("user with mail %s does not exist", mail)
+		return fmt.Errorf("user with mail %s does not exist: %w", mail, err)
 	}
 
 	return nil
@@ -113,11 +112,7 @@ func (postgres *PostgresDatabase) UserExistsById(userId string) error {
 
 	var exists bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
-		return fmt.Errorf("error checking if user exists: %w", err)
-	}
-
-	if !exists {
-		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with id %s does not exist", userId))
+		return fmt.Errorf("user with id %s does not exist: %w", userId, err)
 	}
 
 	return nil
@@ -175,6 +170,64 @@ func (postgres *PostgresDatabase) ListAllUsersBySubjectId(subjectId string) ([]U
 	}
 
 	return users, nil
+}
+
+func (postgres *PostgresDatabase) ValidateUser(mail, password string) (User, error) {
+	query := `
+	SELECT u.id, r.role, u.name, u.mail, u.password
+	FROM users u
+	JOIN roles r ON u.role_id = r.id
+	WHERE u.mail = @mail AND u.password = @password`
+	args := pgx.NamedArgs{"mail": mail, "password": password}
+
+	var dbUser DatabaseUser
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password); err != nil {
+		return User{}, fmt.Errorf("error validating user: %w", err)
+	}
+
+	return dbUser.toUser(), nil
+}
+
+func (postgres *PostgresDatabase) GetUser(userId string) (User, error) {
+	query := `
+	SELECT u.id, r.role, u.name, u.mail, u.password
+	FROM users u
+	JOIN roles r ON u.role_id = r.id
+	WHERE u.id = @id`
+	args := pgx.NamedArgs{"id": userId}
+
+	var dbUser DatabaseUser
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password); err != nil {
+		return User{}, fmt.Errorf("error getting user: %w", err)
+	}
+
+	return dbUser.toUser(), nil
+}
+
+func (postgres *PostgresDatabase) SubjectExistsById(subjectId string) error {
+	query := "SELECT EXISTS(SELECT 1 FROM subjects WHERE id = @id)"
+	args := pgx.NamedArgs{"id": subjectId}
+
+	var exists bool
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
+		return fmt.Errorf("subject with id %s does not exist: %w", subjectId, err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) EnrollUserInSubject(userId, subjectId string) error {
+	query := `
+	INSERT INTO user_subjects (user_id, subject_id)
+	VALUES (@user_id, @subject_id)`
+	args := pgx.NamedArgs{"user_id": userId, "subject_id": subjectId}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error enrolling user in subject: %w", err)
+	}
+
+	return nil
 }
 
 func (user *User) toDatabaseUser() DatabaseUser {

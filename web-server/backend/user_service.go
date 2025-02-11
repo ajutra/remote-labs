@@ -1,11 +1,17 @@
 package main
 
-import "github.com/google/uuid"
+import (
+	"net/http"
+
+	"github.com/google/uuid"
+)
 
 type UserService interface {
 	CreateUser(request CreateUserRequest) error
 	CreateProfessor(request CreateProfessorRequest) error
 	ListAllUsersBySubjectId(subjectId string) ([]UserResponse, error)
+	ValidateUser(request ValidateUserRequest) (ValidateUserResponse, error)
+	GetUser(userId string) (UserResponse, error)
 }
 
 type UsrService struct {
@@ -42,6 +48,24 @@ func (s *UsrService) ListAllUsersBySubjectId(subjectId string) ([]UserResponse, 
 	return usersResponse, nil
 }
 
+func (s *UsrService) ValidateUser(request ValidateUserRequest) (ValidateUserResponse, error) {
+	user, err := s.db.ValidateUser(request.Mail, request.Password)
+	if err != nil {
+		return ValidateUserResponse{}, NewHttpError(http.StatusBadRequest, err)
+	}
+
+	return user.toValidateUserResponse(), nil
+}
+
+func (s *UsrService) GetUser(userId string) (UserResponse, error) {
+	user, err := s.db.GetUser(userId)
+	if err != nil {
+		return UserResponse{}, NewHttpError(http.StatusBadRequest, err)
+	}
+
+	return user.toUserResponse(), nil
+}
+
 func (createUsrReq *CreateUserRequest) toUser() User {
 	return User{
 		ID:       uuid.New(),
@@ -63,20 +87,17 @@ func (createProfReq *CreateProfessorRequest) toUser() User {
 	}
 }
 
-func (subject Subject) toSubjectResponse() SubjectResponse {
-	return SubjectResponse{
-		ID:            subject.ID,
-		Name:          subject.Name,
-		Code:          subject.Code,
-		ProfessorMail: subject.ProfessorMail,
-	}
-}
-
 func (user User) toUserResponse() UserResponse {
 	return UserResponse{
 		ID:   user.ID,
 		Name: user.Name,
 		Role: string(user.Role),
 		Mail: user.Mail,
+	}
+}
+
+func (user User) toValidateUserResponse() ValidateUserResponse {
+	return ValidateUserResponse{
+		ID: user.ID,
 	}
 }
