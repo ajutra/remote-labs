@@ -23,6 +23,8 @@ type Database interface {
 	GetUser(userId string) (User, error)
 	SubjectExistsById(subjectId string) error
 	EnrollUserInSubject(userId, subjectId string) error
+	IsMainProfessorOfSubject(userId, subjectId string) bool
+	RemoveUserFromSubject(userId, subjectId string) error
 }
 
 type PostgresDatabase struct {
@@ -225,6 +227,32 @@ func (postgres *PostgresDatabase) EnrollUserInSubject(userId, subjectId string) 
 	_, err := postgres.db.Exec(context.Background(), query, args)
 	if err != nil {
 		return fmt.Errorf("error enrolling user in subject: %w", err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) IsMainProfessorOfSubject(userId, subjectId string) bool {
+	query := "SELECT EXISTS(SELECT 1 FROM subjects WHERE id = @subject_id AND main_professor_id = @user_id)"
+	args := pgx.NamedArgs{"subject_id": subjectId, "user_id": userId}
+
+	var isMainProfessor bool
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&isMainProfessor); err != nil {
+		return false
+	}
+
+	return isMainProfessor
+}
+
+func (postgres *PostgresDatabase) RemoveUserFromSubject(userId, subjectId string) error {
+	query := `
+	DELETE FROM user_subjects
+	WHERE user_id = @user_id AND subject_id = @subject_id`
+	args := pgx.NamedArgs{"user_id": userId, "subject_id": subjectId}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error removing user from subject: %w", err)
 	}
 
 	return nil

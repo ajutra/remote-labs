@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -10,6 +11,7 @@ type SubjectService interface {
 	CreateSubject(request CreateSubjectRequest) error
 	ListAllSubjectsByUserId(userId string) ([]SubjectResponse, error)
 	EnrollUserInSubject(userId, subjectId string) error
+	RemoveUserFromSubject(userId, subjectId string) error
 }
 
 type SubjService struct {
@@ -64,6 +66,25 @@ func (s *SubjService) EnrollUserInSubject(userId, subjectId string) error {
 	}
 
 	return s.db.EnrollUserInSubject(userId, subjectId)
+}
+
+func (s *SubjService) RemoveUserFromSubject(userId, subjectId string) error {
+	// Check if user exists
+	if err := s.db.UserExistsById(userId); err != nil {
+		return NewHttpError(http.StatusBadRequest, err)
+	}
+
+	// Check if subject exists
+	if err := s.db.SubjectExistsById(subjectId); err != nil {
+		return NewHttpError(http.StatusBadRequest, err)
+	}
+
+	// Check if user is main professor of the subject
+	if s.db.IsMainProfessorOfSubject(userId, subjectId) {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("main professor cannot be removed from subject"))
+	}
+
+	return s.db.RemoveUserFromSubject(userId, subjectId)
 }
 
 func (createSubjReq *CreateSubjectRequest) toSubject() Subject {
