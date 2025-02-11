@@ -1,0 +1,12 @@
+services:
+  db:
+    image: postgres
+    container_name: postgres-dev
+    restart: always
+    shm_size: 128mb
+    ports:
+      - "5432:5432"
+    env_file:
+      - .postgres.env
+    volumes:
+      - ./docker-postgres:/var/lib/postgresql/data
