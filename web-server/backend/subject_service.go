@@ -9,6 +9,7 @@ import (
 type SubjectService interface {
 	CreateSubject(request CreateSubjectRequest) error
 	ListAllSubjectsByUserId(userId string) ([]SubjectResponse, error)
+	EnrollUserInSubject(userId, subjectId string) error
 }
 
 type SubjService struct {
@@ -51,6 +52,20 @@ func (s *SubjService) ListAllSubjectsByUserId(userId string) ([]SubjectResponse,
 	return subjectsResponse, nil
 }
 
+func (s *SubjService) EnrollUserInSubject(userId, subjectId string) error {
+	// Check if user exists
+	if err := s.db.UserExistsById(userId); err != nil {
+		return NewHttpError(http.StatusBadRequest, err)
+	}
+
+	// Check if subject exists
+	if err := s.db.SubjectExistsById(subjectId); err != nil {
+		return NewHttpError(http.StatusBadRequest, err)
+	}
+
+	return s.db.EnrollUserInSubject(userId, subjectId)
+}
+
 func (createSubjReq *CreateSubjectRequest) toSubject() Subject {
 	return Subject{
 		ID:            uuid.New(),
@@ -58,4 +73,8 @@ func (createSubjReq *CreateSubjectRequest) toSubject() Subject {
 		Code:          createSubjReq.Code,
 		ProfessorMail: createSubjReq.MainProfessor,
 	}
+}
+
+func (subject Subject) toSubjectResponse() SubjectResponse {
+	return SubjectResponse(subject)
 }

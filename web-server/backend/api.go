@@ -89,6 +89,50 @@ func (server *ApiServer) handleListAllUsersBySubjectId(w http.ResponseWriter, r 
 	return writeResponse(w, http.StatusOK, users)
 }
 
+func (server *ApiServer) handleValidateUserCredentials(w http.ResponseWriter, r *http.Request) error {
+	var request ValidateUserRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return NewHttpError(http.StatusBadRequest, err)
+	}
+
+	validateUserResponse, err := server.userService.ValidateUser(request)
+	if err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, validateUserResponse)
+}
+
+func (server *ApiServer) handleGetUserInfo(w http.ResponseWriter, r *http.Request) error {
+	userId := r.PathValue("id")
+	if userId == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing user id"))
+	}
+
+	user, err := server.userService.GetUser(userId)
+	if err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, user)
+}
+
+func (server *ApiServer) handleEnrollUserInSubject(w http.ResponseWriter, r *http.Request) error {
+	subjectId := r.PathValue("subjectId")
+	userId := r.PathValue("userId")
+
+	if subjectId == "" || userId == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing subject or user id"))
+	}
+
+	if err := server.subjectService.EnrollUserInSubject(userId, subjectId); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, "User enrolled in subject successfully")
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -124,6 +168,9 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("POST /subjects", createHttpHandler(server.handleCreateSubject))
 	mux.HandleFunc("GET /users/{id}/subjects", createHttpHandler(server.handleListAllSubjectsByUserId))
 	mux.HandleFunc("GET /subjects/{id}/users", createHttpHandler(server.handleListAllUsersBySubjectId))
+	mux.HandleFunc("POST /users/validate", createHttpHandler(server.handleValidateUserCredentials))
+	mux.HandleFunc("GET /users/{id}", createHttpHandler(server.handleGetUserInfo))
+	mux.HandleFunc("PUT /subjects/{subjectId}/users/{userId}", createHttpHandler(server.handleEnrollUserInSubject))
 
 	log.Println("Starting server on port", server.listenAddr)
 
