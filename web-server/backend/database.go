@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/google/uuid"
@@ -80,7 +81,11 @@ func (postgres *PostgresDatabase) UserExistsByMail(mail string) error {
 
 	var exists bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
-		return fmt.Errorf("user with mail %s does not exist: %w", mail, err)
+		return fmt.Errorf("error checking if user exists: %w", err)
+	}
+
+	if !exists {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with mail %s does not exist", mail))
 	}
 
 	return nil
@@ -116,7 +121,11 @@ func (postgres *PostgresDatabase) UserExistsById(userId string) error {
 
 	var exists bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
-		return fmt.Errorf("user with id %s does not exist: %w", userId, err)
+		return fmt.Errorf("error checking if user exists: %w", err)
+	}
+
+	if !exists {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with id %s does not exist", userId))
 	}
 
 	return nil
@@ -146,13 +155,18 @@ func (postgres *PostgresDatabase) ListAllSubjectsByUserId(userId string) ([]Subj
 		subjects = append(subjects, dbSubject.toSubject())
 	}
 
+	if len(subjects) == 0 {
+		return nil, NewHttpError(http.StatusBadRequest, fmt.Errorf("no subjects found for user with id %s", userId))
+	}
+
 	return subjects, nil
 }
 
 func (postgres *PostgresDatabase) ListAllUsersBySubjectId(subjectId string) ([]User, error) {
 	query := `
-	SELECT u.id, u.role_id, u.name, u.mail, u.password
+	SELECT u.id, r.role, u.name, u.mail, u.password
 	FROM users u
+	JOIN roles r ON u.role_id = r.id
 	JOIN user_subjects us ON u.id = us.user_id
 	WHERE us.subject_id = @id`
 	args := pgx.NamedArgs{"id": subjectId}
@@ -171,6 +185,10 @@ func (postgres *PostgresDatabase) ListAllUsersBySubjectId(subjectId string) ([]U
 		}
 
 		users = append(users, dbUser.toUser())
+	}
+
+	if len(users) == 0 {
+		return nil, NewHttpError(http.StatusBadRequest, fmt.Errorf("no users enrolled in subject with id %s", subjectId))
 	}
 
 	return users, nil
@@ -214,7 +232,11 @@ func (postgres *PostgresDatabase) SubjectExistsById(subjectId string) error {
 
 	var exists bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
-		return fmt.Errorf("subject with id %s does not exist: %w", subjectId, err)
+		return fmt.Errorf("error checking if subject exists: %w", err)
+	}
+
+	if !exists {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("subject with id %s does not exist", subjectId))
 	}
 
 	return nil
