@@ -1,6 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
-import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -12,52 +9,10 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { useTranslation } from 'react-i18next'
+import useCreateSubjectForm from '@/hooks/forms/useCreateSubjectForm'
 
 const CreateSubjectForm = () => {
-  const { t } = useTranslation()
-  // Define the form schema for creating a subject
-  const subjectFormSchema = z.object({
-    name: z.string().min(2, {
-      message: t('Name must be at least 2 characters.'),
-    }),
-    code: z.string().min(6, {
-      message: t('Code must be at least 6 characters.'),
-    }),
-    professorMail: z.string().email({
-      message: t('Invalid email address.'),
-    }),
-  })
-
-  // Define the form
-  const form = useForm<z.infer<typeof subjectFormSchema>>({
-    resolver: zodResolver(subjectFormSchema),
-    defaultValues: {
-      name: '',
-      code: '',
-      professorMail: '',
-    },
-  })
-
-  // Define the submit handler for creating a subject
-  async function onSubmit(values: z.infer<typeof subjectFormSchema>) {
-    try {
-      const response = await fetch('/subjects', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(values),
-      })
-      if (!response.ok) {
-        throw new Error('Network response was not ok')
-      }
-      const data = await response.json()
-      console.log('Subject created:', data)
-    } catch (error) {
-      console.error('Error creating subject:', error)
-    }
-  }
+  const { form, onSubmit, t } = useCreateSubjectForm()
 
   return (
     <div className="w-full max-w-md rounded bg-card p-8 shadow-md">

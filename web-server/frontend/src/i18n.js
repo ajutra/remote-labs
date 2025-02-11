@@ -199,7 +199,7 @@ const resources = {
         "L'ID d'usuari ha de tenir almenys 1 caràcter.",
       'Subject ID must be at least 1 character.':
         "L'ID de l'assignatura ha de tenir almenys 1 caràcter.",
-      
+
       // Formulari Afegir Usuari a Assignatura
       'Add User to Subject': 'Afegir Usuari a Assignatura',
 
