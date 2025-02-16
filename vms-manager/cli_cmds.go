@@ -10,6 +10,7 @@ import (
 
 type VmManager interface {
 	CloneVM(originalVmName string, newVmName string) error
+	DeleteVM(vmName string) error
 }
 
 type VmManagerImpl struct{}
@@ -20,10 +21,6 @@ var (
 )
 
 func (manager *VmManagerImpl) CloneVM(originalVmName string, newVmName string) error {
-	if err := checkIfVmIsStopped(originalVmName); err != nil {
-		return err
-	}
-
 	vmMutex := getMutex(originalVmName)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
@@ -41,28 +38,28 @@ func (manager *VmManagerImpl) CloneVM(originalVmName string, newVmName string) e
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		return fmt.Errorf("Error cloning VM %s: %s", originalVmName, string(output))
+		return logAndReturnError(
+			"Error cloning VM "+originalVmName+" into "+newVmName+": ", string(output))
 	}
 
-	log.Printf("virt-clone output: %s", output)
+	log.Printf("Cloned VM %s to %s successfully", originalVmName, newVmName)
 
 	return nil
 }
 
-func checkIfVmIsStopped(vmName string) error {
+func (manager *VmManagerImpl) DeleteVM(vmName string) error {
+	vmMutex := getMutex(vmName)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
 	cmd := exec.Command(
-		"bash", "-c",
-		"virsh list --all | grep "+vmName,
+		"virsh", "undefine", vmName, "--remove-all-storage",
 	)
 
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		return fmt.Errorf("Error checking if VM %s is stopped: %s", vmName, string(output))
-	}
-
-	if !strings.Contains(string(output), "shut off") {
-		return fmt.Errorf("VM %s must be stopped before cloning", vmName)
+		return logAndReturnError("Error deleting VM "+vmName+": ", string(output))
 	}
 
 	return nil
@@ -77,6 +74,15 @@ func getMutex(vmName string) *sync.Mutex {
 	}
 
 	return mutexMap[vmName]
+}
+
+func logAndReturnError(customMsg string, err string) error {
+	err = strings.TrimPrefix(err, "error")
+	err = strings.TrimPrefix(err, "ERROR")
+	err = strings.TrimPrefix(err, ":")
+	err = strings.TrimSpace(err)
+	log.Printf("%s%s", customMsg, err)
+	return fmt.Errorf("%s%s", customMsg, err)
 }
 
 func NewVmManager() VmManager {
