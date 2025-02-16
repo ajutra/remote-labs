@@ -31,6 +31,16 @@ func (server *ApiServer) handleCloneVM(w http.ResponseWriter, r *http.Request) e
 	return writeResponse(w, http.StatusOK, nil)
 }
 
+func (server *ApiServer) handleDeleteVM(w http.ResponseWriter, r *http.Request) error {
+	vmName := r.PathValue("vmName")
+
+	if err := server.service.DeleteVM(vmName); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, nil)
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -62,6 +72,7 @@ func (server *ApiServer) Run() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /vms/clone", createHttpHandler(server.handleCloneVM))
+	mux.HandleFunc("DELETE /vms/delete/{vmName}", createHttpHandler(server.handleDeleteVM))
 
 	log.Println("Starting server on", server.listenAddr)
 
