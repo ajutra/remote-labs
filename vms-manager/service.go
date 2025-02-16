@@ -4,15 +4,18 @@ type Service interface {
 	CloneVM(request CloneVmRequest) error
 }
 
-type VmService struct {
+type ServiceImpl struct {
+	vmManager VmManager
 }
 
-func NewService() Service {
-	return &VmService{}
+func NewService(vmManager VmManager) Service {
+	return &ServiceImpl{
+		vmManager: vmManager,
+	}
 }
 
-func (s *VmService) CloneVM(request CloneVmRequest) error {
-	if err := CloneVM(request.SourceVmName, request.TargetVmName); err != nil {
+func (s *ServiceImpl) CloneVM(request CloneVmRequest) error {
+	if err := s.vmManager.CloneVM(request.SourceVmName, request.TargetVmName); err != nil {
 		return err
 	}
 	return nil
