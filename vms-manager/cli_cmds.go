@@ -41,6 +41,7 @@ func CloneVM(originalVmName string, newVmName string) error {
 
 func checkIfVmIsStopped(vmName string) error {
 	cmd := exec.Command(
+		"bash", "-c",
 		"virsh", "list", "--all",
 		"|", "grep", vmName,
 	)
