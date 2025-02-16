@@ -8,12 +8,18 @@ import (
 	"sync"
 )
 
+type VmManager interface {
+	CloneVM(originalVmName string, newVmName string) error
+}
+
+type VmManagerImpl struct{}
+
 var (
 	mutexMap = make(map[string]*sync.Mutex)
 	mutex    sync.Mutex
 )
 
-func CloneVM(originalVmName string, newVmName string) error {
+func (manager *VmManagerImpl) CloneVM(originalVmName string, newVmName string) error {
 	if err := checkIfVmIsStopped(originalVmName); err != nil {
 		return err
 	}
@@ -71,4 +77,8 @@ func getMutex(vmName string) *sync.Mutex {
 	}
 
 	return mutexMap[vmName]
+}
+
+func NewVmManager() VmManager {
+	return &VmManagerImpl{}
 }
