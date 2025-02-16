@@ -12,6 +12,7 @@ type VmManager interface {
 	CloneVM(originalVmName string, newVmName string) error
 	DeleteVM(vmName string) error
 	StartVM(vmName string) error
+	StopVM(vmName string) error
 }
 
 type VmManagerImpl struct{}
@@ -26,7 +27,7 @@ func (manager *VmManagerImpl) CloneVM(originalVmName string, newVmName string) e
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
-	log.Printf("Cloning VM %s to %s...", originalVmName, newVmName)
+	log.Printf("Cloning VM '%s' to '%s'...", originalVmName, newVmName)
 
 	cmd := exec.Command(
 		"virt-clone",
@@ -40,10 +41,10 @@ func (manager *VmManagerImpl) CloneVM(originalVmName string, newVmName string) e
 
 	if err != nil {
 		return logAndReturnError(
-			"Error cloning VM "+originalVmName+" to "+newVmName+": ", string(output))
+			"Error cloning VM '"+originalVmName+"' to '"+newVmName+"': ", string(output))
 	}
 
-	log.Printf("Cloned VM %s to %s successfully!", originalVmName, newVmName)
+	log.Printf("Cloned VM '%s' to '%s' successfully!", originalVmName, newVmName)
 
 	return nil
 }
@@ -53,7 +54,7 @@ func (manager *VmManagerImpl) DeleteVM(vmName string) error {
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
-	log.Printf("Deleting VM %s...", vmName)
+	log.Printf("Deleting VM '%s'...", vmName)
 
 	cmd := exec.Command(
 		"virsh", "undefine", vmName, "--remove-all-storage",
@@ -62,10 +63,10 @@ func (manager *VmManagerImpl) DeleteVM(vmName string) error {
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		return logAndReturnError("Error deleting VM "+vmName+": ", string(output))
+		return logAndReturnError("Error deleting VM '"+vmName+"': ", string(output))
 	}
 
-	log.Printf("Deleted VM %s successfully!", vmName)
+	log.Printf("Deleted VM '%s' successfully!", vmName)
 
 	return nil
 }
@@ -75,7 +76,7 @@ func (manager *VmManagerImpl) StartVM(vmName string) error {
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
-	log.Printf("Starting VM %s...", vmName)
+	log.Printf("Starting VM '%s'...", vmName)
 
 	cmd := exec.Command(
 		"virsh", "start", vmName,
@@ -84,10 +85,32 @@ func (manager *VmManagerImpl) StartVM(vmName string) error {
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		return logAndReturnError("Error starting VM "+vmName+": ", string(output))
+		return logAndReturnError("Error starting VM '"+vmName+"': ", string(output))
 	}
 
-	log.Printf("Started VM %s successfully!", vmName)
+	log.Printf("Started VM '%s' successfully!", vmName)
+
+	return nil
+}
+
+func (manager *VmManagerImpl) StopVM(vmName string) error {
+	vmMutex := getMutex(vmName)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
+	log.Printf("Stopping VM '%s'...", vmName)
+
+	cmd := exec.Command(
+		"virsh", "shutdown", vmName,
+	)
+
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return logAndReturnError("", string(output))
+	}
+
+	log.Printf("Stopped VM '%s' successfully!", vmName)
 
 	return nil
 }
