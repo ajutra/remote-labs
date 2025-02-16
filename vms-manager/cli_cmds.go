@@ -8,15 +8,19 @@ import (
 	"sync"
 )
 
-var cloneMutex sync.Mutex
+var (
+	mutexMap = make(map[string]*sync.Mutex)
+	mutex    sync.Mutex
+)
 
 func CloneVM(originalVmName string, newVmName string) error {
 	if err := checkIfVmIsStopped(originalVmName); err != nil {
 		return err
 	}
 
-	cloneMutex.Lock()
-	defer cloneMutex.Unlock()
+	vmMutex := getMutex(originalVmName)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
 
 	log.Printf("Cloning VM %s to %s", originalVmName, newVmName)
 
@@ -31,7 +35,7 @@ func CloneVM(originalVmName string, newVmName string) error {
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		return err
+		return fmt.Errorf("Error cloning VM %s: %s", originalVmName, string(output))
 	}
 
 	log.Printf("virt-clone output: %s", output)
@@ -42,14 +46,13 @@ func CloneVM(originalVmName string, newVmName string) error {
 func checkIfVmIsStopped(vmName string) error {
 	cmd := exec.Command(
 		"bash", "-c",
-		"virsh", "list", "--all",
-		"|", "grep", vmName,
+		"virsh list --all | grep "+vmName,
 	)
 
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		return err
+		return fmt.Errorf("Error checking if VM %s is stopped: %s", vmName, string(output))
 	}
 
 	if !strings.Contains(string(output), "shut off") {
@@ -57,4 +60,15 @@ func checkIfVmIsStopped(vmName string) error {
 	}
 
 	return nil
+}
+
+func getMutex(vmName string) *sync.Mutex {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	if mutexMap[vmName] == nil {
+		mutexMap[vmName] = &sync.Mutex{}
+	}
+
+	return mutexMap[vmName]
 }
