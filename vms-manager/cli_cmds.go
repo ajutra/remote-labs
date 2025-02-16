@@ -14,6 +14,7 @@ type VmManager interface {
 	StartVM(vmName string) error
 	StopVM(vmName string) error
 	RestartVM(vmName string) error
+	ForceStopVM(vmName string) error
 }
 
 type VmManagerImpl struct{}
@@ -134,6 +135,28 @@ func (manager *VmManagerImpl) RestartVM(vmName string) error {
 	}
 
 	log.Printf("Restarted VM '%s' successfully!", vmName)
+
+	return nil
+}
+
+func (manager *VmManagerImpl) ForceStopVM(vmName string) error {
+	vmMutex := getMutex(vmName)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
+	log.Printf("Force stopping VM '%s'...", vmName)
+
+	cmd := exec.Command(
+		"virsh", "destroy", vmName,
+	)
+
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return logAndReturnError("", string(output))
+	}
+
+	log.Printf("Force stopped VM '%s' successfully!", vmName)
 
 	return nil
 }
