@@ -4,6 +4,7 @@ type Service interface {
 	CloneVM(request CloneVmRequest) error
 	DeleteVM(vmName string) error
 	StartVM(vmName string) error
+	StopVM(vmName string) error
 }
 
 type ServiceImpl struct {
@@ -32,6 +33,13 @@ func (s *ServiceImpl) DeleteVM(vmName string) error {
 
 func (s *ServiceImpl) StartVM(vmName string) error {
 	if err := s.vmManager.StartVM(vmName); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *ServiceImpl) StopVM(vmName string) error {
+	if err := s.vmManager.StopVM(vmName); err != nil {
 		return err
 	}
 	return nil
