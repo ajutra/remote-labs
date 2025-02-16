@@ -3,6 +3,7 @@ package main
 type Service interface {
 	CloneVM(request CloneVmRequest) error
 	DeleteVM(vmName string) error
+	StartVM(vmName string) error
 }
 
 type ServiceImpl struct {
@@ -24,6 +25,13 @@ func (s *ServiceImpl) CloneVM(request CloneVmRequest) error {
 
 func (s *ServiceImpl) DeleteVM(vmName string) error {
 	if err := s.vmManager.DeleteVM(vmName); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *ServiceImpl) StartVM(vmName string) error {
+	if err := s.vmManager.StartVM(vmName); err != nil {
 		return err
 	}
 	return nil
