@@ -55,10 +55,13 @@ func (s *ServiceImpl) CloneVM(request CloneVmRequest) error {
 		return err
 	}
 
-	if err := s.db.AddVm(request.TargetVmName); err != nil {
-		log.Println(err.Error())
-		s.vmManager.DeleteVM(request.TargetVmName)
-		return err
+	// Try to add the VM to the database until it succeeds
+	for {
+		if err := s.db.AddVm(request.TargetVmName); err != nil {
+			log.Println(err.Error())
+		} else {
+			break
+		}
 	}
 
 	return nil
@@ -72,6 +75,16 @@ func (s *ServiceImpl) DeleteVM(vmName string) error {
 	if err := s.vmManager.DeleteVM(vmName); err != nil {
 		return err
 	}
+
+	// Try to delete the VM from the database until it succeeds
+	for {
+		if err := s.vmManager.DeleteVM(vmName); err != nil {
+			log.Println(err.Error())
+		} else {
+			break
+		}
+	}
+
 	return nil
 }
 

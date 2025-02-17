@@ -15,6 +15,7 @@ type Database interface {
 	Close()
 	VmExistsByName(vmName string) (bool, error)
 	AddVm(vmName string) error
+	DeleteVm(vmName string) error
 }
 
 type PostgresDatabase struct {
@@ -44,6 +45,17 @@ func (postgres *PostgresDatabase) AddVm(vmName string) error {
 
 	if _, err := postgres.db.Exec(context.Background(), query, args); err != nil {
 		return fmt.Errorf("Error adding VM: %v", err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) DeleteVm(vmName string) error {
+	query := "DELETE FROM vms WHERE name = @name"
+	args := pgx.NamedArgs{"name": vmName}
+
+	if _, err := postgres.db.Exec(context.Background(), query, args); err != nil {
+		return fmt.Errorf("Error deleting VM: %v", err)
 	}
 
 	return nil
