@@ -180,8 +180,11 @@ func (manager *VmManagerImpl) ListVMsStatus() (map[string]string, error) {
 
 	for _, line := range lines {
 		fields := strings.Fields(line)
-		if len(fields) >= 4 && fields[0] != "Id" {
-			vmStatusMap[fields[1]] = fields[2] + " " + fields[3]
+		if len(fields) >= 3 && fields[0] != "Id" {
+			vmStatusMap[fields[1]] = fields[2]
+			if len(fields) > 3 {
+				vmStatusMap[fields[1]] += " " + fields[3]
+			}
 		}
 	}
 
