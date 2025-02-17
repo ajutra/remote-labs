@@ -15,6 +15,7 @@ type VmManager interface {
 	StopVM(vmName string) error
 	RestartVM(vmName string) error
 	ForceStopVM(vmName string) error
+	ListVMsStatus() (map[string]string, error)
 }
 
 type VmManagerImpl struct{}
@@ -159,6 +160,37 @@ func (manager *VmManagerImpl) ForceStopVM(vmName string) error {
 	log.Printf("Force stopped VM '%s' successfully!", vmName)
 
 	return nil
+}
+
+func (manager *VmManagerImpl) ListVMsStatus() (map[string]string, error) {
+	log.Printf("Getting VMs status...")
+
+	cmd := exec.Command(
+		"virsh", "list", "--all",
+	)
+
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return nil, logAndReturnError("", string(output))
+	}
+
+	lines := strings.Split(string(output), "\n")
+	vmStatusMap := make(map[string]string)
+
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) >= 4 && fields[0] != "Id" {
+			vmStatusMap[fields[1]] = fields[2] + " " + fields[3]
+		}
+	}
+
+	log.Printf("VMs status:")
+	for vmName, status := range vmStatusMap {
+		log.Printf("%s: %s", vmName, status)
+	}
+
+	return vmStatusMap, nil
 }
 
 func getMutex(vmName string) *sync.Mutex {
