@@ -39,9 +39,28 @@ func (s *ServiceImpl) CloneVM(request CloneVmRequest) error {
 		return err
 	}
 
+	exists, err := s.db.VmExistsByName(request.TargetVmName)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		return NewHttpError(
+			http.StatusBadRequest,
+			fmt.Errorf("VM '%s' already exists", request.TargetVmName),
+		)
+	}
+
 	if err := s.vmManager.CloneVM(request.SourceVmName, request.TargetVmName); err != nil {
 		return err
 	}
+
+	if err := s.db.AddVm(request.TargetVmName); err != nil {
+		log.Println(err.Error())
+		s.vmManager.DeleteVM(request.TargetVmName)
+		return err
+	}
+
 	return nil
 }
 
