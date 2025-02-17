@@ -141,6 +141,8 @@ func (s *ServiceImpl) ListVMsStatus() ([]ListVMsStatusResponse, error) {
 }
 
 func (s *ServiceImpl) addCurrentVMsToDb() error {
+	log.Println("Trying to add current VMs to the database if they don't exist...")
+
 	vms, err := s.vmManager.ListVMsStatus()
 	if err != nil {
 		return err
