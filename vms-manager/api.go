@@ -81,6 +81,15 @@ func (server *ApiServer) handleForceStopVM(w http.ResponseWriter, r *http.Reques
 	return writeResponse(w, http.StatusOK, nil)
 }
 
+func (server *ApiServer) handleListVMsStatus(w http.ResponseWriter, r *http.Request) error {
+	statuses, err := server.service.ListVMsStatus()
+	if err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, statuses)
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -117,6 +126,7 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("POST /vms/stop/{vmName}", createHttpHandler(server.handleStopVM))
 	mux.HandleFunc("POST /vms/restart/{vmName}", createHttpHandler(server.handleRestartVM))
 	mux.HandleFunc("POST /vms/force-stop/{vmName}", createHttpHandler(server.handleForceStopVM))
+	mux.HandleFunc("GET /vms/status", createHttpHandler(server.handleListVMsStatus))
 
 	log.Println("Starting server on", server.listenAddr)
 

@@ -7,6 +7,7 @@ type Service interface {
 	StopVM(vmName string) error
 	RestartVM(vmName string) error
 	ForceStopVM(vmName string) error
+	ListVMsStatus() ([]ListVMsStatusResponse, error)
 }
 
 type ServiceImpl struct {
@@ -59,4 +60,23 @@ func (s *ServiceImpl) ForceStopVM(vmName string) error {
 		return err
 	}
 	return nil
+}
+
+func (s *ServiceImpl) ListVMsStatus() ([]ListVMsStatusResponse, error) {
+	status, err := s.vmManager.ListVMsStatus()
+	if err != nil {
+		return nil, err
+	}
+	return toVMsStatusResponse(status), nil
+}
+
+func toVMsStatusResponse(status map[string]string) []ListVMsStatusResponse {
+	var response []ListVMsStatusResponse
+	for vmName, status := range status {
+		response = append(response, ListVMsStatusResponse{
+			VmName: vmName,
+			Status: status,
+		})
+	}
+	return response
 }
