@@ -130,5 +130,7 @@ func (server *ApiServer) Run() {
 
 	log.Println("Starting server on", server.listenAddr)
 
-	http.ListenAndServe(server.listenAddr, mux)
+	if err := http.ListenAndServe(server.listenAddr, mux); err != nil {
+		log.Fatal("Error starting server:", err)
+	}
 }
