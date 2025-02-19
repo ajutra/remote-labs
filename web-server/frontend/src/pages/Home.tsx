@@ -10,13 +10,11 @@ import DeleteSubjectForm from '@/components/froms/DeleteSubjectForm'
 import DeleteUserForm from '@/components/froms/DeleteUserForm'
 import RemoveUserFromSubjectForm from '@/components/froms/RemoveUserFromSubjectFrom'
 import '@/i18n'
-import Header from '@/components/Header'
 import PhotoCarousel from '@/components/PhotoCarousel'
 
 function Home() {
   return (
     <div>
-      <Header />
       <PhotoCarousel />
       <div className="mt-8 flex min-h-screen flex-wrap gap-4">
         <div className="flex w-full flex-wrap items-start gap-4">
