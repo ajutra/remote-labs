@@ -11,13 +11,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/context/AuthContext'
 import { Loader2 } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
 import { useTranslation } from 'react-i18next'
+import { useAlertDialog } from '@/context/AlertDialogContext'
 
 export function RegisterForm({ onRegister }: { onRegister: () => void }) {
   const { t } = useTranslation()
   const { register } = useAuth()
-  const { toast } = useToast()
+  const { showAlert } = useAlertDialog()
   const nameRef = useRef<HTMLInputElement>(null)
   const emailRef = useRef<HTMLInputElement>(null)
   const pwdRef = useRef<HTMLInputElement>(null)
@@ -81,11 +81,12 @@ export function RegisterForm({ onRegister }: { onRegister: () => void }) {
         // Aquí podrías asignar el error a uno de los campos o mostrar un mensaje general
         setErrors({ email: result.error })
       } else {
-        toast({
-          description: t(
+        showAlert(
+          t('Registration successful'),
+          t(
             'A verification email has been sent to your email address. Please verify your account before logging in.'
-          ),
-        })
+          )
+        )
         onRegister()
       }
     }
