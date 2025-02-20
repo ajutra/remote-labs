@@ -1,10 +1,16 @@
 import Header from '@/components/Header'
+import { Toaster } from '@/components/ui/toaster'
+import ScrollToTopButton from '@/components/ScrollToTopButton'
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div>
       <Header />
-      <main className="flex-1">{children}</main>
+      <div className="pt-24">
+        <main>{children}</main>
+        <Toaster />
+      </div>
+      <ScrollToTopButton />
     </div>
   )
 }

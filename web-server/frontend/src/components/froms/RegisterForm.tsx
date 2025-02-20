@@ -22,34 +22,71 @@ export function RegisterForm({ onRegister }: { onRegister: () => void }) {
   const emailRef = useRef<HTMLInputElement>(null)
   const pwdRef = useRef<HTMLInputElement>(null)
   const pwdCheckRef = useRef<HTMLInputElement>(null)
-  const [error, setError] = useState<string | null>(null)
+
+  // Estado para almacenar múltiples errores
+  const [errors, setErrors] = useState<{
+    email?: string
+    password?: string
+    passwordMatch?: string
+  }>({})
   const [isLoading, setIsLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError(null)
+    // Limpiar errores previos
+    setErrors({})
 
-    if (pwdRef.current && pwdCheckRef.current) {
-      if (pwdRef.current.value !== pwdCheckRef.current.value) {
-        setError(t('Passwords do not match'))
-      } else if (nameRef.current && emailRef.current && pwdRef.current) {
-        setIsLoading(true)
-        const result = await register(
-          nameRef.current.value,
-          emailRef.current.value,
-          pwdRef.current.value
-        )
-        setIsLoading(false)
-        if (result.error) {
-          setError(result.error)
-        } else {
-          toast({
-            description: t(
-              'A verification email has been sent to your email address. Please verify your account before logging in.'
-            ),
-          })
-          onRegister()
-        }
+    const newErrors: {
+      email?: string
+      password?: string
+      passwordMatch?: string
+    } = {}
+
+    // Expresión regular para validar que el correo sea cualquiercosa@edu.tecnocampus.cat
+    const emailPattern = /^[^@\s]+@edu\.tecnocampus\.cat$/
+    if (emailRef.current && !emailPattern.test(emailRef.current.value)) {
+      newErrors.email = t(
+        'Invalid email address, must be student email like: user@edu.tecnocampus.cat'
+      )
+    }
+
+    if (pwdRef.current && pwdRef.current.value.length < 6) {
+      newErrors.password = t('Password must be at least 6 characters')
+    }
+
+    if (
+      pwdRef.current &&
+      pwdCheckRef.current &&
+      pwdRef.current.value !== pwdCheckRef.current.value
+    ) {
+      newErrors.passwordMatch = t('Passwords do not match')
+    }
+
+    // Si hay algún error, se actualiza el estado y se detiene el envío
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+
+    // Si todas las validaciones pasan, se procede a registrar al usuario
+    if (nameRef.current && emailRef.current && pwdRef.current) {
+      setIsLoading(true)
+      const result = await register(
+        nameRef.current.value,
+        emailRef.current.value,
+        pwdRef.current.value
+      )
+      setIsLoading(false)
+      if (result.error) {
+        // Aquí podrías asignar el error a uno de los campos o mostrar un mensaje general
+        setErrors({ email: result.error })
+      } else {
+        toast({
+          description: t(
+            'A verification email has been sent to your email address. Please verify your account before logging in.'
+          ),
+        })
+        onRegister()
       }
     }
   }
@@ -65,7 +102,7 @@ export function RegisterForm({ onRegister }: { onRegister: () => void }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="grid gap-4">
+        <form noValidate onSubmit={handleSubmit} className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="name">{t('Name')}</Label>
             <Input
@@ -84,7 +121,7 @@ export function RegisterForm({ onRegister }: { onRegister: () => void }) {
               placeholder={t('Your email')}
               ref={emailRef}
               required
-              pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+              pattern="^[^@\s]+@edu\.tecnocampus\.cat$"
             />
           </div>
           <div className="grid gap-2">
@@ -100,11 +137,24 @@ export function RegisterForm({ onRegister }: { onRegister: () => void }) {
               required
             />
           </div>
-          {error && (
+
+          {/* Mostrar los errores correspondientes */}
+          {errors.email && (
             <CardDescription className="text-destructive">
-              {error}
+              {errors.email}
             </CardDescription>
           )}
+          {errors.password && (
+            <CardDescription className="text-destructive">
+              {errors.password}
+            </CardDescription>
+          )}
+          {errors.passwordMatch && (
+            <CardDescription className="text-destructive">
+              {errors.passwordMatch}
+            </CardDescription>
+          )}
+
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 animate-spin" />}
             {t('Sign Up')}

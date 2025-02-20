@@ -47,7 +47,7 @@ export function LoginForm({
   return (
     <Card className="mx-auto max-w-sm border-none shadow-none">
       <CardHeader>
-        <CardTitle className="text-2xl">{t('Login')}</CardTitle>
+        <CardTitle className="text-2xl">{t('Log In')}</CardTitle>
         <CardDescription>
           {t('Enter your email and password below to login to your account')}
         </CardDescription>
@@ -62,7 +62,6 @@ export function LoginForm({
               placeholder={t('Your email')}
               ref={emailRef}
               required
-              pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
             />
           </div>
           <div className="grid gap-2">

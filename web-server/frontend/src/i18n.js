@@ -27,6 +27,8 @@ const resources = {
       'Name must be at least 2 characters.':
         'Name must be at least 2 characters.',
       'Invalid email address.': 'Invalid email address.',
+      'Invalid email address, must be student email like: user@edu.tecnocampus.cat':
+        'Invalid email address, must be student email like: user@edu.tecnocampus.cat',
       'Password must be at least 6 characters.':
         'Password must be at least 6 characters.',
       'User ID must be at least 1 character.':
@@ -134,6 +136,8 @@ const resources = {
       'Name must be at least 2 characters.':
         'El nombre debe tener al menos 2 caracteres.',
       'Invalid email address.': 'Dirección de correo electrónico no válida.',
+      'Invalid email address, must be student email like: user@edu.tecnocampus.cat':
+        'Dirección de correo electrónico no válida, debe ser un correo de estudiante como: usuario@edu.tecnoampus.cat',
       'Password must be at least 6 characters.':
         'La contraseña debe tener al menos 6 caracteres.',
       'User ID must be at least 1 character.':
@@ -240,6 +244,8 @@ const resources = {
       'Name must be at least 2 characters.':
         'El nom ha de tenir almenys 2 caràcters.',
       'Invalid email address.': 'Adreça de correu electrònic no vàlida.',
+      'Invalid email address, must be student email like: user@edu.tecnocampus.cat':
+        'Adreça de correu electrònic no vàlida, ha de ser un correu d’estudiant com: usuari@edu.tecnocampus.cat',
       'Password must be at least 6 characters.':
         'La contrasenya ha de tenir almenys 6 caràcters.',
       'User ID must be at least 1 character.':
