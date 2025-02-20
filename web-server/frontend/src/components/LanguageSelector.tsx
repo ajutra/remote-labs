@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/select'
 
 const LanguageSelector: React.FC = () => {
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
 
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng)
@@ -17,8 +17,8 @@ const LanguageSelector: React.FC = () => {
   return (
     <div className="language-selector">
       <Select onValueChange={changeLanguage}>
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder="Select Language" />
+        <SelectTrigger>
+          <SelectValue placeholder={t('Language')} />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="en">English</SelectItem>

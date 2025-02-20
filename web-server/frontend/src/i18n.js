@@ -81,6 +81,30 @@ const resources = {
       // Validate User Credentials Form
       'Validate User Credentials': 'Validate User Credentials',
 
+      // Login and Register Forms
+      'Log In': 'Log In',
+      'Sign Up': 'Sign Up',
+      Logout: 'Logout',
+      'Confirm Password': 'Confirm Password',
+      'Passwords do not match': 'Passwords do not match',
+      'You have been logged in successfully':
+        'You have been logged in successfully',
+      'You have been registered and logged in successfully':
+        'You have been registered and logged in successfully',
+      "Don't have an account?": "Don't have an account?",
+      'Your username': 'Your username',
+      'Your email': 'Your email',
+      'Your password': 'Your password',
+      'Enter your email and password below to login to your account':
+        'Enter your email and password below to login to your account',
+      'Enter your name, email and password below to sign up for an account':
+        'Enter your name, email and password below to sign up for an account',
+      'A verification email has been sent to your email address. Please verify your account before logging in.':
+        'A verification email has been sent to your email address. Please verify your account before logging in.',
+
+      // Language Selector
+      Language: 'Language',
+
       // Add more translations here
     },
   },
@@ -163,6 +187,29 @@ const resources = {
 
       // Formulario Validar Credenciales de Usuario
       'Validate User Credentials': 'Validar Credenciales de Usuario',
+
+      // Login and Register Forms
+      'Log In': 'Iniciar Sesión',
+      'Sign Up': 'Registrarse',
+      Logout: 'Cerrar Sesión',
+      'Confirm Password': 'Confirmar Contraseña',
+      'Passwords do not match': 'Las contraseñas no coinciden',
+      'You have been logged in successfully': 'Has iniciado sesión con éxito',
+      'You have been registered and logged in successfully':
+        'Te has registrado e iniciado sesión con éxito',
+      "Don't have an account?": '¿No tienes una cuenta?',
+      'Your username': 'Tu nombre de usuario',
+      'Your email': 'Tu correo electrónico',
+      'Your password': 'Tu contraseña',
+      'Enter your email and password below to login to your account':
+        'Introduce tu correo electrónico y contraseña para iniciar sesión en tu cuenta',
+      'Enter your name, email and password below to sign up for an account':
+        'Introduce tu nombre, correo electrónico y contraseña para registrarte en una cuenta',
+      'A verification email has been sent to your email address. Please verify your account before logging in.':
+        'Se ha enviado un correo de verificación a tu dirección de correo electrónico. Por favor, verifica tu cuenta antes de iniciar sesión.',
+
+      // Selector de Idioma
+      Language: 'Idioma',
 
       // Add more translations here
     },
@@ -247,6 +294,29 @@ const resources = {
 
       // Formulari Validar Credencials d'Usuari
       'Validate User Credentials': 'Validar Credencials d’Usuari',
+
+      // Login and Register Forms
+      'Log In': 'Iniciar Sessió',
+      'Sign Up': 'Registrar-se',
+      Logout: 'Tancar Sessió',
+      'Confirm Password': 'Confirmar Contrasenya',
+      'Passwords do not match': 'Les contrasenyes no coincideixen',
+      'You have been logged in successfully': 'Has iniciat sessió amb èxit',
+      'You have been registered and logged in successfully':
+        'T’has registrat i iniciat sessió amb èxit',
+      "Don't have an account?": 'No tens un compte?',
+      'Your username': 'El teu nom d’usuari',
+      'Your email': 'El teu correu electrònic',
+      'Your password': 'La teva contrasenya',
+      'Enter your email and password below to login to your account':
+        'Introdueix el teu correu electrònic i contrasenya per iniciar sessió al teu compte',
+      'Enter your name, email and password below to sign up for an account':
+        'Introdueix el teu nom, correu electrònic i contrasenya per registrar-te a un compte',
+      'A verification email has been sent to your email address. Please verify your account before logging in.':
+        "S'ha enviat un correu de verificació a la teva adreça de correu electrònic. Si us plau, verifica el teu compte abans d'iniciar sessió.",
+
+      // Selector d'idioma
+      Language: 'Idioma',
 
       // Add more translations here
     },
