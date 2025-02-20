@@ -107,6 +107,10 @@ const resources = {
       // Language Selector
       Language: 'Language',
 
+      //Alert dialog
+      Ok: 'Ok',
+      'Registration successful': 'Registration successful',
+
       // Add more translations here
     },
   },
@@ -214,6 +218,10 @@ const resources = {
 
       // Selector de Idioma
       Language: 'Idioma',
+
+      //Dialogo de alerta
+      Ok: 'De acuerdo',
+      'Registration successful': 'Registro exitoso',
 
       // Add more translations here
     },
@@ -323,6 +331,10 @@ const resources = {
 
       // Selector d'idioma
       Language: 'Idioma',
+
+      //Diàleg d'alerta
+      Ok: 'D’acord',
+      'Registration successful': 'Registre exitós',
 
       // Add more translations here
     },
