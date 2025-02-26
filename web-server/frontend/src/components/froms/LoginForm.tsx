@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -9,10 +9,9 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useAuth } from '@/context/AuthContext'
 import { Loader2 } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
 import { useTranslation } from 'react-i18next'
+import { useLoginForm } from '@/hooks/forms/useLoginForm'
 
 export function LoginForm({
   onLogin,
@@ -22,27 +21,8 @@ export function LoginForm({
   onOpenRegister: () => void
 }) {
   const { t } = useTranslation()
-  const { login, isLoading } = useAuth()
-  const { toast } = useToast()
-  const emailRef = useRef<HTMLInputElement>(null)
-  const pwdRef = useRef<HTMLInputElement>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    if (emailRef.current && pwdRef.current) {
-      const result = await login(emailRef.current.value, pwdRef.current.value)
-      if (result.error) {
-        setError(result.error)
-      } else {
-        toast({
-          description: t('You have been logged in successfully'),
-        })
-        onLogin()
-      }
-    }
-  }
+  const { emailRef, pwdRef, error, isLoading, handleSubmit } =
+    useLoginForm(onLogin)
 
   return (
     <Card className="mx-auto max-w-sm border-none shadow-none">
