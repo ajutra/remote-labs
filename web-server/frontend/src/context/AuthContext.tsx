@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import Cookies from 'js-cookie'
 import { getEnv } from '@/utils/Env'
+import { useNavigate } from 'react-router-dom'
+import { AppRoutes } from '@/enums/AppRoutes'
 
 interface AuthContextType {
   isLoggedIn: boolean
@@ -20,6 +22,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  const navigate = useNavigate()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -53,6 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     if (response.ok) {
       const data = await response.json()
       handleSuccessfulAuth(data.userId)
+      navigate(AppRoutes.SUBJECTS)
       return {}
     } else {
       const errorText = await response.text()
@@ -88,6 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setUserId(null)
     setIsLoggedIn(false)
     Cookies.remove('userId')
+    navigate(AppRoutes.HOME)
   }
 
   return (

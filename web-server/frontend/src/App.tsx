@@ -7,6 +7,7 @@ import { Layout } from '@/pages/Layout'
 import { AppRoutes } from '@/enums/AppRoutes'
 import { AuthProvider } from './context/AuthContext'
 import { AlertDialogProvider } from '@/context/AlertDialogContext'
+import Subjects from './pages/Subjects'
 
 const App: React.FC = () => {
   return (
@@ -17,6 +18,7 @@ const App: React.FC = () => {
             <Layout>
               <Routes>
                 <Route path={AppRoutes.HOME} element={<Home />} />
+                <Route path={AppRoutes.SUBJECTS} element={<Subjects />} />
               </Routes>
             </Layout>
           </AlertDialogProvider>
