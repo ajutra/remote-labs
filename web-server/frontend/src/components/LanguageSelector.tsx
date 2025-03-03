@@ -17,10 +17,10 @@ const LanguageSelector: React.FC = () => {
   return (
     <div className="language-selector">
       <Select onValueChange={changeLanguage}>
-        <SelectTrigger>
+        <SelectTrigger className="bg-card text-card-foreground">
           <SelectValue placeholder={t('Language')} />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="bg-card text-card-foreground">
           <SelectItem value="en">English</SelectItem>
           <SelectItem value="es">Español</SelectItem>
           <SelectItem value="ca">Català</SelectItem>

@@ -8,6 +8,7 @@ import { AppRoutes } from '@/enums/AppRoutes'
 import { AuthProvider } from './context/AuthContext'
 import { AlertDialogProvider } from '@/context/AlertDialogContext'
 import Subjects from './pages/Subjects'
+import LoginPage from './pages/LoginPage'
 
 const App: React.FC = () => {
   return (
@@ -15,12 +16,20 @@ const App: React.FC = () => {
       <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
         <AuthProvider>
           <AlertDialogProvider>
-            <Layout>
-              <Routes>
-                <Route path={AppRoutes.HOME} element={<Home />} />
-                <Route path={AppRoutes.SUBJECTS} element={<Subjects />} />
-              </Routes>
-            </Layout>
+            <Routes>
+              <Route path={AppRoutes.LOGIN} element={<LoginPage />} />
+              <Route
+                path="*"
+                element={
+                  <Layout>
+                    <Routes>
+                      <Route path={AppRoutes.HOME} element={<Home />} />
+                      <Route path={AppRoutes.SUBJECTS} element={<Subjects />} />
+                    </Routes>
+                  </Layout>
+                }
+              />
+            </Routes>
           </AlertDialogProvider>
         </AuthProvider>
       </ThemeProvider>
