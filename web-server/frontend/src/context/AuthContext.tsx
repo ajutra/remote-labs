@@ -56,7 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     if (response.ok) {
       const data = await response.json()
       handleSuccessfulAuth(data.userId)
-      navigate(AppRoutes.SUBJECTS)
+      navigate(AppRoutes.HOME)
       return {}
     } else {
       const errorText = await response.text()
@@ -92,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setUserId(null)
     setIsLoggedIn(false)
     Cookies.remove('userId')
-    navigate(AppRoutes.HOME)
+    navigate(AppRoutes.LOGIN)
   }
 
   return (
