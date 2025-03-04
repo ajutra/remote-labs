@@ -9,6 +9,7 @@ import { AuthProvider } from './context/AuthContext'
 import { AlertDialogProvider } from '@/context/AlertDialogContext'
 import Subjects from './pages/Subjects'
 import LoginPage from './pages/LoginPage'
+import MyLabs from './pages/MyLabs'
 
 const App: React.FC = () => {
   return (
@@ -25,6 +26,7 @@ const App: React.FC = () => {
                     <Routes>
                       <Route path={AppRoutes.HOME} element={<Home />} />
                       <Route path={AppRoutes.SUBJECTS} element={<Subjects />} />
+                      <Route path={AppRoutes.MYLABS} element={<MyLabs />} />
                     </Routes>
                   </Layout>
                 }

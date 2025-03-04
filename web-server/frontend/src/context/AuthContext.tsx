@@ -55,7 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     if (response.ok) {
       const data = await response.json()
-      handleSuccessfulAuth(data.userId)
+      handleSuccessfulAuth(data.id)
       navigate(AppRoutes.HOME)
       return {}
     } else {

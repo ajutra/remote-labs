@@ -9,7 +9,14 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { Home, Book, LogOut } from 'lucide-react'
+import {
+  Home,
+  Book,
+  LogOut,
+  FlaskConical,
+  Computer,
+  PcCaseIcon,
+} from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { AppRoutes } from '@/enums/AppRoutes'
 import { useAuth } from '@/context/AuthContext'
@@ -24,6 +31,11 @@ const items = [
     title: 'Subjects',
     url: AppRoutes.SUBJECTS,
     icon: Book,
+  },
+  {
+    title: 'MyLabs',
+    url: AppRoutes.MYLABS,
+    icon: PcCaseIcon,
   },
 ]
 
