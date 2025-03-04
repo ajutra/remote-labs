@@ -7,15 +7,42 @@ import {
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
 import { Separator } from '@/components/ui/separator'
 import LanguageSelector from '@/components/LanguageSelector'
 import ModeToggle from '@/components/mode-toggle'
+import { useLocation } from 'react-router-dom'
+import { AppRoutes } from '@/enums/AppRoutes'
 import '@/index.css'
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const location = useLocation()
+
+  const getBreadcrumb = () => {
+    switch (location.pathname) {
+      case AppRoutes.HOME:
+        return (
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href={AppRoutes.HOME}>Home</BreadcrumbLink>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        )
+      case AppRoutes.SUBJECTS:
+        return (
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href={AppRoutes.SUBJECTS}>
+                Subjects
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        )
+      default:
+        return null
+    }
+  }
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full flex-col">
@@ -36,17 +63,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 <div className="flex items-center gap-2">
                   <SidebarTrigger className="-ml-1" />
                   <Separator orientation="vertical" className="mr-2 h-4" />
-                  <Breadcrumb>
-                    <BreadcrumbList>
-                      <BreadcrumbItem className="hidden md:block">
-                        <BreadcrumbLink href="#">Home</BreadcrumbLink>
-                      </BreadcrumbItem>
-                      <BreadcrumbSeparator className="hidden md:block" />
-                      <BreadcrumbItem>
-                        <BreadcrumbPage>Current Page</BreadcrumbPage>
-                      </BreadcrumbItem>
-                    </BreadcrumbList>
-                  </Breadcrumb>
+                  <Breadcrumb>{getBreadcrumb()}</Breadcrumb>
                 </div>
               </div>
             </header>
