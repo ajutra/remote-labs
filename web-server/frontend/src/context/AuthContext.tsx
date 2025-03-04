@@ -3,10 +3,18 @@ import Cookies from 'js-cookie'
 import { getEnv } from '@/utils/Env'
 import { useNavigate } from 'react-router-dom'
 import { AppRoutes } from '@/enums/AppRoutes'
+import { getUserIdFromCookie } from '@/utils/cookies'
+
+interface User {
+  id: string
+  name: string
+  mail: string
+  role: string
+}
 
 interface AuthContextType {
   isLoggedIn: boolean
-  userId: string | null
+  user: User | null
   isLoading: boolean
   login: (mail: string, password: string) => Promise<{ error?: string }>
   register: (
@@ -24,21 +32,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const navigate = useNavigate()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [userId, setUserId] = useState<string | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    const storedUserId = Cookies.get('userId')
+    const storedUserId = getUserIdFromCookie()
     if (storedUserId) {
-      setUserId(storedUserId)
-      setIsLoggedIn(true)
+      // Obtener los detalles del usuario desde el backend
+      fetchUserDetails(storedUserId)
     }
   }, [])
 
-  const handleSuccessfulAuth = (userId: string) => {
-    setUserId(userId)
-    setIsLoggedIn(true)
+  const fetchUserDetails = async (userId: string) => {
+    const response = await fetch(`${getEnv().API_BASE_URL}/users/${userId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (response.ok) {
+      const userData = await response.json()
+      setUser({
+        id: userData.id,
+        name: userData.name,
+        mail: userData.mail,
+        role: userData.role,
+      })
+      setIsLoggedIn(true)
+    } else {
+      console.error('Failed to fetch user details')
+    }
+  }
+
+  const handleSuccessfulAuth = async (userId: string) => {
     Cookies.set('userId', userId, { expires: 7, sameSite: 'Lax' }) // Set cookie to expire in 7 days
+    await fetchUserDetails(userId)
   }
 
   const authenticate = async (url: string, body: object) => {
@@ -55,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     if (response.ok) {
       const data = await response.json()
-      handleSuccessfulAuth(data.id)
+      await handleSuccessfulAuth(data.id)
       navigate(AppRoutes.HOME)
       return {}
     } else {
@@ -89,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }
 
   const logout = () => {
-    setUserId(null)
+    setUser(null)
     setIsLoggedIn(false)
     Cookies.remove('userId')
     navigate(AppRoutes.LOGIN)
@@ -97,7 +126,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   return (
     <AuthContext.Provider
-      value={{ isLoggedIn, userId, isLoading, login, register, logout }}
+      value={{
+        isLoggedIn,
+        user,
+        isLoading,
+        login,
+        register,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>
