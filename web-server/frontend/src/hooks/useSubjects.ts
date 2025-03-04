@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getEnv } from '@/utils/Env'
+import { useAuth } from '@/context/AuthContext'
 import { getUserIdFromCookie } from '@/utils/cookies'
 
 interface Subject {
@@ -10,6 +11,7 @@ interface Subject {
 }
 
 const useSubjects = () => {
+  const { user } = useAuth()
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -17,7 +19,7 @@ const useSubjects = () => {
   useEffect(() => {
     const fetchSubjects = async () => {
       try {
-        const userId = getUserIdFromCookie()
+        const userId = user?.id || getUserIdFromCookie()
         if (!userId) {
           throw new Error('User ID not found')
         }
@@ -47,7 +49,7 @@ const useSubjects = () => {
     }
 
     fetchSubjects()
-  }, [])
+  }, [user])
 
   return { subjects, loading, error }
 }
