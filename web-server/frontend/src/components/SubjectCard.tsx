@@ -11,13 +11,15 @@ interface SubjectCardProps {
   id: string
   name: string
   code: string
-  professorMail: string
+  professorName?: string
+  professorMail?: string
 }
 
 const SubjectCard: React.FC<SubjectCardProps> = ({
   id,
   name,
   code,
+  professorName,
   professorMail,
 }) => {
   return (
@@ -32,7 +34,7 @@ const SubjectCard: React.FC<SubjectCardProps> = ({
         <CardContent>
           <p className="text-sm text-muted-foreground">Code: {code}</p>
           <p className="text-sm text-muted-foreground">
-            Professor: {professorMail}
+            Professor: {professorName} ({professorMail})
           </p>
         </CardContent>
       </div>
