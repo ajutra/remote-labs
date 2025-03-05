@@ -7,6 +7,7 @@ interface Subject {
   id: string
   name: string
   code: string
+  professorName?: string
   professorMail: string
 }
 
@@ -25,7 +26,6 @@ const useSubjects = () => {
         }
         const apiUrl = getEnv().API_BASE_URL
         const fullUrl = `${apiUrl}/users/${userId}/subjects`
-        console.log('Full URL:', fullUrl)
         const response = await fetch(fullUrl, {
           method: 'GET',
           headers: {
@@ -35,8 +35,33 @@ const useSubjects = () => {
         if (!response.ok) {
           throw new Error('Network response was not ok')
         }
-        const data = await response.json()
-        setSubjects(data)
+        const subjectsData: Subject[] = await response.json()
+
+        const subjectsWithProfessorDetails = await Promise.all(
+          subjectsData.map(async (subject) => {
+            const professorResponse = await fetch(
+              `${apiUrl}/users/${subject.professorMail}`,
+              {
+                method: 'GET',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+              }
+            )
+            if (professorResponse.ok) {
+              const professorData = await professorResponse.json()
+              return {
+                ...subject,
+                professorName: professorData.name,
+                professorMail: professorData.mail,
+              }
+            } else {
+              return subject
+            }
+          })
+        )
+
+        setSubjects(subjectsWithProfessorDetails)
       } catch (err) {
         if (err instanceof Error) {
           setError(err.message)

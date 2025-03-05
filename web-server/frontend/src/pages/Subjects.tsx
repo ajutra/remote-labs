@@ -23,6 +23,7 @@ const Subjects: React.FC = () => {
             id={subject.id}
             name={subject.name}
             code={subject.code}
+            professorName={subject.professorName}
             professorMail={subject.professorMail}
           />
         ))}
