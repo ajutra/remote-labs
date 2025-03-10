@@ -46,7 +46,7 @@ const CreateSubjectSheet: React.FC = () => {
 
   return (
     <Sheet>
-      <SheetTrigger>
+      <SheetTrigger asChild>
         <Button className="w-full">Create a new subject</Button>
       </SheetTrigger>
       <SheetContent className="sm:max-w-2/3 h-full w-full sm:w-2/3">
