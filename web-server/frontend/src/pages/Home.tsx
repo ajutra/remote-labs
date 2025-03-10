@@ -11,7 +11,6 @@ import DeleteUserForm from '@/components/froms/DeleteUserForm'
 import RemoveUserFromSubjectForm from '@/components/froms/RemoveUserFromSubjectFrom'
 import '@/i18n'
 import PhotoCarousel from '@/components/PhotoCarousel'
-
 function Home() {
   return (
     <div>
