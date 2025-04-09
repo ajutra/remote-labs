@@ -1,4 +1,4 @@
-import { Routes, Route, BrowserRouter } from 'react-router-dom'
+import { Routes, Route, BrowserRouter, Navigate } from 'react-router-dom'
 import Home from './pages/Home'
 import '@/index.css'
 import '@/i18n'
@@ -11,6 +11,13 @@ import Subjects from './pages/Subjects'
 import LoginPage from './pages/LoginPage'
 import MyLabs from './pages/MyLabs'
 import SubjectDetail from './pages/SubjectDetail'
+import ControlPlane from './pages/ControlPlane'
+import useUserRole from '@/hooks/useUserRole'
+
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const isAdmin = useUserRole()
+  return isAdmin ? <>{children}</> : <Navigate to={AppRoutes.HOME} />
+}
 
 const App: React.FC = () => {
   return (
@@ -32,6 +39,14 @@ const App: React.FC = () => {
                         element={<SubjectDetail />}
                       />
                       <Route path={AppRoutes.MYLABS} element={<MyLabs />} />
+                      <Route
+                        path={AppRoutes.CONTROL_PLANE}
+                        element={
+                          <AdminRoute>
+                            <ControlPlane />
+                          </AdminRoute>
+                        }
+                      />
                     </Routes>
                   </Layout>
                 }
