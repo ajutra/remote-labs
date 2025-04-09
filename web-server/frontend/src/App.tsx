@@ -10,6 +10,7 @@ import { AlertDialogProvider } from '@/context/AlertDialogContext'
 import Subjects from './pages/Subjects'
 import LoginPage from './pages/LoginPage'
 import MyLabs from './pages/MyLabs'
+import SubjectDetail from './pages/SubjectDetail'
 
 const App: React.FC = () => {
   return (
@@ -26,6 +27,10 @@ const App: React.FC = () => {
                     <Routes>
                       <Route path={AppRoutes.HOME} element={<Home />} />
                       <Route path={AppRoutes.SUBJECTS} element={<Subjects />} />
+                      <Route
+                        path={`${AppRoutes.SUBJECTS}/:id`}
+                        element={<SubjectDetail />}
+                      />
                       <Route path={AppRoutes.MYLABS} element={<MyLabs />} />
                     </Routes>
                   </Layout>

@@ -1,11 +1,5 @@
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardFooter,
-} from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { useNavigate } from 'react-router-dom'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 
 interface SubjectCardProps {
   id: string
@@ -22,10 +16,13 @@ const SubjectCard: React.FC<SubjectCardProps> = ({
   professorName,
   professorMail,
 }) => {
+  const navigate = useNavigate()
+
   return (
     <Card
       key={id}
-      className="col-span-2 flex h-[250px] min-h-[200px] flex-col justify-between bg-card p-4 text-card-foreground"
+      className="col-span-2 flex h-[250px] min-h-[200px] cursor-pointer flex-col justify-between bg-card p-4 text-card-foreground transition-colors hover:bg-accent"
+      onClick={() => navigate(`/subjects/${id}`)}
     >
       <div>
         <CardHeader>
@@ -38,9 +35,6 @@ const SubjectCard: React.FC<SubjectCardProps> = ({
           </p>
         </CardContent>
       </div>
-      <CardFooter className="flex justify-end">
-        <Button className="w-full sm:w-auto">Request Lab</Button>
-      </CardFooter>
     </Card>
   )
 }
