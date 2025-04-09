@@ -17,6 +17,14 @@ const useCreateSubject = (onSuccess: () => void) => {
     ValidationResult[]
   >([])
 
+  // VM Configuration
+  const [vmOs, setVmOs] = useState('debian12')
+  const [vmRam, setVmRam] = useState('2')
+  const [vmCpu, setVmCpu] = useState('1')
+  const [vmStorage, setVmStorage] = useState('20')
+  const [useQcow2, setUseQcow2] = useState(false)
+  const [qcow2File, setQcow2File] = useState<File | null>(null)
+
   const handleAddEmail = () => {
     if (
       emailInput &&
@@ -79,6 +87,14 @@ const useCreateSubject = (onSuccess: () => void) => {
       subjectCode,
       professorEmails,
       studentEmails: emails,
+      vmConfig: {
+        os: vmOs,
+        ram: vmRam,
+        cpu: vmCpu,
+        storage: vmStorage,
+        useQcow2,
+        qcow2File,
+      },
     })
 
     // Clear form fields
@@ -88,6 +104,12 @@ const useCreateSubject = (onSuccess: () => void) => {
     setEmailInput('')
     setStudentEmails('')
     setValidationResults([])
+    setVmOs('debian12')
+    setVmRam('2')
+    setVmCpu('1')
+    setVmStorage('20')
+    setUseQcow2(false)
+    setQcow2File(null)
 
     // Call onSuccess callback
     onSuccess()
@@ -110,6 +132,19 @@ const useCreateSubject = (onSuccess: () => void) => {
     handleRemoveEmail,
     handleSubjectCodeChange,
     handleCreateSubject,
+    // VM Configuration
+    vmOs,
+    setVmOs,
+    vmRam,
+    setVmRam,
+    vmCpu,
+    setVmCpu,
+    vmStorage,
+    setVmStorage,
+    useQcow2,
+    setUseQcow2,
+    qcow2File,
+    setQcow2File,
   }
 }
 
