@@ -1,55 +1,37 @@
-import React, { useEffect, useState } from 'react'
-import { DataTable } from '@/components/labs/data-table'
-import { columns, Lab } from '@/components/labs/colums'
+import React from 'react'
+import { Loader2 } from 'lucide-react'
+import { useVMs } from '@/hooks/useVMs'
+import { VMsTable } from '@/components/vm/VMsTable'
 
 const MyLabs: React.FC = () => {
-  const [labs, setLabs] = useState<Lab[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    // Datos de prueba
-    const mockLabs: Lab[] = [
-      {
-        id: '1',
-        subject: 'Mathematics',
-        machineName: 'Machine A',
-        status: 'on',
-      },
-      {
-        id: '2',
-        subject: 'Physics',
-        machineName: 'Machine B',
-        status: 'off',
-      },
-      {
-        id: '3',
-        subject: 'Chemistry',
-        machineName: 'Machine C',
-        status: 'on',
-      },
-      {
-        id: '4',
-        subject: 'Biology',
-        machineName: 'Machine D',
-        status: 'off',
-      },
-    ]
-
-    // Simular carga de datos
-    setTimeout(() => {
-      setLabs(mockLabs)
-      setLoading(false)
-    }, 1000)
-  }, [])
+  const { vms, loading } = useVMs()
 
   if (loading) {
-    return <div>Loading...</div>
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    )
   }
 
   return (
-    <div className="flex min-h-screen w-full flex-col p-4">
-      <h1 className="mb-4 text-2xl font-bold">My Labs</h1>
-      <DataTable columns={columns} data={labs} />
+    <div className="container mx-auto py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">My Labs</h1>
+        <p className="text-muted-foreground">
+          View and manage your virtual machines
+        </p>
+      </div>
+
+      {vms.length === 0 ? (
+        <div className="rounded-lg border p-8 text-center">
+          <p className="text-muted-foreground">
+            You don't have any virtual machines yet.
+          </p>
+        </div>
+      ) : (
+        <VMsTable vms={vms} />
+      )}
     </div>
   )
 }
