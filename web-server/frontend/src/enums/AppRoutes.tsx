@@ -3,4 +3,5 @@ export enum AppRoutes {
   SUBJECTS = '/subjects',
   LOGIN = '/',
   MYLABS = '/mylabs',
+  CONTROL_PLANE = '/control-plane',
 }
