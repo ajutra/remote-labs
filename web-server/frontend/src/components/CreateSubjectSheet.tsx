@@ -15,6 +15,13 @@ import { Label } from './ui/label'
 import { Textarea } from './ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import useCreateSubject from '@/hooks/useCreateSubject'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select'
 
 const CreateSubjectSheet: React.FC = () => {
   const { toast } = useToast()
@@ -42,6 +49,19 @@ const CreateSubjectSheet: React.FC = () => {
     handleAddEmail,
     handleRemoveEmail,
     handleCreateSubject,
+    // VM Configuration
+    vmOs,
+    setVmOs,
+    vmRam,
+    setVmRam,
+    vmCpu,
+    setVmCpu,
+    vmStorage,
+    setVmStorage,
+    useQcow2,
+    setUseQcow2,
+    qcow2File,
+    setQcow2File,
   } = useCreateSubject(handleSuccess)
 
   return (
@@ -130,6 +150,90 @@ const CreateSubjectSheet: React.FC = () => {
                 Enter each student email on a new line
               </p>
             </div>
+
+            {/* VM Configuration Section */}
+            <div className="border-t pt-4">
+              <h3 className="mb-4 text-lg font-semibold">
+                Virtual Machine Configuration
+              </h3>
+
+              <div className="mb-4 flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="useQcow2"
+                  checked={useQcow2}
+                  onChange={(e) => setUseQcow2(e.target.checked)}
+                />
+                <Label htmlFor="useQcow2">Use existing qcow2 image</Label>
+              </div>
+
+              {useQcow2 ? (
+                <div>
+                  <Label htmlFor="qcow2">Qcow2 Image File</Label>
+                  <Input
+                    id="qcow2"
+                    type="file"
+                    accept=".qcow2"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setQcow2File(e.target.files[0])
+                      }
+                    }}
+                  />
+                </div>
+              ) : (
+                <>
+                  <div className="mb-4">
+                    <Label htmlFor="vmOs">Operating System</Label>
+                    <Select value={vmOs} onValueChange={setVmOs}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select OS" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="debian12">Debian 12</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="vmRam">RAM (GB)</Label>
+                      <Input
+                        id="vmRam"
+                        type="number"
+                        min="1"
+                        max="32"
+                        value={vmRam}
+                        onChange={(e) => setVmRam(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="vmCpu">CPU Cores</Label>
+                      <Input
+                        id="vmCpu"
+                        type="number"
+                        min="1"
+                        max="16"
+                        value={vmCpu}
+                        onChange={(e) => setVmCpu(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="vmStorage">Storage (GB)</Label>
+                      <Input
+                        id="vmStorage"
+                        type="number"
+                        min="10"
+                        max="1000"
+                        value={vmStorage}
+                        onChange={(e) => setVmStorage(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
             <SheetClose asChild>
               <Button onClick={handleCreateSubject}>Create Subject</Button>
             </SheetClose>
