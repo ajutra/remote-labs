@@ -3,7 +3,6 @@ import Home from './pages/Home'
 import '@/index.css'
 import '@/i18n'
 import { ThemeProvider } from '@/components/theme-provider'
-import { Layout } from '@/pages/Layout'
 import { AppRoutes } from '@/enums/AppRoutes'
 import { AuthProvider } from './context/AuthContext'
 import { AlertDialogProvider } from '@/context/AlertDialogContext'
@@ -13,6 +12,8 @@ import MyLabs from './pages/MyLabs'
 import SubjectDetail from './pages/SubjectDetail'
 import ControlPlane from './pages/ControlPlane'
 import useIsAdmin from '@/hooks/useIsAdmin'
+import VerifyEmail from './pages/VerifyEmail'
+import { Layout } from '@/pages/Layout'
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const isAdmin = useIsAdmin()
@@ -27,6 +28,7 @@ const App: React.FC = () => {
           <AlertDialogProvider>
             <Routes>
               <Route path={AppRoutes.LOGIN} element={<LoginPage />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
               <Route
                 path="*"
                 element={
