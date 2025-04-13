@@ -9,10 +9,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { Home, Book, LogOut, Laptop } from 'lucide-react'
+import { Home, Book, LogOut, Laptop, Settings } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { AppRoutes } from '@/enums/AppRoutes'
 import { useAuth } from '@/context/AuthContext'
+import useIsAdmin from '@/hooks/useIsAdmin'
 
 const items = [
   {
@@ -34,6 +35,7 @@ const items = [
 
 export function AppSidebar() {
   const { logout } = useAuth()
+  const isAdmin = useIsAdmin()
 
   return (
     <Sidebar collapsible="icon">
@@ -52,6 +54,16 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <Link to={AppRoutes.CONTROL_PLANE}>
+                      <Settings />
+                      <span>Control Plane</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -59,11 +71,9 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <button onClick={logout}>
-                <LogOut />
-                <span>Logout</span>
-              </button>
+            <SidebarMenuButton onClick={logout}>
+              <LogOut />
+              <span>Logout</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
