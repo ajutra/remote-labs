@@ -14,6 +14,8 @@ import (
 
 type Database interface {
 	Close()
+	CreateUnverifiedUser(user User, verificationToken uuid.UUID) error
+	VerifyUser(token string) error
 	CreateUser(user User) error
 	UserExistsByMail(mail string) error
 	CreateSubject(subject Subject) error
@@ -28,6 +30,7 @@ type Database interface {
 	RemoveUserFromSubject(userId, subjectId string) error
 	DeleteSubject(subjectId string) error
 	DeleteUser(userId string) error
+	UpdateVerificationToken(email string, token uuid.UUID) error
 }
 
 type PostgresDatabase struct {
@@ -75,7 +78,36 @@ func (postgres *PostgresDatabase) CreateUser(user User) error {
 	return nil
 }
 
+func (postgres *PostgresDatabase) CreateUnverifiedUser(user User, verificationToken uuid.UUID) error {
+	dbUser := user.toDatabaseUser()
+	query := `
+	INSERT INTO unverified_users (id, role_id, name, mail, password, verification_token)
+	VALUES (
+		@id, 
+		(SELECT id FROM roles WHERE role = @role), 
+		@name, 
+		@mail, 
+		@password,
+		@verification_token)`
+	args := pgx.NamedArgs{
+		"id":                 dbUser.ID,
+		"role":               dbUser.Role,
+		"name":               dbUser.Name,
+		"mail":               dbUser.Mail,
+		"password":           dbUser.Password,
+		"verification_token": verificationToken,
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error creating unverified user: %w", err)
+	}
+
+	return nil
+}
+
 func (postgres *PostgresDatabase) UserExistsByMail(mail string) error {
+	// Check if user exists in users table
 	query := "SELECT EXISTS(SELECT 1 FROM users WHERE mail = @mail)"
 	args := pgx.NamedArgs{"mail": mail}
 
@@ -84,8 +116,18 @@ func (postgres *PostgresDatabase) UserExistsByMail(mail string) error {
 		return fmt.Errorf("error checking if user exists: %w", err)
 	}
 
-	if !exists {
-		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with mail %s does not exist", mail))
+	if exists {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with mail %s already exists", mail))
+	}
+
+	// Check if user exists in unverified_users table
+	query = "SELECT EXISTS(SELECT 1 FROM unverified_users WHERE mail = @mail)"
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
+		return fmt.Errorf("error checking if unverified user exists: %w", err)
+	}
+
+	if exists {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with mail %s already exists but is not verified", mail))
 	}
 
 	return nil
@@ -195,6 +237,7 @@ func (postgres *PostgresDatabase) ListAllUsersBySubjectId(subjectId string) ([]U
 }
 
 func (postgres *PostgresDatabase) ValidateUser(mail, password string) (User, error) {
+	// First, try to find the user in the users table
 	query := `
 	SELECT u.id, r.role, u.name, u.mail, u.password
 	FROM users u
@@ -203,7 +246,20 @@ func (postgres *PostgresDatabase) ValidateUser(mail, password string) (User, err
 	args := pgx.NamedArgs{"mail": mail, "password": password}
 
 	var dbUser DatabaseUser
-	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password); err != nil {
+	err := postgres.db.QueryRow(context.Background(), query, args).Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password)
+	if err == nil {
+		return dbUser.toUser(), nil
+	}
+
+	// If not found in users table, check unverified_users table
+	query = `
+	SELECT u.id, r.role, u.name, u.mail, u.password
+	FROM unverified_users u
+	JOIN roles r ON u.role_id = r.id
+	WHERE u.mail = @mail AND u.password = @password`
+
+	err = postgres.db.QueryRow(context.Background(), query, args).Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password)
+	if err != nil {
 		return User{}, fmt.Errorf("error validating user: %w", err)
 	}
 
@@ -306,6 +362,78 @@ func (postgres *PostgresDatabase) DeleteUser(userId string) error {
 	return nil
 }
 
+func (postgres *PostgresDatabase) VerifyUser(token string) error {
+	// Start a transaction
+	tx, err := postgres.db.Begin(context.Background())
+	if err != nil {
+		return fmt.Errorf("error starting transaction: %w", err)
+	}
+	defer tx.Rollback(context.Background())
+
+	// Get the unverified user
+	query := `
+	SELECT id, role_id, name, mail, password
+	FROM unverified_users
+	WHERE verification_token = @token`
+	args := pgx.NamedArgs{"token": token}
+
+	var dbUser DatabaseUser
+	if err := tx.QueryRow(context.Background(), query, args).Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password); err != nil {
+		if err == pgx.ErrNoRows {
+			return fmt.Errorf("no unverified user found with this token")
+		}
+		return fmt.Errorf("error retrieving unverified user: %w", err)
+	}
+
+	// Check if user already exists in users table
+	query = "SELECT EXISTS(SELECT 1 FROM users WHERE mail = @mail)"
+	args = pgx.NamedArgs{"mail": dbUser.Mail}
+	var exists bool
+	if err := tx.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
+		return fmt.Errorf("error checking if user exists: %w", err)
+	}
+
+	if exists {
+		// User is already verified, just delete from unverified_users
+		query = "DELETE FROM unverified_users WHERE verification_token = @token"
+		args = pgx.NamedArgs{"token": token}
+		if _, err := tx.Exec(context.Background(), query, args); err != nil {
+			return fmt.Errorf("error deleting unverified user: %w", err)
+		}
+		return fmt.Errorf("user already verified")
+	}
+
+	// Insert into verified users
+	query = `
+	INSERT INTO users (id, role_id, name, mail, password)
+	VALUES (@id, @role_id, @name, @mail, @password)`
+	args = pgx.NamedArgs{
+		"id":       dbUser.ID,
+		"role_id":  dbUser.Role,
+		"name":     dbUser.Name,
+		"mail":     dbUser.Mail,
+		"password": dbUser.Password,
+	}
+
+	if _, err := tx.Exec(context.Background(), query, args); err != nil {
+		return fmt.Errorf("error inserting verified user: %w", err)
+	}
+
+	// Delete from unverified users
+	query = "DELETE FROM unverified_users WHERE verification_token = @token"
+	args = pgx.NamedArgs{"token": token}
+	if _, err := tx.Exec(context.Background(), query, args); err != nil {
+		return fmt.Errorf("error deleting unverified user: %w", err)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(context.Background()); err != nil {
+		return fmt.Errorf("error committing transaction: %w", err)
+	}
+
+	return nil
+}
+
 func (user *User) toDatabaseUser() DatabaseUser {
 	return DatabaseUser{
 		ID:       user.ID,
@@ -382,44 +510,68 @@ func (postgres *PostgresDatabase) Close() {
 
 func getDDLStatements() string {
 	return `
-    CREATE TABLE IF NOT EXISTS roles (
-        id SERIAL PRIMARY KEY,
-        role VARCHAR(50) NOT NULL UNIQUE
-    );
+		CREATE TABLE IF NOT EXISTS roles (
+			id SERIAL PRIMARY KEY,
+			role VARCHAR(50) NOT NULL UNIQUE
+		);
 
-    CREATE TABLE IF NOT EXISTS users (
-        id UUID PRIMARY KEY,
-        role_id INTEGER NOT NULL,
-        name VARCHAR(100) NOT NULL,
-        mail VARCHAR(100) NOT NULL UNIQUE,
-        password VARCHAR(100) NOT NULL,
-        FOREIGN KEY (role_id) REFERENCES roles(id)
-    );
+		CREATE TABLE IF NOT EXISTS users (
+			id UUID PRIMARY KEY,
+			role_id INTEGER NOT NULL REFERENCES roles(id),
+			name VARCHAR(100) NOT NULL,
+			mail VARCHAR(100) NOT NULL UNIQUE,
+			password VARCHAR(100) NOT NULL
+		);
 
-    CREATE TABLE IF NOT EXISTS subjects (
-        id UUID PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        code VARCHAR(50) NOT NULL UNIQUE,
-        main_professor_id UUID,
-        FOREIGN KEY (main_professor_id) REFERENCES users(id)
-    );
+		CREATE TABLE IF NOT EXISTS unverified_users (
+			id UUID PRIMARY KEY,
+			role_id INTEGER NOT NULL REFERENCES roles(id),
+			name VARCHAR(100) NOT NULL,
+			mail VARCHAR(100) NOT NULL UNIQUE,
+			password VARCHAR(100) NOT NULL,
+			verification_token UUID NOT NULL UNIQUE,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
 
-    CREATE TABLE IF NOT EXISTS user_subjects (
-        user_id UUID NOT NULL,
-        subject_id UUID NOT NULL,
-        PRIMARY KEY (user_id, subject_id),
-        FOREIGN KEY (user_id) REFERENCES users(id),
-        FOREIGN KEY (subject_id) REFERENCES subjects(id)
-    );
-    `
+		CREATE TABLE IF NOT EXISTS subjects (
+			id UUID PRIMARY KEY,
+			name VARCHAR(100) NOT NULL,
+			code VARCHAR(50) NOT NULL UNIQUE,
+			main_professor_id UUID NOT NULL REFERENCES users(id)
+		);
+
+		CREATE TABLE IF NOT EXISTS user_subjects (
+			user_id UUID NOT NULL REFERENCES users(id),
+			subject_id UUID NOT NULL REFERENCES subjects(id),
+			PRIMARY KEY (user_id, subject_id)
+		);
+	`
 }
 
 func getInsertRolesSQL() string {
 	return `
-    INSERT INTO roles (role) VALUES
-    ('admin'),
-    ('professor'),
-    ('student')
-    ON CONFLICT (role) DO NOTHING;
-    `
+		INSERT INTO roles (role) VALUES
+		('admin'),
+		('professor'),
+		('student')
+		ON CONFLICT (role) DO NOTHING;
+	`
+}
+
+func (postgres *PostgresDatabase) UpdateVerificationToken(email string, token uuid.UUID) error {
+	query := `
+	UPDATE unverified_users
+	SET verification_token = @token
+	WHERE mail = @mail`
+	args := pgx.NamedArgs{
+		"mail":  email,
+		"token": token,
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error updating verification token: %w", err)
+	}
+
+	return nil
 }

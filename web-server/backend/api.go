@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/google/uuid"
 )
 
 type apiFunc func(w http.ResponseWriter, r *http.Request) error
@@ -13,10 +15,23 @@ type ApiServer struct {
 	listenAddr     string
 	userService    UserService
 	subjectService SubjectService
+	emailService   EmailService
 }
 
 type ApiError struct {
 	Error string `json:"error"`
+}
+
+type TestEmailRequest struct {
+	To string `json:"to"`
+}
+
+type TestEmailResponse struct {
+	Message string `json:"message"`
+}
+
+type VerifyEmailRequest struct {
+	Mail string `json:"mail"`
 }
 
 func (server *ApiServer) handleCreateUser(w http.ResponseWriter, r *http.Request) error {
@@ -26,11 +41,23 @@ func (server *ApiServer) handleCreateUser(w http.ResponseWriter, r *http.Request
 		return NewHttpError(http.StatusBadRequest, err)
 	}
 
-	if err := server.userService.CreateUser(request); err != nil {
+	// Generate verification token
+	verificationToken := uuid.New()
+
+	// Create unverified user
+	if err := server.userService.CreateUnverifiedUser(request, verificationToken); err != nil {
 		return err
 	}
 
-	return writeResponse(w, http.StatusOK, "User created successfully")
+	// Send verification email
+	verificationLink := fmt.Sprintf("http://localhost:5173/verify-email?token=%s", verificationToken.String())
+	emailBody := fmt.Sprintf("Please click the following link to verify your email: %s", verificationLink)
+	if err := server.emailService.SendEmail(request.Mail, "Email Verification", emailBody); err != nil {
+		// Log the error but don't return it to the user
+		log.Printf("Error sending verification email: %v", err)
+	}
+
+	return writeResponse(w, http.StatusOK, "User created successfully. Please check your email to verify your account.")
 }
 
 func (server *ApiServer) handleCreateProfessor(w http.ResponseWriter, r *http.Request) error {
@@ -162,6 +189,10 @@ func (server *ApiServer) handleDeleteSubject(w http.ResponseWriter, r *http.Requ
 }
 
 func (server *ApiServer) handleDeleteUser(w http.ResponseWriter, r *http.Request) error {
+	if r.Method != http.MethodDelete {
+		return NewHttpError(http.StatusMethodNotAllowed, fmt.Errorf("method %s not allowed", r.Method))
+	}
+
 	userId := r.PathValue("id")
 	if userId == "" {
 		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing user id"))
@@ -172,6 +203,71 @@ func (server *ApiServer) handleDeleteUser(w http.ResponseWriter, r *http.Request
 	}
 
 	return writeResponse(w, http.StatusOK, "User deleted successfully")
+}
+
+func (server *ApiServer) handleTestEmail(w http.ResponseWriter, r *http.Request) error {
+	var request TestEmailRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+	}
+
+	// Generar un token de prueba
+	token := uuid.New().String()
+
+	// Enviar el correo de prueba
+	subject := "Test Email"
+	body := fmt.Sprintf("This is a test email. Token: %s", token)
+	if err := server.emailService.SendEmail(request.To, subject, body); err != nil {
+		return NewHttpError(http.StatusInternalServerError, fmt.Errorf("error sending test email: %w", err))
+	}
+
+	return writeResponse(w, http.StatusOK, TestEmailResponse{
+		Message: "Test email sent successfully",
+	})
+}
+
+func (server *ApiServer) handleVerifyEmail(w http.ResponseWriter, r *http.Request) error {
+	var request VerifyEmailRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+	}
+
+	// Generate new verification token
+	verificationToken := uuid.New()
+
+	// Update the verification token in the database
+	if err := server.userService.UpdateVerificationToken(request.Mail, verificationToken); err != nil {
+		return err
+	}
+
+	// Send verification email
+	verificationLink := fmt.Sprintf("http://localhost:5173/verify-email?token=%s", verificationToken.String())
+	emailBody := fmt.Sprintf("Please click the following link to verify your email: %s", verificationLink)
+	if err := server.emailService.SendEmail(request.Mail, "Email Verification", emailBody); err != nil {
+		return NewHttpError(http.StatusInternalServerError, fmt.Errorf("error sending verification email: %w", err))
+	}
+
+	return writeResponse(w, http.StatusOK, "Verification email sent successfully")
+}
+
+func (server *ApiServer) handleVerifyUser(w http.ResponseWriter, r *http.Request) error {
+	token := r.PathValue("token")
+	if token == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing verification token"))
+	}
+
+	if err := server.userService.VerifyUser(token); err != nil {
+		if err.Error() == "user already verified" {
+			return writeResponse(w, http.StatusOK, map[string]string{
+				"message": "User already verified",
+			})
+		}
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, map[string]string{
+		"message": "User verified successfully",
+	})
 }
 
 func writeResponse(w http.ResponseWriter, status int, value any) error {
@@ -194,11 +290,12 @@ func createHttpHandler(fn apiFunc) http.HandlerFunc {
 	}
 }
 
-func NewApiServer(listenAddr string, userService UserService, subjectService SubjectService) *ApiServer {
+func NewApiServer(listenAddr string, userService UserService, subjectService SubjectService, emailService EmailService) *ApiServer {
 	return &ApiServer{
 		listenAddr:     listenAddr,
 		userService:    userService,
 		subjectService: subjectService,
+		emailService:   emailService,
 	}
 }
 
@@ -231,7 +328,10 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("PUT /subjects/{subjectId}/add/users/{userId}", createHttpHandler(server.handleEnrollUserInSubject))
 	mux.HandleFunc("DELETE /subjects/{subjectId}/remove/users/{userId}", createHttpHandler(server.handleRemoveUserFromSubject))
 	mux.HandleFunc("DELETE /subjects/{id}", createHttpHandler(server.handleDeleteSubject))
-	mux.HandleFunc("DELETE /users/{id}", createHttpHandler(server.handleDeleteUser))
+	mux.HandleFunc("DELETE /users/delete/{id}", createHttpHandler(server.handleDeleteUser))
+	mux.HandleFunc("POST /test-email", createHttpHandler(server.handleTestEmail))
+	mux.HandleFunc("POST /verify-email", createHttpHandler(server.handleVerifyEmail))
+	mux.HandleFunc("GET /verify-email/{token}", createHttpHandler(server.handleVerifyUser))
 
 	log.Println("Starting server on port", server.listenAddr)
 

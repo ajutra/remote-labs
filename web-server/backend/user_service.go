@@ -9,34 +9,42 @@ import (
 
 type UserService interface {
 	CreateUser(request CreateUserRequest) error
+	CreateUnverifiedUser(request CreateUserRequest, verificationToken uuid.UUID) error
 	CreateProfessor(request CreateProfessorRequest) error
 	ListAllUsersBySubjectId(subjectId string) ([]UserResponse, error)
 	ValidateUser(request ValidateUserRequest) (ValidateUserResponse, error)
 	GetUser(userId string) (UserResponse, error)
 	DeleteUser(userId string) error
+	VerifyUser(token string) error
+	UpdateVerificationToken(email string, token uuid.UUID) error
 }
 
-type UsrService struct {
+type UserServiceImpl struct {
 	db Database
 }
 
 func NewUserService(db Database) UserService {
-	return &UsrService{
+	return &UserServiceImpl{
 		db: db,
 	}
 }
 
-func (s *UsrService) CreateUser(request CreateUserRequest) error {
+func (s *UserServiceImpl) CreateUser(request CreateUserRequest) error {
 	user := request.toUser()
 	return s.db.CreateUser(user)
 }
 
-func (s *UsrService) CreateProfessor(request CreateProfessorRequest) error {
+func (s *UserServiceImpl) CreateUnverifiedUser(request CreateUserRequest, verificationToken uuid.UUID) error {
+	user := request.toUser()
+	return s.db.CreateUnverifiedUser(user, verificationToken)
+}
+
+func (s *UserServiceImpl) CreateProfessor(request CreateProfessorRequest) error {
 	user := request.toUser()
 	return s.db.CreateUser(user)
 }
 
-func (s *UsrService) ListAllUsersBySubjectId(subjectId string) ([]UserResponse, error) {
+func (s *UserServiceImpl) ListAllUsersBySubjectId(subjectId string) ([]UserResponse, error) {
 	users, err := s.db.ListAllUsersBySubjectId(subjectId)
 	if err != nil {
 		return nil, err
@@ -50,7 +58,7 @@ func (s *UsrService) ListAllUsersBySubjectId(subjectId string) ([]UserResponse, 
 	return usersResponse, nil
 }
 
-func (s *UsrService) ValidateUser(request ValidateUserRequest) (ValidateUserResponse, error) {
+func (s *UserServiceImpl) ValidateUser(request ValidateUserRequest) (ValidateUserResponse, error) {
 	user, err := s.db.ValidateUser(request.Mail, request.Password)
 	if err != nil {
 		return ValidateUserResponse{}, NewHttpError(http.StatusBadRequest, err)
@@ -59,7 +67,7 @@ func (s *UsrService) ValidateUser(request ValidateUserRequest) (ValidateUserResp
 	return user.toValidateUserResponse(), nil
 }
 
-func (s *UsrService) GetUser(userId string) (UserResponse, error) {
+func (s *UserServiceImpl) GetUser(userId string) (UserResponse, error) {
 	user, err := s.db.GetUser(userId)
 	if err != nil {
 		return UserResponse{}, NewHttpError(http.StatusBadRequest, err)
@@ -68,7 +76,7 @@ func (s *UsrService) GetUser(userId string) (UserResponse, error) {
 	return user.toUserResponse(), nil
 }
 
-func (s *UsrService) DeleteUser(userId string) error {
+func (s *UserServiceImpl) DeleteUser(userId string) error {
 	// Check if user exists
 	if err := s.db.UserExistsById(userId); err != nil {
 		return err
@@ -117,4 +125,12 @@ func (user User) toValidateUserResponse() ValidateUserResponse {
 	return ValidateUserResponse{
 		ID: user.ID,
 	}
+}
+
+func (s *UserServiceImpl) VerifyUser(token string) error {
+	return s.db.VerifyUser(token)
+}
+
+func (s *UserServiceImpl) UpdateVerificationToken(email string, token uuid.UUID) error {
+	return s.db.UpdateVerificationToken(email, token)
 }
