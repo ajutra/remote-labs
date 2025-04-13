@@ -12,10 +12,10 @@ import LoginPage from './pages/LoginPage'
 import MyLabs from './pages/MyLabs'
 import SubjectDetail from './pages/SubjectDetail'
 import ControlPlane from './pages/ControlPlane'
-import useUserRole from '@/hooks/useUserRole'
+import useIsAdmin from '@/hooks/useIsAdmin'
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const isAdmin = useUserRole()
+  const isAdmin = useIsAdmin()
   return isAdmin ? <>{children}</> : <Navigate to={AppRoutes.HOME} />
 }
 
