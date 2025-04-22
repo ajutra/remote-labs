@@ -1,11 +1,11 @@
 package main
 
 type CloneVmRequest struct {
-	SourceVmName string `json:"sourceVmName"`
-	TargetVmName string `json:"targetVmName"`
+	SourceVmId string `json:"sourceVmId"`
+	TargetVmId string `json:"targetVmId"`
 }
 
 type ListVMsStatusResponse struct {
-	VmName string `json:"vmName"`
+	VmId   string `json:"vmId"`
 	Status string `json:"status"`
 }

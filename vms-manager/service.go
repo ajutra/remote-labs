@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 )
 
 type Service interface {
@@ -17,14 +20,17 @@ type Service interface {
 }
 
 type ServiceImpl struct {
-	vmManager VmManager
-	db        Database
+	db             Database
+	serverAgentURL string
+	mutexMap       map[string]*sync.Mutex
+	mutex          sync.Mutex
 }
 
-func NewService(vmManager VmManager, db Database) (Service, error) {
+func NewService(db Database, serverAgentURL string) (Service, error) {
 	service := &ServiceImpl{
-		vmManager: vmManager,
-		db:        db,
+		db:             db,
+		serverAgentURL: serverAgentURL,
+		mutexMap:       make(map[string]*sync.Mutex),
 	}
 
 	if err := service.addCurrentVMsToDb(); err != nil {
@@ -34,12 +40,23 @@ func NewService(vmManager VmManager, db Database) (Service, error) {
 	return service, nil
 }
 
+func (s *ServiceImpl) getMutex(vmId string) *sync.Mutex {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	if s.mutexMap[vmId] == nil {
+		s.mutexMap[vmId] = &sync.Mutex{}
+	}
+
+	return s.mutexMap[vmId]
+}
+
 func (s *ServiceImpl) CloneVM(request CloneVmRequest) error {
-	if err := checkIfVmExists(request.SourceVmName, s.db); err != nil {
+	if err := checkIfVmExists(request.SourceVmId, s.db); err != nil {
 		return err
 	}
 
-	exists, err := s.db.VmExistsByName(request.TargetVmName)
+	exists, err := s.db.VmExistsById(request.TargetVmId)
 	if err != nil {
 		return err
 	}
@@ -47,17 +64,37 @@ func (s *ServiceImpl) CloneVM(request CloneVmRequest) error {
 	if exists {
 		return NewHttpError(
 			http.StatusBadRequest,
-			fmt.Errorf("VM '%s' already exists", request.TargetVmName),
+			fmt.Errorf("VM '%s' already exists", request.TargetVmId),
 		)
 	}
 
-	if err := s.vmManager.CloneVM(request.SourceVmName, request.TargetVmName); err != nil {
+	vmMutex := s.getMutex(request.SourceVmId)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
+	// Make API call to server-agent
+	jsonData, err := json.Marshal(request)
+	if err != nil {
 		return err
+	}
+
+	resp, err := http.Post(s.serverAgentURL+"/vms/clone", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var apiErr ApiError
+		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
+			return err
+		}
+		return NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
 	}
 
 	// Try to add the VM to the database until it succeeds
 	for {
-		if err := s.db.AddVm(request.TargetVmName); err != nil {
+		if err := s.db.AddVm(request.TargetVmId); err != nil {
 			log.Println(err.Error())
 		} else {
 			break
@@ -72,13 +109,33 @@ func (s *ServiceImpl) DeleteVM(vmName string) error {
 		return err
 	}
 
-	if err := s.vmManager.DeleteVM(vmName); err != nil {
+	vmMutex := s.getMutex(vmName)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
+	// Make API call to server-agent
+	req, err := http.NewRequest(http.MethodDelete, s.serverAgentURL+"/vms/delete/"+vmName, nil)
+	if err != nil {
 		return err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var apiErr ApiError
+		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
+			return err
+		}
+		return NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
 	}
 
 	// Try to delete the VM from the database until it succeeds
 	for {
-		if err := s.vmManager.DeleteVM(vmName); err != nil {
+		if err := s.db.DeleteVm(vmName); err != nil {
 			log.Println(err.Error())
 		} else {
 			break
@@ -93,9 +150,25 @@ func (s *ServiceImpl) StartVM(vmName string) error {
 		return err
 	}
 
-	if err := s.vmManager.StartVM(vmName); err != nil {
+	vmMutex := s.getMutex(vmName)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
+	// Make API call to server-agent
+	resp, err := http.Post(s.serverAgentURL+"/vms/start/"+vmName, "application/json", nil)
+	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var apiErr ApiError
+		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
+			return err
+		}
+		return NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
+	}
+
 	return nil
 }
 
@@ -104,9 +177,25 @@ func (s *ServiceImpl) StopVM(vmName string) error {
 		return err
 	}
 
-	if err := s.vmManager.StopVM(vmName); err != nil {
+	vmMutex := s.getMutex(vmName)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
+	// Make API call to server-agent
+	resp, err := http.Post(s.serverAgentURL+"/vms/stop/"+vmName, "application/json", nil)
+	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var apiErr ApiError
+		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
+			return err
+		}
+		return NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
+	}
+
 	return nil
 }
 
@@ -115,9 +204,25 @@ func (s *ServiceImpl) RestartVM(vmName string) error {
 		return err
 	}
 
-	if err := s.vmManager.RestartVM(vmName); err != nil {
+	vmMutex := s.getMutex(vmName)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
+	// Make API call to server-agent
+	resp, err := http.Post(s.serverAgentURL+"/vms/restart/"+vmName, "application/json", nil)
+	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var apiErr ApiError
+		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
+			return err
+		}
+		return NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
+	}
+
 	return nil
 }
 
@@ -126,37 +231,69 @@ func (s *ServiceImpl) ForceStopVM(vmName string) error {
 		return err
 	}
 
-	if err := s.vmManager.ForceStopVM(vmName); err != nil {
+	vmMutex := s.getMutex(vmName)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
+	// Make API call to server-agent
+	resp, err := http.Post(s.serverAgentURL+"/vms/force-stop/"+vmName, "application/json", nil)
+	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var apiErr ApiError
+		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
+			return err
+		}
+		return NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
+	}
+
 	return nil
 }
 
 func (s *ServiceImpl) ListVMsStatus() ([]ListVMsStatusResponse, error) {
-	status, err := s.vmManager.ListVMsStatus()
+	// Make API call to server-agent
+	resp, err := http.Get(s.serverAgentURL + "/vms/status")
 	if err != nil {
 		return nil, err
 	}
-	return toVMsStatusResponse(status), nil
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var apiErr ApiError
+		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
+			return nil, err
+		}
+		return nil, NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
+	}
+
+	var statuses []ListVMsStatusResponse
+	if err := json.NewDecoder(resp.Body).Decode(&statuses); err != nil {
+		return nil, err
+	}
+
+	return statuses, nil
 }
 
 func (s *ServiceImpl) addCurrentVMsToDb() error {
 	log.Println("Trying to add current VMs to the database if they don't exist...")
 
-	vms, err := s.vmManager.ListVMsStatus()
+	statuses, err := s.ListVMsStatus()
 	if err != nil {
 		return err
 	}
 
-	for vmName := range vms {
-		exists, err := s.db.VmExistsByName(vmName)
-
+	for _, vm := range statuses {
+		exists, err := s.db.VmExistsById(vm.VmId)
 		if err != nil {
 			log.Println(err.Error())
+			continue
 		}
 
 		if !exists {
-			if err := s.db.AddVm(vmName); err != nil {
+			if err := s.db.AddVm(vm.VmId); err != nil {
 				return err
 			}
 		}
@@ -165,20 +302,8 @@ func (s *ServiceImpl) addCurrentVMsToDb() error {
 	return nil
 }
 
-func toVMsStatusResponse(status map[string]string) []ListVMsStatusResponse {
-	var response []ListVMsStatusResponse
-	for vmName, status := range status {
-		response = append(response, ListVMsStatusResponse{
-			VmName: vmName,
-			Status: status,
-		})
-	}
-	return response
-}
-
-func checkIfVmExists(vmName string, db Database) error {
-	exists, err := db.VmExistsByName(vmName)
-
+func checkIfVmExists(vmId string, db Database) error {
+	exists, err := db.VmExistsById(vmId)
 	if err != nil {
 		log.Println(err.Error())
 		return err
@@ -187,9 +312,8 @@ func checkIfVmExists(vmName string, db Database) error {
 	if !exists {
 		return NewHttpError(
 			http.StatusBadRequest,
-			fmt.Errorf("VM '%s' does not exist", vmName),
+			fmt.Errorf("VM '%s' does not exist", vmId),
 		)
 	}
-
 	return nil
 }

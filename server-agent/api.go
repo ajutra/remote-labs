@@ -9,12 +9,85 @@ import (
 type apiFunc func(w http.ResponseWriter, r *http.Request) error
 
 type ApiServer struct {
-	listenAddr string
-	service    Service
+	listenAddr  string
+	serverAgent ServerAgent
 }
 
 type ApiError struct {
 	Error string `json:"error"`
+}
+
+func (server *ApiServer) handleCloneVM(w http.ResponseWriter, r *http.Request) error {
+	var request CloneVmRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return NewHttpError(http.StatusBadRequest, err)
+	}
+
+	if err := server.serverAgent.CloneVM(request.SourceVmId, request.TargetVmId); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, nil)
+}
+
+func (server *ApiServer) handleDeleteVM(w http.ResponseWriter, r *http.Request) error {
+	vmId := r.PathValue("vmId")
+
+	if err := server.serverAgent.DeleteVM(vmId); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, nil)
+}
+
+func (server *ApiServer) handleStartVM(w http.ResponseWriter, r *http.Request) error {
+	vmId := r.PathValue("vmId")
+
+	if err := server.serverAgent.StartVM(vmId); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, nil)
+}
+
+func (server *ApiServer) handleStopVM(w http.ResponseWriter, r *http.Request) error {
+	vmId := r.PathValue("vmId")
+
+	if err := server.serverAgent.StopVM(vmId); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, nil)
+}
+
+func (server *ApiServer) handleRestartVM(w http.ResponseWriter, r *http.Request) error {
+	vmId := r.PathValue("vmId")
+
+	if err := server.serverAgent.RestartVM(vmId); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, nil)
+}
+
+func (server *ApiServer) handleForceStopVM(w http.ResponseWriter, r *http.Request) error {
+	vmId := r.PathValue("vmId")
+
+	if err := server.serverAgent.ForceStopVM(vmId); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, nil)
+}
+
+func (server *ApiServer) handleListVMsStatus(w http.ResponseWriter, r *http.Request) error {
+	statuses, err := server.serverAgent.ListVMsStatus()
+	if err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, statuses)
 }
 
 func writeResponse(w http.ResponseWriter, status int, value any) error {
@@ -37,10 +110,10 @@ func createHttpHandler(fn apiFunc) http.HandlerFunc {
 	}
 }
 
-func NewApiServer(listenAddr string, service Service) *ApiServer {
+func NewApiServer(listenAddr string, serverAgent ServerAgent) *ApiServer {
 	return &ApiServer{
-		listenAddr: listenAddr,
-		service:    service,
+		listenAddr:  listenAddr,
+		serverAgent: serverAgent,
 	}
 }
 
@@ -48,16 +121,16 @@ func (server *ApiServer) Run() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /vms/clone", createHttpHandler(server.handleCloneVM))
-	mux.HandleFunc("DELETE /vms/delete/{vmName}", createHttpHandler(server.handleDeleteVM))
-	mux.HandleFunc("POST /vms/start/{vmName}", createHttpHandler(server.handleStartVM))
-	mux.HandleFunc("POST /vms/stop/{vmName}", createHttpHandler(server.handleStopVM))
-	mux.HandleFunc("POST /vms/restart/{vmName}", createHttpHandler(server.handleRestartVM))
-	mux.HandleFunc("POST /vms/force-stop/{vmName}", createHttpHandler(server.handleForceStopVM))
+	mux.HandleFunc("DELETE /vms/delete/{vmId}", createHttpHandler(server.handleDeleteVM))
+	mux.HandleFunc("POST /vms/start/{vmId}", createHttpHandler(server.handleStartVM))
+	mux.HandleFunc("POST /vms/stop/{vmId}", createHttpHandler(server.handleStopVM))
+	mux.HandleFunc("POST /vms/restart/{vmId}", createHttpHandler(server.handleRestartVM))
+	mux.HandleFunc("POST /vms/force-stop/{vmId}", createHttpHandler(server.handleForceStopVM))
 	mux.HandleFunc("GET /vms/status", createHttpHandler(server.handleListVMsStatus))
 
-	log.Println("Starting server on", server.listenAddr)
+	log.Println("Starting server agent on", server.listenAddr)
 
 	if err := http.ListenAndServe(server.listenAddr, mux); err != nil {
-		log.Fatal("Error starting server:", err)
+		log.Fatal("Error starting server agent:", err)
 	}
 }

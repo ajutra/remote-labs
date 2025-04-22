@@ -13,9 +13,9 @@ import (
 
 type Database interface {
 	Close()
-	VmExistsByName(vmName string) (bool, error)
-	AddVm(vmName string) error
-	DeleteVm(vmName string) error
+	VmExistsById(vmId string) (bool, error)
+	AddVm(vmId string) error
+	DeleteVm(vmId string) error
 }
 
 type PostgresDatabase struct {
@@ -27,9 +27,10 @@ type DatabaseVM struct {
 	Name string
 }
 
-func (postgres *PostgresDatabase) VmExistsByName(vmName string) (bool, error) {
+// TODO: Change to use id instead of name
+func (postgres *PostgresDatabase) VmExistsById(vmId string) (bool, error) {
 	query := "SELECT EXISTS(SELECT 1 FROM vms WHERE name = @name)"
-	args := pgx.NamedArgs{"name": vmName}
+	args := pgx.NamedArgs{"name": vmId}
 
 	var exists bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
@@ -39,9 +40,10 @@ func (postgres *PostgresDatabase) VmExistsByName(vmName string) (bool, error) {
 	return exists, nil
 }
 
-func (postgres *PostgresDatabase) AddVm(vmName string) error {
+// TODO: Change to use id instead of name
+func (postgres *PostgresDatabase) AddVm(vmId string) error {
 	query := "INSERT INTO vms (name) VALUES (@name)"
-	args := pgx.NamedArgs{"name": vmName}
+	args := pgx.NamedArgs{"name": vmId}
 
 	if _, err := postgres.db.Exec(context.Background(), query, args); err != nil {
 		return fmt.Errorf("Error adding VM: %v", err)
@@ -50,9 +52,10 @@ func (postgres *PostgresDatabase) AddVm(vmName string) error {
 	return nil
 }
 
-func (postgres *PostgresDatabase) DeleteVm(vmName string) error {
+// TODO: Change to use id instead of name
+func (postgres *PostgresDatabase) DeleteVm(vmId string) error {
 	query := "DELETE FROM vms WHERE name = @name"
-	args := pgx.NamedArgs{"name": vmName}
+	args := pgx.NamedArgs{"name": vmId}
 
 	if _, err := postgres.db.Exec(context.Background(), query, args); err != nil {
 		return fmt.Errorf("Error deleting VM: %v", err)
