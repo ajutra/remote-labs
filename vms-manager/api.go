@@ -32,9 +32,9 @@ func (server *ApiServer) handleCloneVM(w http.ResponseWriter, r *http.Request) e
 }
 
 func (server *ApiServer) handleDeleteVM(w http.ResponseWriter, r *http.Request) error {
-	vmName := r.PathValue("vmName")
+	vmId := r.PathValue("vmId")
 
-	if err := server.service.DeleteVM(vmName); err != nil {
+	if err := server.service.DeleteVM(vmId); err != nil {
 		return err
 	}
 
@@ -42,9 +42,9 @@ func (server *ApiServer) handleDeleteVM(w http.ResponseWriter, r *http.Request) 
 }
 
 func (server *ApiServer) handleStartVM(w http.ResponseWriter, r *http.Request) error {
-	vmName := r.PathValue("vmName")
+	vmId := r.PathValue("vmId")
 
-	if err := server.service.StartVM(vmName); err != nil {
+	if err := server.service.StartVM(vmId); err != nil {
 		return err
 	}
 
@@ -52,9 +52,9 @@ func (server *ApiServer) handleStartVM(w http.ResponseWriter, r *http.Request) e
 }
 
 func (server *ApiServer) handleStopVM(w http.ResponseWriter, r *http.Request) error {
-	vmName := r.PathValue("vmName")
+	vmId := r.PathValue("vmId")
 
-	if err := server.service.StopVM(vmName); err != nil {
+	if err := server.service.StopVM(vmId); err != nil {
 		return err
 	}
 
@@ -62,9 +62,9 @@ func (server *ApiServer) handleStopVM(w http.ResponseWriter, r *http.Request) er
 }
 
 func (server *ApiServer) handleRestartVM(w http.ResponseWriter, r *http.Request) error {
-	vmName := r.PathValue("vmName")
+	vmId := r.PathValue("vmId")
 
-	if err := server.service.RestartVM(vmName); err != nil {
+	if err := server.service.RestartVM(vmId); err != nil {
 		return err
 	}
 
@@ -72,9 +72,9 @@ func (server *ApiServer) handleRestartVM(w http.ResponseWriter, r *http.Request)
 }
 
 func (server *ApiServer) handleForceStopVM(w http.ResponseWriter, r *http.Request) error {
-	vmName := r.PathValue("vmName")
+	vmId := r.PathValue("vmId")
 
-	if err := server.service.ForceStopVM(vmName); err != nil {
+	if err := server.service.ForceStopVM(vmId); err != nil {
 		return err
 	}
 
@@ -121,11 +121,11 @@ func (server *ApiServer) Run() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /vms/clone", createHttpHandler(server.handleCloneVM))
-	mux.HandleFunc("DELETE /vms/delete/{vmName}", createHttpHandler(server.handleDeleteVM))
-	mux.HandleFunc("POST /vms/start/{vmName}", createHttpHandler(server.handleStartVM))
-	mux.HandleFunc("POST /vms/stop/{vmName}", createHttpHandler(server.handleStopVM))
-	mux.HandleFunc("POST /vms/restart/{vmName}", createHttpHandler(server.handleRestartVM))
-	mux.HandleFunc("POST /vms/force-stop/{vmName}", createHttpHandler(server.handleForceStopVM))
+	mux.HandleFunc("DELETE /vms/delete/{vmId}", createHttpHandler(server.handleDeleteVM))
+	mux.HandleFunc("POST /vms/start/{vmId}", createHttpHandler(server.handleStartVM))
+	mux.HandleFunc("POST /vms/stop/{vmId}", createHttpHandler(server.handleStopVM))
+	mux.HandleFunc("POST /vms/restart/{vmId}", createHttpHandler(server.handleRestartVM))
+	mux.HandleFunc("POST /vms/force-stop/{vmId}", createHttpHandler(server.handleForceStopVM))
 	mux.HandleFunc("GET /vms/status", createHttpHandler(server.handleListVMsStatus))
 
 	log.Println("Starting server on", server.listenAddr)
