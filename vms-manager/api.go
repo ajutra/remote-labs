@@ -9,80 +9,101 @@ import (
 type apiFunc func(w http.ResponseWriter, r *http.Request) error
 
 type ApiServer struct {
-	listenAddr string
-	service    Service
+	listenAddr                  string
+	service                     Service
+	listBaseImagesEndpoint      string
+	defineTemplateEndpoint      string
+	deleteTemplateEndpoint      string
+	createInstanceEndpoint      string
+	deleteInstanceEndpoint      string
+	startInstanceEndpoint       string
+	stopInstanceEndpoint        string
+	restartInstanceEndpoint     string
+	listInstancesStatusEndpoint string
 }
 
-type ApiError struct {
-	Error string `json:"error"`
-}
-
-func (server *ApiServer) handleCloneVM(w http.ResponseWriter, r *http.Request) error {
-	var request CloneVmRequest
-
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		return NewHttpError(http.StatusBadRequest, err)
-	}
-
-	if err := server.service.CloneVM(request); err != nil {
+func (server *ApiServer) handleListBaseImages(w http.ResponseWriter, r *http.Request) error {
+	baseImages, err := server.service.ListBaseImages()
+	if err != nil {
 		return err
 	}
-
-	return writeResponse(w, http.StatusOK, nil)
+	return writeResponse(w, http.StatusOK, baseImages)
 }
 
-func (server *ApiServer) handleDeleteVM(w http.ResponseWriter, r *http.Request) error {
+func (server *ApiServer) handleDefineTemplate(w http.ResponseWriter, r *http.Request) error {
 	vmId := r.PathValue("vmId")
 
-	if err := server.service.DeleteVM(vmId); err != nil {
+	response, err := server.service.DefineTemplate(vmId)
+	if err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, response)
+}
+
+func (server *ApiServer) handleDeleteTemplate(w http.ResponseWriter, r *http.Request) error {
+	templateId := r.PathValue("templateId")
+
+	if err := server.service.DeleteTemplate(templateId); err != nil {
 		return err
 	}
 
 	return writeResponse(w, http.StatusOK, nil)
 }
 
-func (server *ApiServer) handleStartVM(w http.ResponseWriter, r *http.Request) error {
-	vmId := r.PathValue("vmId")
+func (server *ApiServer) handleCreateInstance(w http.ResponseWriter, r *http.Request) error {
+	templateId := r.PathValue("templateId")
 
-	if err := server.service.StartVM(vmId); err != nil {
+	response, err := server.service.CreateInstance(templateId)
+	if err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, response)
+}
+
+func (server *ApiServer) handleDeleteInstance(w http.ResponseWriter, r *http.Request) error {
+	instanceId := r.PathValue("instanceId")
+
+	if err := server.service.DeleteInstance(instanceId); err != nil {
 		return err
 	}
 
 	return writeResponse(w, http.StatusOK, nil)
 }
 
-func (server *ApiServer) handleStopVM(w http.ResponseWriter, r *http.Request) error {
-	vmId := r.PathValue("vmId")
+func (server *ApiServer) handleStartInstance(w http.ResponseWriter, r *http.Request) error {
+	instanceId := r.PathValue("instanceId")
 
-	if err := server.service.StopVM(vmId); err != nil {
+	if err := server.service.StartInstance(instanceId); err != nil {
 		return err
 	}
 
 	return writeResponse(w, http.StatusOK, nil)
 }
 
-func (server *ApiServer) handleRestartVM(w http.ResponseWriter, r *http.Request) error {
-	vmId := r.PathValue("vmId")
+func (server *ApiServer) handleStopInstance(w http.ResponseWriter, r *http.Request) error {
+	instanceId := r.PathValue("instanceId")
 
-	if err := server.service.RestartVM(vmId); err != nil {
+	if err := server.service.StopInstance(instanceId); err != nil {
 		return err
 	}
 
 	return writeResponse(w, http.StatusOK, nil)
 }
 
-func (server *ApiServer) handleForceStopVM(w http.ResponseWriter, r *http.Request) error {
-	vmId := r.PathValue("vmId")
+func (server *ApiServer) handleRestartInstance(w http.ResponseWriter, r *http.Request) error {
+	instanceId := r.PathValue("instanceId")
 
-	if err := server.service.ForceStopVM(vmId); err != nil {
+	if err := server.service.RestartInstance(instanceId); err != nil {
 		return err
 	}
 
 	return writeResponse(w, http.StatusOK, nil)
 }
 
-func (server *ApiServer) handleListVMsStatus(w http.ResponseWriter, r *http.Request) error {
-	statuses, err := server.service.ListVMsStatus()
+func (server *ApiServer) handleListInstancesStatus(w http.ResponseWriter, r *http.Request) error {
+	statuses, err := server.service.ListInstancesStatus()
 	if err != nil {
 		return err
 	}
@@ -110,23 +131,73 @@ func createHttpHandler(fn apiFunc) http.HandlerFunc {
 	}
 }
 
-func NewApiServer(listenAddr string, service Service) *ApiServer {
+func NewApiServer(
+	listenAddr string,
+	service Service,
+	listBaseImagesEndpoint string,
+	defineTemplateEndpoint string,
+	deleteTemplateEndpoint string,
+	createInstanceEndpoint string,
+	deleteInstanceEndpoint string,
+	startInstanceEndpoint string,
+	stopInstanceEndpoint string,
+	restartInstanceEndpoint string,
+	listInstancesStatusEndpoint string,
+) *ApiServer {
 	return &ApiServer{
-		listenAddr: listenAddr,
-		service:    service,
+		listenAddr:                  listenAddr,
+		service:                     service,
+		listBaseImagesEndpoint:      listBaseImagesEndpoint,
+		defineTemplateEndpoint:      defineTemplateEndpoint,
+		deleteTemplateEndpoint:      deleteTemplateEndpoint,
+		createInstanceEndpoint:      createInstanceEndpoint,
+		deleteInstanceEndpoint:      deleteInstanceEndpoint,
+		startInstanceEndpoint:       startInstanceEndpoint,
+		stopInstanceEndpoint:        stopInstanceEndpoint,
+		restartInstanceEndpoint:     restartInstanceEndpoint,
+		listInstancesStatusEndpoint: listInstancesStatusEndpoint,
 	}
 }
 
 func (server *ApiServer) Run() {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("POST /vms/clone", createHttpHandler(server.handleCloneVM))
-	mux.HandleFunc("DELETE /vms/delete/{vmId}", createHttpHandler(server.handleDeleteVM))
-	mux.HandleFunc("POST /vms/start/{vmId}", createHttpHandler(server.handleStartVM))
-	mux.HandleFunc("POST /vms/stop/{vmId}", createHttpHandler(server.handleStopVM))
-	mux.HandleFunc("POST /vms/restart/{vmId}", createHttpHandler(server.handleRestartVM))
-	mux.HandleFunc("POST /vms/force-stop/{vmId}", createHttpHandler(server.handleForceStopVM))
-	mux.HandleFunc("GET /vms/status", createHttpHandler(server.handleListVMsStatus))
+	mux.HandleFunc(
+		"GET "+server.listBaseImagesEndpoint,
+		createHttpHandler(server.handleListBaseImages),
+	)
+	mux.HandleFunc(
+		"POST "+server.defineTemplateEndpoint+"/{vmId}",
+		createHttpHandler(server.handleDefineTemplate),
+	)
+	mux.HandleFunc(
+		"DELETE "+server.deleteTemplateEndpoint+"/{templateId}",
+		createHttpHandler(server.handleDeleteTemplate),
+	)
+	mux.HandleFunc(
+		"POST "+server.createInstanceEndpoint+"/{templateId}",
+		createHttpHandler(server.handleCreateInstance),
+	)
+	mux.HandleFunc(
+		"DELETE "+server.deleteInstanceEndpoint+"/{instanceId}",
+		createHttpHandler(server.handleDeleteInstance),
+	)
+	mux.HandleFunc(
+		"POST "+server.startInstanceEndpoint+"/{instanceId}",
+		createHttpHandler(server.handleStartInstance),
+	)
+	mux.HandleFunc(
+		"POST "+server.stopInstanceEndpoint+"/{instanceId}",
+		createHttpHandler(server.handleStopInstance),
+	)
+	mux.HandleFunc(
+		"POST "+server.restartInstanceEndpoint+"/{instanceId}",
+		createHttpHandler(server.handleRestartInstance),
+	)
+	mux.HandleFunc(
+		"GET "+server.listInstancesStatusEndpoint,
+		createHttpHandler(server.handleListInstancesStatus),
+	)
 
 	log.Println("Starting server on", server.listenAddr)
 

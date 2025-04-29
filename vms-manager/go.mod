@@ -3,6 +3,7 @@ module github.com/ajutra/remote-vms-deployment/vms-manager
 go 1.23.5
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/joho/godotenv v1.5.1
 )

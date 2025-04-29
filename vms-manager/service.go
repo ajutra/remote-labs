@@ -6,38 +6,578 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
 type Service interface {
-	CloneVM(request CloneVmRequest) error
-	DeleteVM(vmName string) error
-	StartVM(vmName string) error
-	StopVM(vmName string) error
-	RestartVM(vmName string) error
-	ForceStopVM(vmName string) error
-	ListVMsStatus() ([]ListVMsStatusResponse, error)
+	ListBaseImages() ([]ListBaseImagesResponse, error)
+	DefineTemplate(vmId string) (DefineTemplateResponse, error)
+	DeleteTemplate(templateId string) error
+	CreateInstance(templateId string) (CreateInstanceResponse, error)
+	DeleteInstance(instanceId string) error
+	StartInstance(instanceId string) error
+	StopInstance(instanceId string) error
+	RestartInstance(instanceId string) error
+	ListInstancesStatus() ([]ListInstancesStatusResponse, error)
 }
 
 type ServiceImpl struct {
-	db             Database
-	serverAgentURL string
-	mutexMap       map[string]*sync.Mutex
-	mutex          sync.Mutex
+	db                          Database
+	serverAgentsURLs            string
+	listBaseImagesEndpoint      string
+	defineTemplateEndpoint      string
+	deleteTemplateEndpoint      string
+	createInstanceEndpoint      string
+	deleteInstanceEndpoint      string
+	startInstanceEndpoint       string
+	stopInstanceEndpoint        string
+	restartInstanceEndpoint     string
+	listInstancesStatusEndpoint string
+	mutexMap                    map[string]*sync.Mutex
+	mutex                       sync.Mutex
 }
 
-func NewService(db Database, serverAgentURL string) (Service, error) {
-	service := &ServiceImpl{
-		db:             db,
-		serverAgentURL: serverAgentURL,
-		mutexMap:       make(map[string]*sync.Mutex),
-	}
-
-	if err := service.addCurrentVMsToDb(); err != nil {
+func (s *ServiceImpl) ListBaseImages() ([]ListBaseImagesResponse, error) {
+	baseImages, err := s.db.GetBaseImages()
+	if err != nil {
 		return nil, err
 	}
 
-	return service, nil
+	return s.toListBaseImagesResponse(baseImages)
+}
+
+func (s *ServiceImpl) DefineTemplate(vmId string) (DefineTemplateResponse, error) {
+	if err := s.checkIfVmExists(vmId); err != nil {
+		return DefineTemplateResponse{}, err
+	}
+
+	if err := s.checkIfVmIsRunning(vmId, false); err != nil {
+		return DefineTemplateResponse{}, err
+	}
+
+	isTemplate, err := s.db.VmIsTemplate(vmId)
+	if err != nil {
+		return DefineTemplateResponse{}, err
+	}
+	if isTemplate {
+		return DefineTemplateResponse{}, NewHttpError(
+			http.StatusBadRequest,
+			fmt.Errorf("VM '%s' is already a template", vmId),
+		)
+	}
+
+	templateId, err := s.generateNewVmId()
+	if err != nil {
+		return DefineTemplateResponse{}, err
+	}
+
+	request := DefineTemplateAgentRequest{
+		VmId:       vmId,
+		TemplateId: templateId,
+	}
+
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return DefineTemplateResponse{}, err
+	}
+
+	vmMutex := s.getMutex(vmId)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
+	resp, err := http.Post(
+		s.serverAgentsURLs+s.defineTemplateEndpoint,
+		"application/json",
+		bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		return DefineTemplateResponse{}, err
+	}
+	defer resp.Body.Close()
+	if err := checkIfStatusCodeIsOk(resp); err != nil {
+		return DefineTemplateResponse{}, err
+	}
+
+	vm := Vm{
+		ID:          templateId,
+		Description: nil,
+		DependsOn:   nil,
+	}
+
+	s.addVmToDb(vm, true)
+
+	return DefineTemplateResponse{
+		TemplateId: templateId,
+	}, nil
+}
+
+func (s *ServiceImpl) DeleteTemplate(templateId string) error {
+	if err := s.checkIfVmExists(templateId); err != nil {
+		return err
+	}
+
+	isTemplate, err := s.db.VmIsTemplate(templateId)
+	if err != nil {
+		return err
+	}
+	if !isTemplate {
+		return NewHttpError(
+			http.StatusBadRequest,
+			fmt.Errorf("VM '%s' is not a template", templateId),
+		)
+	}
+
+	hasInstancesThatDependOnIt, err := s.db.VmHasInstancesThatDependOnIt(templateId)
+	if err != nil {
+		return err
+	}
+	if hasInstancesThatDependOnIt {
+		return NewHttpError(
+			http.StatusBadRequest,
+			fmt.Errorf("VM '%s' has instances that depend on it", templateId),
+		)
+	}
+
+	vmMutex := s.getMutex(templateId)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
+	resp, err := http.Post(
+		s.serverAgentsURLs+s.deleteTemplateEndpoint+"/"+templateId,
+		"application/json",
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if err := checkIfStatusCodeIsOk(resp); err != nil {
+		return err
+	}
+
+	s.deleteVmFromDb(templateId)
+	s.deleteMutex(templateId)
+
+	return nil
+}
+
+func (s *ServiceImpl) CreateInstance(templateId string) (CreateInstanceResponse, error) {
+	if err := s.checkIfVmExists(templateId); err != nil {
+		return CreateInstanceResponse{}, err
+	}
+
+	isTemplate, err := s.db.VmIsTemplate(templateId)
+	if err != nil {
+		return CreateInstanceResponse{}, err
+	}
+
+	isBase, err := s.db.VmIsBase(templateId)
+	if err != nil {
+		return CreateInstanceResponse{}, err
+	}
+
+	if !isTemplate && !isBase {
+		return CreateInstanceResponse{}, NewHttpError(
+			http.StatusBadRequest,
+			fmt.Errorf("VM '%s' is not a template or base image", templateId),
+		)
+	}
+
+	instanceId, err := s.generateNewVmId()
+	if err != nil {
+		return CreateInstanceResponse{}, err
+	}
+
+	request := CreateInstanceAgentRequest{
+		TemplateId: templateId,
+		InstanceId: instanceId,
+	}
+
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return CreateInstanceResponse{}, err
+	}
+
+	vmMutex := s.getMutex(templateId)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
+	resp, err := http.Post(
+		s.serverAgentsURLs+s.createInstanceEndpoint,
+		"application/json",
+		bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		return CreateInstanceResponse{}, err
+	}
+	defer resp.Body.Close()
+	if err := checkIfStatusCodeIsOk(resp); err != nil {
+		return CreateInstanceResponse{}, err
+	}
+
+	vm := Vm{
+		ID:          instanceId,
+		Description: nil,
+		DependsOn:   &templateId,
+	}
+
+	s.addVmToDb(vm, false)
+
+	return CreateInstanceResponse{
+		InstanceId: instanceId,
+	}, nil
+}
+
+func (s *ServiceImpl) DeleteInstance(instanceId string) error {
+	if err := s.checkIfVmExists(instanceId); err != nil {
+		return err
+	}
+
+	if err := s.checkIfVmIsTemplateOrBase(instanceId); err != nil {
+		return err
+	}
+
+	if err := s.checkIfVmIsRunning(instanceId, false); err != nil {
+		return err
+	}
+
+	vmMutex := s.getMutex(instanceId)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
+	resp, err := http.Post(
+		s.serverAgentsURLs+s.deleteInstanceEndpoint+"/"+instanceId,
+		"application/json",
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if err := checkIfStatusCodeIsOk(resp); err != nil {
+		return err
+	}
+
+	s.deleteVmFromDb(instanceId)
+	s.deleteMutex(instanceId)
+
+	return nil
+}
+
+func (s *ServiceImpl) StartInstance(instanceId string) error {
+	if err := s.checkIfVmExists(instanceId); err != nil {
+		return err
+	}
+
+	if err := s.checkIfVmIsTemplateOrBase(instanceId); err != nil {
+		return err
+	}
+
+	if err := s.checkIfVmIsRunning(instanceId, false); err != nil {
+		return err
+	}
+
+	vmMutex := s.getMutex(instanceId)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
+	resp, err := http.Post(
+		s.serverAgentsURLs+s.startInstanceEndpoint+"/"+instanceId,
+		"application/json",
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if err := checkIfStatusCodeIsOk(resp); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *ServiceImpl) StopInstance(instanceId string) error {
+	if err := s.checkIfVmExists(instanceId); err != nil {
+		return err
+	}
+
+	if err := s.checkIfVmIsRunning(instanceId, true); err != nil {
+		return err
+	}
+
+	vmMutex := s.getMutex(instanceId)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
+	resp, err := http.Post(
+		s.serverAgentsURLs+s.stopInstanceEndpoint+"/"+instanceId,
+		"application/json",
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if err := checkIfStatusCodeIsOk(resp); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *ServiceImpl) RestartInstance(instanceId string) error {
+	if err := s.checkIfVmExists(instanceId); err != nil {
+		return err
+	}
+
+	if err := s.checkIfVmIsRunning(instanceId, true); err != nil {
+		return err
+	}
+
+	vmMutex := s.getMutex(instanceId)
+	vmMutex.Lock()
+	defer vmMutex.Unlock()
+
+	resp, err := http.Post(
+		s.serverAgentsURLs+s.restartInstanceEndpoint+"/"+instanceId,
+		"application/json",
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if err := checkIfStatusCodeIsOk(resp); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *ServiceImpl) ListInstancesStatus() ([]ListInstancesStatusResponse, error) {
+	resp, err := http.Get(s.serverAgentsURLs + s.listInstancesStatusEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if err := checkIfStatusCodeIsOk(resp); err != nil {
+		return nil, err
+	}
+
+	var statuses []ListInstancesStatusResponse
+	if err := json.NewDecoder(resp.Body).Decode(&statuses); err != nil {
+		return nil, err
+	}
+
+	return statuses, nil
+}
+
+func (s *ServiceImpl) getBaseImagesNames() ([]string, error) {
+	resp, err := http.Get(s.serverAgentsURLs + s.listBaseImagesEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, NewHttpError(resp.StatusCode, fmt.Errorf("failed to list base VMs"))
+	}
+
+	var baseImagesAgentResponse ListBaseImagesAgentResponse
+	if err := json.NewDecoder(resp.Body).Decode(&baseImagesAgentResponse); err != nil {
+		return nil, err
+	}
+
+	var baseImages []string
+	for _, baseImage := range baseImagesAgentResponse.FileNames {
+		baseImages = append(baseImages, strings.TrimSuffix(baseImage, filepath.Ext(baseImage)))
+	}
+
+	return baseImages, nil
+}
+
+func (s *ServiceImpl) checkIfVmIsRunning(vmId string, wantRunning bool) error {
+	statuses, err := s.ListInstancesStatus()
+	if err != nil {
+		return err
+	}
+
+	for _, vm := range statuses {
+		if vm.InstanceId == vmId {
+			// TODO: add compatibility with other languages
+			if vm.Status == "running" && !wantRunning {
+				return NewHttpError(
+					http.StatusBadRequest,
+					fmt.Errorf("VM '%s' is running", vmId),
+				)
+			}
+			if vm.Status != "running" && wantRunning {
+				return NewHttpError(
+					http.StatusBadRequest,
+					fmt.Errorf("VM '%s' is not running", vmId),
+				)
+			}
+			return nil
+		}
+	}
+
+	if wantRunning {
+		return NewHttpError(
+			http.StatusBadRequest,
+			fmt.Errorf("VM '%s' not found", vmId),
+		)
+	}
+
+	return nil
+}
+
+func (s *ServiceImpl) addBaseImagesToDb() error {
+	log.Println("Trying to add base images to the database if they don't exist...")
+
+	baseImages, err := s.getBaseImagesNames()
+	if err != nil {
+		return err
+	}
+
+	for _, baseImage := range baseImages {
+		exists, err := s.db.VmExistsByDescription(baseImage)
+		if err != nil {
+			log.Println(err.Error())
+			continue
+		}
+
+		if !exists {
+			vmId, err := s.generateNewVmId()
+			if err != nil {
+				return err
+			}
+
+			vm := Vm{
+				ID:          vmId,
+				Description: &baseImage,
+				DependsOn:   nil,
+			}
+
+			if err := s.db.AddVm(vm, true, false); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *ServiceImpl) checkIfVmExists(vmId string) error {
+	exists, err := s.db.VmExistsById(vmId)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+
+	if !exists {
+		return NewHttpError(
+			http.StatusBadRequest,
+			fmt.Errorf("VM '%s' does not exist", vmId),
+		)
+	}
+	return nil
+}
+
+func (s *ServiceImpl) toListBaseImagesResponse(baseImages []Vm) ([]ListBaseImagesResponse, error) {
+	var baseImagesList []ListBaseImagesResponse
+	for _, baseImage := range baseImages {
+		baseImagesList = append(baseImagesList, ListBaseImagesResponse{
+			BaseId:      baseImage.ID,
+			Description: *baseImage.Description,
+		})
+	}
+	return baseImagesList, nil
+}
+
+func checkIfStatusCodeIsOk(resp *http.Response) error {
+	if resp.StatusCode != http.StatusOK {
+		var apiErr ApiError
+		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
+			return err
+		}
+		return NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
+	}
+	return nil
+}
+
+func (s *ServiceImpl) generateNewVmId() (string, error) {
+	var vmId string
+	errorCount := 0
+	for {
+		vmId = uuid.New().String()
+
+		if exists, err := s.db.VmExistsById(vmId); !exists && err == nil {
+			break
+		}
+
+		errorCount++
+		if errorCount > 10 {
+			return "", fmt.Errorf("failed to generate a new VM ID")
+		}
+	}
+
+	return vmId, nil
+}
+
+func (s *ServiceImpl) addVmToDb(vm Vm, isTemplate bool) {
+	// Try to add the VM to the database until it succeeds
+	// The only reason it might fail is if the DB has gone down
+	// All the other scenarios are checked before calling this function
+	// In that case, the VM will be added to the database when the DB is back up
+	for {
+		if err := s.db.AddVm(vm, false, isTemplate); err != nil {
+			log.Println(err.Error())
+		} else {
+			break
+		}
+	}
+}
+
+func (s *ServiceImpl) deleteVmFromDb(vmId string) {
+	// Try to delete the VM from the database until it succeeds
+	// The only reason it might fail is if the DB has gone down
+	// All the other scenarios are checked before calling this function
+	// In that case, the VM will be deleted from the database when the DB is back up
+	for {
+		if err := s.db.DeleteVm(vmId); err != nil {
+			log.Println(err.Error())
+		} else {
+			break
+		}
+	}
+}
+
+func (s *ServiceImpl) checkIfVmIsTemplateOrBase(vmId string) error {
+	isTemplate, err := s.db.VmIsTemplate(vmId)
+	if err != nil {
+		return err
+	}
+
+	if isTemplate {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("VM '%s' is a template", vmId))
+	}
+
+	isBase, err := s.db.VmIsBase(vmId)
+	if err != nil {
+		return err
+	}
+
+	if isBase {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("VM '%s' is a base image", vmId))
+	}
+
+	return nil
 }
 
 func (s *ServiceImpl) getMutex(vmId string) *sync.Mutex {
@@ -51,269 +591,44 @@ func (s *ServiceImpl) getMutex(vmId string) *sync.Mutex {
 	return s.mutexMap[vmId]
 }
 
-func (s *ServiceImpl) CloneVM(request CloneVmRequest) error {
-	if err := checkIfVmExists(request.SourceVmId, s.db); err != nil {
-		return err
-	}
+func (s *ServiceImpl) deleteMutex(vmId string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
-	exists, err := s.db.VmExistsById(request.TargetVmId)
-	if err != nil {
-		return err
-	}
-
-	if exists {
-		return NewHttpError(
-			http.StatusBadRequest,
-			fmt.Errorf("VM '%s' already exists", request.TargetVmId),
-		)
-	}
-
-	vmMutex := s.getMutex(request.SourceVmId)
-	vmMutex.Lock()
-	defer vmMutex.Unlock()
-
-	// Make API call to server-agent
-	jsonData, err := json.Marshal(request)
-	if err != nil {
-		return err
-	}
-
-	resp, err := http.Post(s.serverAgentURL+"/vms/clone", "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		var apiErr ApiError
-		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
-			return err
-		}
-		return NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
-	}
-
-	// Try to add the VM to the database until it succeeds
-	for {
-		if err := s.db.AddVm(request.TargetVmId); err != nil {
-			log.Println(err.Error())
-		} else {
-			break
-		}
-	}
-
-	return nil
+	delete(s.mutexMap, vmId)
 }
 
-func (s *ServiceImpl) DeleteVM(vmName string) error {
-	if err := checkIfVmExists(vmName, s.db); err != nil {
-		return err
+func NewService(
+	db Database,
+	serverAgentsURLs []string,
+	listBaseImagesEndpoint string,
+	defineTemplateEndpoint string,
+	deleteTemplateEndpoint string,
+	createInstanceEndpoint string,
+	deleteInstanceEndpoint string,
+	startInstanceEndpoint string,
+	stopInstanceEndpoint string,
+	restartInstanceEndpoint string,
+	listInstancesStatusEndpoint string,
+) (Service, error) {
+	service := &ServiceImpl{
+		db:                          db,
+		serverAgentsURLs:            serverAgentsURLs[0], // TODO: support multiple server agents
+		listBaseImagesEndpoint:      listBaseImagesEndpoint,
+		defineTemplateEndpoint:      defineTemplateEndpoint,
+		deleteTemplateEndpoint:      deleteTemplateEndpoint,
+		createInstanceEndpoint:      createInstanceEndpoint,
+		deleteInstanceEndpoint:      deleteInstanceEndpoint,
+		startInstanceEndpoint:       startInstanceEndpoint,
+		stopInstanceEndpoint:        stopInstanceEndpoint,
+		restartInstanceEndpoint:     restartInstanceEndpoint,
+		listInstancesStatusEndpoint: listInstancesStatusEndpoint,
+		mutexMap:                    make(map[string]*sync.Mutex),
 	}
 
-	vmMutex := s.getMutex(vmName)
-	vmMutex.Lock()
-	defer vmMutex.Unlock()
-
-	// Make API call to server-agent
-	req, err := http.NewRequest(http.MethodDelete, s.serverAgentURL+"/vms/delete/"+vmName, nil)
-	if err != nil {
-		return err
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		var apiErr ApiError
-		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
-			return err
-		}
-		return NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
-	}
-
-	// Try to delete the VM from the database until it succeeds
-	for {
-		if err := s.db.DeleteVm(vmName); err != nil {
-			log.Println(err.Error())
-		} else {
-			break
-		}
-	}
-
-	return nil
-}
-
-func (s *ServiceImpl) StartVM(vmName string) error {
-	if err := checkIfVmExists(vmName, s.db); err != nil {
-		return err
-	}
-
-	vmMutex := s.getMutex(vmName)
-	vmMutex.Lock()
-	defer vmMutex.Unlock()
-
-	// Make API call to server-agent
-	resp, err := http.Post(s.serverAgentURL+"/vms/start/"+vmName, "application/json", nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		var apiErr ApiError
-		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
-			return err
-		}
-		return NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
-	}
-
-	return nil
-}
-
-func (s *ServiceImpl) StopVM(vmName string) error {
-	if err := checkIfVmExists(vmName, s.db); err != nil {
-		return err
-	}
-
-	vmMutex := s.getMutex(vmName)
-	vmMutex.Lock()
-	defer vmMutex.Unlock()
-
-	// Make API call to server-agent
-	resp, err := http.Post(s.serverAgentURL+"/vms/stop/"+vmName, "application/json", nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		var apiErr ApiError
-		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
-			return err
-		}
-		return NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
-	}
-
-	return nil
-}
-
-func (s *ServiceImpl) RestartVM(vmName string) error {
-	if err := checkIfVmExists(vmName, s.db); err != nil {
-		return err
-	}
-
-	vmMutex := s.getMutex(vmName)
-	vmMutex.Lock()
-	defer vmMutex.Unlock()
-
-	// Make API call to server-agent
-	resp, err := http.Post(s.serverAgentURL+"/vms/restart/"+vmName, "application/json", nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		var apiErr ApiError
-		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
-			return err
-		}
-		return NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
-	}
-
-	return nil
-}
-
-func (s *ServiceImpl) ForceStopVM(vmName string) error {
-	if err := checkIfVmExists(vmName, s.db); err != nil {
-		return err
-	}
-
-	vmMutex := s.getMutex(vmName)
-	vmMutex.Lock()
-	defer vmMutex.Unlock()
-
-	// Make API call to server-agent
-	resp, err := http.Post(s.serverAgentURL+"/vms/force-stop/"+vmName, "application/json", nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		var apiErr ApiError
-		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
-			return err
-		}
-		return NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
-	}
-
-	return nil
-}
-
-func (s *ServiceImpl) ListVMsStatus() ([]ListVMsStatusResponse, error) {
-	// Make API call to server-agent
-	resp, err := http.Get(s.serverAgentURL + "/vms/status")
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		var apiErr ApiError
-		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
-			return nil, err
-		}
-		return nil, NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
-	}
-
-	var statuses []ListVMsStatusResponse
-	if err := json.NewDecoder(resp.Body).Decode(&statuses); err != nil {
+	if err := service.addBaseImagesToDb(); err != nil {
 		return nil, err
 	}
 
-	return statuses, nil
-}
-
-func (s *ServiceImpl) addCurrentVMsToDb() error {
-	log.Println("Trying to add current VMs to the database if they don't exist...")
-
-	statuses, err := s.ListVMsStatus()
-	if err != nil {
-		return err
-	}
-
-	for _, vm := range statuses {
-		exists, err := s.db.VmExistsById(vm.VmId)
-		if err != nil {
-			log.Println(err.Error())
-			continue
-		}
-
-		if !exists {
-			if err := s.db.AddVm(vm.VmId); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func checkIfVmExists(vmId string, db Database) error {
-	exists, err := db.VmExistsById(vmId)
-	if err != nil {
-		log.Println(err.Error())
-		return err
-	}
-
-	if !exists {
-		return NewHttpError(
-			http.StatusBadRequest,
-			fmt.Errorf("VM '%s' does not exist", vmId),
-		)
-	}
-	return nil
+	return service, nil
 }
