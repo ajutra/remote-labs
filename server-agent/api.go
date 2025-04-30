@@ -13,7 +13,6 @@ type ApiServer struct {
 	serverAgent                 ServerAgent
 	listBaseImagesEndpoint      string
 	defineTemplateEndpoint      string
-	deleteTemplateEndpoint      string
 	createInstanceEndpoint      string
 	deleteVmEndpoint            string
 	startInstanceEndpoint       string
