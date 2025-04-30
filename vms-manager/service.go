@@ -50,23 +50,34 @@ func (s *ServiceImpl) ListBaseImages() ([]ListBaseImagesResponse, error) {
 	return s.toListBaseImagesResponse(baseImages)
 }
 
-func (s *ServiceImpl) DefineTemplate(sourceVmId string) (DefineTemplateResponse, error) {
-	if err := s.checkIfVmExists(sourceVmId); err != nil {
+func (s *ServiceImpl) DefineTemplate(sourceInstanceId string) (DefineTemplateResponse, error) {
+	if err := s.checkIfVmExists(sourceInstanceId); err != nil {
 		return DefineTemplateResponse{}, err
 	}
 
-	if err := s.checkIfVmIsRunning(sourceVmId, false); err != nil {
+	if err := s.checkIfVmIsRunning(sourceInstanceId, false); err != nil {
 		return DefineTemplateResponse{}, err
 	}
 
-	isTemplate, err := s.db.VmIsTemplate(sourceVmId)
+	isTemplate, err := s.db.VmIsTemplate(sourceInstanceId)
 	if err != nil {
 		return DefineTemplateResponse{}, err
 	}
 	if isTemplate {
 		return DefineTemplateResponse{}, NewHttpError(
 			http.StatusBadRequest,
-			fmt.Errorf("VM '%s' is already a template", sourceVmId),
+			fmt.Errorf("VM '%s' is already a template", sourceInstanceId),
+		)
+	}
+
+	isBase, err := s.db.VmIsBase(sourceInstanceId)
+	if err != nil {
+		return DefineTemplateResponse{}, err
+	}
+	if isBase {
+		return DefineTemplateResponse{}, NewHttpError(
+			http.StatusBadRequest,
+			fmt.Errorf("VM '%s' is a base image, it cannot be used to create a template", sourceInstanceId),
 		)
 	}
 
@@ -76,8 +87,8 @@ func (s *ServiceImpl) DefineTemplate(sourceVmId string) (DefineTemplateResponse,
 	}
 
 	request := DefineTemplateAgentRequest{
-		SourceVmId: sourceVmId,
-		TemplateId: templateId,
+		SourceInstanceId: sourceInstanceId,
+		TemplateId:       templateId,
 	}
 
 	jsonData, err := json.Marshal(request)
@@ -85,7 +96,7 @@ func (s *ServiceImpl) DefineTemplate(sourceVmId string) (DefineTemplateResponse,
 		return DefineTemplateResponse{}, err
 	}
 
-	vmMutex := s.getMutex(sourceVmId)
+	vmMutex := s.getMutex(sourceInstanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
