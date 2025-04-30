@@ -147,7 +147,9 @@ func (s *ServiceImpl) DeleteTemplate(templateId string) error {
 	defer vmMutex.Unlock()
 
 	resp, err := http.Post(
-		s.serverAgentsURLs+s.deleteTemplateEndpoint+"/"+templateId,
+		// Calling deleteInstaceEndpoint because the server agent
+		// makes no difference between a template and an instance
+		s.serverAgentsURLs+s.deleteInstanceEndpoint+"/"+templateId,
 		"application/json",
 		nil,
 	)
