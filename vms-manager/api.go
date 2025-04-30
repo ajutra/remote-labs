@@ -52,9 +52,12 @@ func (server *ApiServer) handleDeleteTemplate(w http.ResponseWriter, r *http.Req
 }
 
 func (server *ApiServer) handleCreateInstance(w http.ResponseWriter, r *http.Request) error {
-	templateId := r.PathValue("templateId")
+	var request CreateInstanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return err
+	}
 
-	response, err := server.service.CreateInstance(templateId)
+	response, err := server.service.CreateInstance(request)
 	if err != nil {
 		return err
 	}
@@ -175,7 +178,7 @@ func (server *ApiServer) Run() {
 		createHttpHandler(server.handleDeleteTemplate),
 	)
 	mux.HandleFunc(
-		"POST "+server.createInstanceEndpoint+"/{templateId}",
+		"POST "+server.createInstanceEndpoint,
 		createHttpHandler(server.handleCreateInstance),
 	)
 	mux.HandleFunc(

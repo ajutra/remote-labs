@@ -17,7 +17,7 @@ type Service interface {
 	ListBaseImages() ([]ListBaseImagesResponse, error)
 	DefineTemplate(vmId string) (DefineTemplateResponse, error)
 	DeleteTemplate(templateId string) error
-	CreateInstance(templateId string) (CreateInstanceResponse, error)
+	CreateInstance(request CreateInstanceRequest) (CreateInstanceResponse, error)
 	DeleteInstance(instanceId string) error
 	StartInstance(instanceId string) error
 	StopInstance(instanceId string) error
@@ -167,17 +167,29 @@ func (s *ServiceImpl) DeleteTemplate(templateId string) error {
 	return nil
 }
 
-func (s *ServiceImpl) CreateInstance(templateId string) (CreateInstanceResponse, error) {
-	if err := s.checkIfVmExists(templateId); err != nil {
+func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInstanceResponse, error) {
+	if request.SizeMB <= 0 ||
+		request.VcpuCount <= 0 ||
+		request.VramMB <= 0 ||
+		request.Username == "" ||
+		request.Password == "" ||
+		len(request.PublicSshKeys) == 0 {
+		return CreateInstanceResponse{}, NewHttpError(
+			http.StatusBadRequest,
+			fmt.Errorf("invalid request"),
+		)
+	}
+
+	if err := s.checkIfVmExists(request.TemplateId); err != nil {
 		return CreateInstanceResponse{}, err
 	}
 
-	isTemplate, err := s.db.VmIsTemplate(templateId)
+	isTemplate, err := s.db.VmIsTemplate(request.TemplateId)
 	if err != nil {
 		return CreateInstanceResponse{}, err
 	}
 
-	isBase, err := s.db.VmIsBase(templateId)
+	isBase, err := s.db.VmIsBase(request.TemplateId)
 	if err != nil {
 		return CreateInstanceResponse{}, err
 	}
@@ -185,7 +197,7 @@ func (s *ServiceImpl) CreateInstance(templateId string) (CreateInstanceResponse,
 	if !isTemplate && !isBase {
 		return CreateInstanceResponse{}, NewHttpError(
 			http.StatusBadRequest,
-			fmt.Errorf("VM '%s' is not a template or base image", templateId),
+			fmt.Errorf("VM '%s' is not a template or base image", request.TemplateId),
 		)
 	}
 
@@ -194,17 +206,23 @@ func (s *ServiceImpl) CreateInstance(templateId string) (CreateInstanceResponse,
 		return CreateInstanceResponse{}, err
 	}
 
-	request := CreateInstanceAgentRequest{
-		TemplateId: templateId,
-		InstanceId: instanceId,
+	agentRequest := CreateInstanceAgentRequest{
+		TemplateId:    request.TemplateId,
+		InstanceId:    instanceId,
+		SizeMB:        request.SizeMB,
+		VcpuCount:     request.VcpuCount,
+		VramMB:        request.VramMB,
+		Username:      request.Username,
+		Password:      request.Password,
+		PublicSshKeys: request.PublicSshKeys,
 	}
 
-	jsonData, err := json.Marshal(request)
+	jsonData, err := json.Marshal(agentRequest)
 	if err != nil {
 		return CreateInstanceResponse{}, err
 	}
 
-	vmMutex := s.getMutex(templateId)
+	vmMutex := s.getMutex(request.TemplateId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
@@ -224,7 +242,7 @@ func (s *ServiceImpl) CreateInstance(templateId string) (CreateInstanceResponse,
 	vm := Vm{
 		ID:          instanceId,
 		Description: nil,
-		DependsOn:   &templateId,
+		DependsOn:   &request.TemplateId,
 	}
 
 	s.addVmToDb(vm, false)

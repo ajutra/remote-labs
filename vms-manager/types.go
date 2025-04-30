@@ -10,6 +10,16 @@ type DefineTemplateResponse struct {
 	TemplateId string `json:"templateId"`
 }
 
+type CreateInstanceRequest struct {
+	TemplateId    string   `json:"templateId"`
+	SizeMB        int      `json:"sizeMB"`
+	VcpuCount     int      `json:"vcpuCount"`
+	VramMB        int      `json:"vramMB"`
+	Username      string   `json:"username"`
+	Password      string   `json:"password"`
+	PublicSshKeys []string `json:"publicSshKeys"`
+}
+
 type CreateInstanceResponse struct {
 	InstanceId string `json:"instanceId"`
 }
@@ -34,8 +44,14 @@ type DefineTemplateAgentRequest struct {
 }
 
 type CreateInstanceAgentRequest struct {
-	TemplateId string `json:"templateId"`
-	InstanceId string `json:"instanceId"`
+	TemplateId    string   `json:"templateId"`
+	InstanceId    string   `json:"instanceId"`
+	SizeMB        int      `json:"sizeMB"`
+	VcpuCount     int      `json:"vcpuCount"`
+	VramMB        int      `json:"vramMB"`
+	Username      string   `json:"username"`
+	Password      string   `json:"password"`
+	PublicSshKeys []string `json:"publicSshKeys"`
 }
 
 // Model
