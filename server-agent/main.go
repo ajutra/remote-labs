@@ -13,11 +13,33 @@ func main() {
 		log.Fatal("Error loading .env file: " + err.Error())
 	}
 
-	serverAgent := NewServerAgent()
+	vmsStoragePath := os.Getenv("VMS_STORAGE_PATH")
+	cloudInitImagesPath := os.Getenv("CLOUD_INIT_IMAGES_PATH")
+	listBaseImagesEndpoint := os.Getenv("LIST_BASE_IMAGES_ENDPOINT")
+	defineTemplateEndpoint := os.Getenv("DEFINE_TEMPLATE_ENDPOINT")
+	createInstanceEndpoint := os.Getenv("CREATE_INSTANCE_ENDPOINT")
+	deleteVmEndpoint := os.Getenv("DELETE_VM_ENDPOINT")
+	startInstanceEndpoint := os.Getenv("START_INSTANCE_ENDPOINT")
+	stopInstanceEndpoint := os.Getenv("STOP_INSTANCE_ENDPOINT")
+	restartInstanceEndpoint := os.Getenv("RESTART_INSTANCE_ENDPOINT")
+	listInstancesStatusEndpoint := os.Getenv("LIST_INSTANCES_STATUS_ENDPOINT")
+
+	serverAgent := NewServerAgent(vmsStoragePath, cloudInitImagesPath)
 
 	listenAddr := getListenAddr()
 
-	apiServer := NewApiServer(listenAddr, serverAgent)
+	apiServer := NewApiServer(
+		listenAddr,
+		serverAgent,
+		listBaseImagesEndpoint,
+		defineTemplateEndpoint,
+		createInstanceEndpoint,
+		deleteVmEndpoint,
+		startInstanceEndpoint,
+		stopInstanceEndpoint,
+		restartInstanceEndpoint,
+		listInstancesStatusEndpoint,
+	)
 	apiServer.Run()
 }
 
