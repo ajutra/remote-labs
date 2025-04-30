@@ -29,7 +29,7 @@ type ListBaseImagesAgentResponse struct {
 }
 
 type DefineTemplateAgentRequest struct {
-	VmId       string `json:"vmId"`
+	SourceVmId string `json:"sourceVmId"`
 	TemplateId string `json:"templateId"`
 }
 

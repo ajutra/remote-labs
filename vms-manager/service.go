@@ -50,23 +50,23 @@ func (s *ServiceImpl) ListBaseImages() ([]ListBaseImagesResponse, error) {
 	return s.toListBaseImagesResponse(baseImages)
 }
 
-func (s *ServiceImpl) DefineTemplate(vmId string) (DefineTemplateResponse, error) {
-	if err := s.checkIfVmExists(vmId); err != nil {
+func (s *ServiceImpl) DefineTemplate(sourceVmId string) (DefineTemplateResponse, error) {
+	if err := s.checkIfVmExists(sourceVmId); err != nil {
 		return DefineTemplateResponse{}, err
 	}
 
-	if err := s.checkIfVmIsRunning(vmId, false); err != nil {
+	if err := s.checkIfVmIsRunning(sourceVmId, false); err != nil {
 		return DefineTemplateResponse{}, err
 	}
 
-	isTemplate, err := s.db.VmIsTemplate(vmId)
+	isTemplate, err := s.db.VmIsTemplate(sourceVmId)
 	if err != nil {
 		return DefineTemplateResponse{}, err
 	}
 	if isTemplate {
 		return DefineTemplateResponse{}, NewHttpError(
 			http.StatusBadRequest,
-			fmt.Errorf("VM '%s' is already a template", vmId),
+			fmt.Errorf("VM '%s' is already a template", sourceVmId),
 		)
 	}
 
@@ -76,7 +76,7 @@ func (s *ServiceImpl) DefineTemplate(vmId string) (DefineTemplateResponse, error
 	}
 
 	request := DefineTemplateAgentRequest{
-		VmId:       vmId,
+		SourceVmId: sourceVmId,
 		TemplateId: templateId,
 	}
 
@@ -85,7 +85,7 @@ func (s *ServiceImpl) DefineTemplate(vmId string) (DefineTemplateResponse, error
 		return DefineTemplateResponse{}, err
 	}
 
-	vmMutex := s.getMutex(vmId)
+	vmMutex := s.getMutex(sourceVmId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 

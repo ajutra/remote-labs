@@ -31,9 +31,9 @@ func (server *ApiServer) handleListBaseImages(w http.ResponseWriter, r *http.Req
 }
 
 func (server *ApiServer) handleDefineTemplate(w http.ResponseWriter, r *http.Request) error {
-	vmId := r.PathValue("vmId")
+	sourceVmId := r.PathValue("sourceVmId")
 
-	response, err := server.service.DefineTemplate(vmId)
+	response, err := server.service.DefineTemplate(sourceVmId)
 	if err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func (server *ApiServer) Run() {
 		createHttpHandler(server.handleListBaseImages),
 	)
 	mux.HandleFunc(
-		"POST "+server.defineTemplateEndpoint+"/{vmId}",
+		"POST "+server.defineTemplateEndpoint+"/{sourceVmId}",
 		createHttpHandler(server.handleDefineTemplate),
 	)
 	mux.HandleFunc(
