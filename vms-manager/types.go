@@ -6,6 +6,14 @@ type ListBaseImagesResponse struct {
 	Description string `json:"description"`
 }
 
+type DefineTemplateRequest struct {
+	SourceInstanceId string `json:"sourceInstanceId"`
+	TemplateId       string `json:"templateId"`
+	SizeMB           int    `json:"sizeMB"`
+	VcpuCount        int    `json:"vcpuCount"`
+	VramMB           int    `json:"vramMB"`
+}
+
 type DefineTemplateResponse struct {
 	TemplateId string `json:"templateId"`
 }
@@ -41,6 +49,9 @@ type ListBaseImagesAgentResponse struct {
 type DefineTemplateAgentRequest struct {
 	SourceInstanceId string `json:"sourceInstanceId"`
 	TemplateId       string `json:"templateId"`
+	SizeMB           int    `json:"sizeMB"`
+	VcpuCount        int    `json:"vcpuCount"`
+	VramMB           int    `json:"vramMB"`
 }
 
 type CreateInstanceAgentRequest struct {
