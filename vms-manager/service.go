@@ -183,8 +183,7 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 		request.VcpuCount <= 0 ||
 		request.VramMB <= 0 ||
 		request.Username == "" ||
-		request.Password == "" ||
-		len(request.PublicSshKeys) == 0 {
+		request.Password == "" {
 		return CreateInstanceResponse{}, NewHttpError(
 			http.StatusBadRequest,
 			fmt.Errorf("invalid request"),
