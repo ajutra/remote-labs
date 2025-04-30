@@ -15,7 +15,7 @@ import (
 
 type Service interface {
 	ListBaseImages() ([]ListBaseImagesResponse, error)
-	DefineTemplate(vmId string) (DefineTemplateResponse, error)
+	DefineTemplate(request DefineTemplateRequest) (DefineTemplateResponse, error)
 	DeleteTemplate(templateId string) error
 	CreateInstance(request CreateInstanceRequest) (CreateInstanceResponse, error)
 	DeleteInstance(instanceId string) error
@@ -50,53 +50,65 @@ func (s *ServiceImpl) ListBaseImages() ([]ListBaseImagesResponse, error) {
 	return s.toListBaseImagesResponse(baseImages)
 }
 
-func (s *ServiceImpl) DefineTemplate(sourceInstanceId string) (DefineTemplateResponse, error) {
-	if err := s.checkIfVmExists(sourceInstanceId); err != nil {
+func (s *ServiceImpl) DefineTemplate(request DefineTemplateRequest) (DefineTemplateResponse, error) {
+	if err := s.checkIfVmExists(request.SourceInstanceId); err != nil {
 		return DefineTemplateResponse{}, err
 	}
 
-	if err := s.checkIfVmIsRunning(sourceInstanceId, false); err != nil {
+	if err := s.checkIfVmIsRunning(request.SourceInstanceId, false); err != nil {
 		return DefineTemplateResponse{}, err
 	}
 
-	isTemplate, err := s.db.VmIsTemplate(sourceInstanceId)
+	isTemplate, err := s.db.VmIsTemplate(request.SourceInstanceId)
 	if err != nil {
 		return DefineTemplateResponse{}, err
 	}
 	if isTemplate {
 		return DefineTemplateResponse{}, NewHttpError(
 			http.StatusBadRequest,
-			fmt.Errorf("VM '%s' is already a template", sourceInstanceId),
+			fmt.Errorf("VM '%s' is already a template", request.SourceInstanceId),
 		)
 	}
 
-	isBase, err := s.db.VmIsBase(sourceInstanceId)
+	isBase, err := s.db.VmIsBase(request.SourceInstanceId)
 	if err != nil {
 		return DefineTemplateResponse{}, err
 	}
 	if isBase {
 		return DefineTemplateResponse{}, NewHttpError(
 			http.StatusBadRequest,
-			fmt.Errorf("VM '%s' is a base image, it cannot be used to create a template", sourceInstanceId),
+			fmt.Errorf(
+				"VM '%s' is a base image, it cannot be used to create a template",
+				request.SourceInstanceId,
+			),
 		)
 	}
 
+	if request.SizeMB <= 0 {
+		return DefineTemplateResponse{}, NewHttpError(
+			http.StatusBadRequest,
+			fmt.Errorf("sizeMB must be greater than 0"),
+		)
+	}
 	templateId, err := s.generateNewVmId()
 	if err != nil {
 		return DefineTemplateResponse{}, err
 	}
 
-	request := DefineTemplateAgentRequest{
-		SourceInstanceId: sourceInstanceId,
+	agentRequest := DefineTemplateAgentRequest{
+		SourceInstanceId: request.SourceInstanceId,
 		TemplateId:       templateId,
+		SizeMB:           request.SizeMB,
+		VcpuCount:        request.VcpuCount,
+		VramMB:           request.VramMB,
 	}
 
-	jsonData, err := json.Marshal(request)
+	jsonData, err := json.Marshal(agentRequest)
 	if err != nil {
 		return DefineTemplateResponse{}, err
 	}
 
-	vmMutex := s.getMutex(sourceInstanceId)
+	vmMutex := s.getMutex(request.SourceInstanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
@@ -180,13 +192,13 @@ func (s *ServiceImpl) DeleteTemplate(templateId string) error {
 
 func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInstanceResponse, error) {
 	if request.SizeMB <= 0 ||
-		request.VcpuCount <= 0 ||
-		request.VramMB <= 0 ||
 		request.Username == "" ||
 		request.Password == "" {
 		return CreateInstanceResponse{}, NewHttpError(
 			http.StatusBadRequest,
-			fmt.Errorf("invalid request"),
+			fmt.Errorf(
+				"invalid request: sizeMB must be greater than 0, username and password must be non-empty",
+			),
 		)
 	}
 

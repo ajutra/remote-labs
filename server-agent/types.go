@@ -5,8 +5,11 @@ type ListBaseImagesResponse struct {
 }
 
 type DefineTemplateRequest struct {
-	SourceVmId string `json:"sourceVmId"`
-	TemplateId string `json:"templateId"`
+	SourceInstanceId string `json:"sourceInstanceId"`
+	TemplateId       string `json:"templateId"`
+	SizeMB           int    `json:"sizeMB"`
+	VcpuCount        int    `json:"vcpuCount"`
+	VramMB           int    `json:"vramMB"`
 }
 
 type CreateInstanceRequest struct {
