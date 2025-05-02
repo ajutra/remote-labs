@@ -13,7 +13,8 @@ type DefineTemplateRequest struct {
 }
 
 type CreateInstanceRequest struct {
-	TemplateId    string   `json:"templateId"`
+	SourceVmId    string   `json:"sourceVmId"`
+	SourceIsBase  bool     `json:"sourceIsBase"`
 	InstanceId    string   `json:"instanceId"`
 	SizeMB        int      `json:"sizeMB"`
 	VcpuCount     int      `json:"vcpuCount"`

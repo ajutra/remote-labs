@@ -19,7 +19,7 @@ type DefineTemplateResponse struct {
 }
 
 type CreateInstanceRequest struct {
-	TemplateId    string   `json:"templateId"`
+	SourceVmId    string   `json:"sourceVmId"`
 	SizeMB        int      `json:"sizeMB"`
 	VcpuCount     int      `json:"vcpuCount"`
 	VramMB        int      `json:"vramMB"`
@@ -55,7 +55,8 @@ type DefineTemplateAgentRequest struct {
 }
 
 type CreateInstanceAgentRequest struct {
-	TemplateId    string   `json:"templateId"`
+	SourceVmId    string   `json:"sourceVmId"`
+	SourceIsBase  bool     `json:"sourceIsBase"`
 	InstanceId    string   `json:"instanceId"`
 	SizeMB        int      `json:"sizeMB"`
 	VcpuCount     int      `json:"vcpuCount"`

@@ -202,16 +202,16 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 		)
 	}
 
-	if err := s.checkIfVmExists(request.TemplateId); err != nil {
+	if err := s.checkIfVmExists(request.SourceVmId); err != nil {
 		return CreateInstanceResponse{}, err
 	}
 
-	isTemplate, err := s.db.VmIsTemplate(request.TemplateId)
+	isTemplate, err := s.db.VmIsTemplate(request.SourceVmId)
 	if err != nil {
 		return CreateInstanceResponse{}, err
 	}
 
-	isBase, err := s.db.VmIsBase(request.TemplateId)
+	isBase, err := s.db.VmIsBase(request.SourceVmId)
 	if err != nil {
 		return CreateInstanceResponse{}, err
 	}
@@ -219,7 +219,7 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 	if !isTemplate && !isBase {
 		return CreateInstanceResponse{}, NewHttpError(
 			http.StatusBadRequest,
-			fmt.Errorf("VM '%s' is not a template or base image", request.TemplateId),
+			fmt.Errorf("VM '%s' is not a template or base image", request.SourceVmId),
 		)
 	}
 
@@ -229,7 +229,8 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 	}
 
 	agentRequest := CreateInstanceAgentRequest{
-		TemplateId:    request.TemplateId,
+		SourceVmId:    request.SourceVmId,
+		SourceIsBase:  isBase,
 		InstanceId:    instanceId,
 		SizeMB:        request.SizeMB,
 		VcpuCount:     request.VcpuCount,
@@ -244,7 +245,7 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 		return CreateInstanceResponse{}, err
 	}
 
-	vmMutex := s.getMutex(request.TemplateId)
+	vmMutex := s.getMutex(request.SourceVmId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
@@ -264,7 +265,7 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 	vm := Vm{
 		ID:          instanceId,
 		Description: nil,
-		DependsOn:   &request.TemplateId,
+		DependsOn:   &request.SourceVmId,
 	}
 
 	s.addVmToDb(vm, false)
