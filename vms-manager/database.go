@@ -214,7 +214,7 @@ func (postgres *PostgresDatabase) createTablesIfNotExist() error {
 			depends_on TEXT DEFAULT NULL,
 			CONSTRAINT check_base_template CHECK (
 				NOT (is_base = true AND is_template = true)
-			)
+			),
 			CONSTRAINT check_depends_on CHECK (
 				NOT (is_base = true AND depends_on IS NOT NULL)
 				AND NOT (is_template = true AND depends_on IS NOT NULL)
