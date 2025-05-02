@@ -230,8 +230,21 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 		return CreateInstanceResponse{}, err
 	}
 
+	// If the source VM is a base image, we need to get the description
+	// this is because base images are stored in servers with their description as the file name.
+	// Non-base VMs are stored with their ID as the file name.
+	var sourceVmId string
+	if isBase {
+		sourceVmId, err = s.db.GetDescriptionById(request.SourceVmId)
+		if err != nil {
+			return CreateInstanceResponse{}, err
+		}
+	} else {
+		sourceVmId = request.SourceVmId
+	}
+
 	agentRequest := CreateInstanceAgentRequest{
-		SourceVmId:    request.SourceVmId,
+		SourceVmId:    sourceVmId,
 		SourceIsBase:  isBase,
 		InstanceId:    instanceId,
 		SizeMB:        request.SizeMB,
