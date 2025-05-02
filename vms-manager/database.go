@@ -19,6 +19,7 @@ type Database interface {
 	AddVm(vm Vm, isBase bool, isTemplate bool) error
 	DeleteVm(vmId string) error
 	GetBaseImages() ([]Vm, error)
+	GetDescriptionById(vmId string) (string, error)
 }
 
 type PostgresDatabase struct {
@@ -146,6 +147,18 @@ func (postgres *PostgresDatabase) GetBaseImages() ([]Vm, error) {
 	}
 
 	return baseImages, nil
+}
+
+func (postgres *PostgresDatabase) GetDescriptionById(vmId string) (string, error) {
+	query := "SELECT description FROM vms WHERE id = @id"
+	args := pgx.NamedArgs{"id": vmId}
+
+	var description string
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&description); err != nil {
+		return "", fmt.Errorf("Error getting description by id: %v", err)
+	}
+
+	return description, nil
 }
 
 func (postgres *PostgresDatabase) toVm(dbVm DatabaseVM) Vm {
