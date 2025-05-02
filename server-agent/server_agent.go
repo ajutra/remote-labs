@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
 )
 
 //go:embed templates/*.tmpl
@@ -47,6 +48,15 @@ type CreateDiskImageData struct {
 	SizeMB       int
 }
 
+type InstallVmData struct {
+	Path          string
+	Name          string
+	RamMB         int
+	VcpuCount     int
+	OsVariant     string
+	NetworkBridge string
+}
+
 func (agent *ServerAgentImpl) ListBaseImages() ([]ListBaseImagesResponse, error) {
 	// TODO: Figure out how to rename the base images to it's id once it's generated
 	log.Printf("Getting base images...")
@@ -77,23 +87,14 @@ func (agent *ServerAgentImpl) DefineTemplate(request DefineTemplateRequest) erro
 
 	dirPath := agent.vmsStoragePath + "/" + request.TemplateId
 
-	log.Printf("Creating template directory...")
-
 	if err := createDir(dirPath); err != nil {
 		return logAndReturnError("Error creating template directory: ", err.Error())
 	}
-
-	log.Printf("Template directory created successfully!")
-
-	log.Printf("Creating metadata files...")
 
 	if err := agent.createTemplateMetadataFiles(dirPath, request); err != nil {
 		return err
 	}
 
-	log.Printf("Metadata files created successfully!")
-
-	log.Printf("Creating template disk image...")
 	createDiskImageData := CreateDiskImageData{
 		sourceVmId:   request.SourceInstanceId,
 		sourceIsBase: false,
@@ -104,13 +105,26 @@ func (agent *ServerAgentImpl) DefineTemplate(request DefineTemplateRequest) erro
 		return err
 	}
 
-	log.Printf("Template disk image created successfully!")
+	if err := agent.removeBackingFileFromTemplateDiskImage(dirPath, request.TemplateId); err != nil {
+		return err
+	}
 
-	// TODO: Create the vm using virt-install
+	installVmData := InstallVmData{
+		Path:          dirPath,
+		Name:          request.TemplateId,
+		RamMB:         request.SizeMB,
+		VcpuCount:     request.VcpuCount,
+		OsVariant:     "debian11",
+		NetworkBridge: "virbr0",
+	}
 
-	// TODO: Shutdown the vm
+	if err := agent.installVm(installVmData); err != nil {
+		return err
+	}
 
-	// TODO: Remove the backing file from the template disk image using qemu-img rebase
+	if err := agent.StopInstance(request.TemplateId); err != nil {
+		return err
+	}
 
 	log.Printf("Template '%s' defined successfully!", request.TemplateId)
 
@@ -163,7 +177,6 @@ func (agent *ServerAgentImpl) StartInstance(instanceId string) error {
 	return nil
 }
 
-// TODO: Implement
 func (agent *ServerAgentImpl) StopInstance(instanceId string) error {
 	log.Printf("Stopping instance '%s'...", instanceId)
 
@@ -177,9 +190,30 @@ func (agent *ServerAgentImpl) StopInstance(instanceId string) error {
 		return logAndReturnError("Error stopping instance '"+instanceId+"': ", string(output))
 	}
 
-	log.Printf("Stopped instance '%s' successfully!", instanceId)
+	// Wait for the instance to shut down
+	time.Sleep(500 * time.Millisecond)
 
-	return nil
+	// Check if the instance is shut down
+	for {
+		times := 0
+
+		statuses, err := agent.ListInstancesStatus()
+		if err != nil {
+			return logAndReturnError("Error listing instances status: ", err.Error())
+		}
+
+		for _, status := range statuses {
+			if status.InstanceId == instanceId && status.Status != "shut off" {
+				time.Sleep(500 * time.Millisecond)
+				times++
+			} else if times > 10 {
+				return agent.forceStopVM(instanceId)
+			} else {
+				log.Printf("Stopped instance '%s' successfully!", instanceId)
+				return nil
+			}
+		}
+	}
 }
 
 // TODO: Implement
@@ -200,26 +234,6 @@ func (agent *ServerAgentImpl) RestartInstance(instanceId string) error {
 
 	return nil
 }
-
-/* Keeping this as a reference for future use
-
-func (agent *ServerAgentImpl) ForceStopVM(vmId string) error {
-	log.Printf("Force stopping VM '%s'...", vmId)
-
-	cmd := exec.Command(
-		"virsh", "destroy", vmId,
-	)
-
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		return logAndReturnError("Error force stopping VM '"+vmId+"': ", string(output))
-	}
-
-	log.Printf("Force stopped VM '%s' successfully!", vmId)
-
-	return nil
-}*/
 
 func (agent *ServerAgentImpl) ListInstancesStatus() ([]ListInstancesStatusResponse, error) {
 	log.Printf("Getting VMs status...")
@@ -261,13 +275,22 @@ func toListBaseImagesResponse(fileNames []string) []ListBaseImagesResponse {
 }
 
 func createDir(path string) error {
-	return os.MkdirAll(path, 0755)
+	log.Printf("Creating directory '%s'...", path)
+
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return logAndReturnError("Error creating directory: ", err.Error())
+	}
+
+	log.Printf("Directory '%s' created successfully!", path)
+	return nil
 }
 
 func (agent *ServerAgentImpl) createTemplateMetadataFiles(
 	templatePath string,
 	request DefineTemplateRequest,
 ) error {
+	log.Printf("Creating template metadata files...")
+
 	cloudInitMetadata := CloudInitMetadata{
 		InstanceId:    request.TemplateId,
 		LocalHostname: "template-" + request.TemplateId,
@@ -320,10 +343,13 @@ func (agent *ServerAgentImpl) createTemplateMetadataFiles(
 		return logAndReturnError("Error creating cidata.iso: ", string(createIsoCmdOutput))
 	}
 
+	log.Printf("Template metadata files created successfully!")
 	return nil
 }
 
 func (agent *ServerAgentImpl) createDiskImage(path string, data CreateDiskImageData) error {
+	log.Printf("Creating disk image...")
+
 	var sourceVmPath string
 	if data.sourceIsBase {
 		sourceVmPath = agent.vmsStoragePath + "/" + agent.cloudInitImagesPath + "/" + data.sourceVmId + ".qcow2"
@@ -345,6 +371,73 @@ func (agent *ServerAgentImpl) createDiskImage(path string, data CreateDiskImageD
 	if err != nil {
 		return logAndReturnError("Error creating disk image: ", string(createDiskImageCmdOutput))
 	}
+
+	log.Printf("Disk image created successfully!")
+	return nil
+}
+
+func (agent *ServerAgentImpl) removeBackingFileFromTemplateDiskImage(dirPath string, id string) error {
+	log.Printf("Removing backing file from template disk image...")
+
+	removeBackingFileCmd := exec.Command(
+		"qemu-img",
+		"rebase",
+		"-b", "",
+		"-f", "qcow2",
+		dirPath+"/"+id+".qcow2",
+	)
+
+	if removeBackingFileOutput, err := removeBackingFileCmd.CombinedOutput(); err != nil {
+		return logAndReturnError(
+			"Error removing backing file from template disk image: ",
+			string(removeBackingFileOutput),
+		)
+	}
+
+	log.Printf("Backing file removed from template disk image successfully!")
+	return nil
+}
+
+func (agent *ServerAgentImpl) installVm(data InstallVmData) error {
+	log.Printf("Installing VM...")
+
+	installVmCmd := exec.Command(
+		"virt-install",
+		"--name", data.Name,
+		"--ram", strconv.Itoa(data.RamMB),
+		"--vcpus", strconv.Itoa(data.VcpuCount),
+		"--import",
+		"--disk", "path="+data.Path+"/"+data.Name+".qcow2,format=qcow2",
+		"--disk", "path="+data.Path+"/cidata.iso,device=cdrom",
+		"--os-variant", data.OsVariant,
+		"--network", "bridge="+data.NetworkBridge+",model=virtio",
+		"--graphics", "vnc,listen=0.0.0.0",
+		"--noautoconsole",
+	)
+
+	installVmCmdOutput, err := installVmCmd.CombinedOutput()
+	if err != nil {
+		return logAndReturnError("Error installing VM: ", string(installVmCmdOutput))
+	}
+
+	log.Printf("VM installed successfully!")
+	return nil
+}
+
+func (agent *ServerAgentImpl) forceStopVM(vmId string) error {
+	log.Printf("Force stopping VM '%s'...", vmId)
+
+	cmd := exec.Command(
+		"virsh", "destroy", vmId,
+	)
+
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return logAndReturnError("Error force stopping VM '"+vmId+"': ", string(output))
+	}
+
+	log.Printf("Force stopped VM '%s' successfully!", vmId)
 
 	return nil
 }
