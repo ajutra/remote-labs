@@ -12,28 +12,20 @@ const VerifyEmail: React.FC = () => {
   useEffect(() => {
     const verifyEmail = async () => {
       if (verificationAttempted.current) {
-        console.log('Verification already attempted, skipping...')
         return
       }
 
       verificationAttempted.current = true
       const token = searchParams.get('token')
-      console.log('Token from URL:', token)
       if (!token) {
-        console.log('No token found in URL')
         setError('No verification token provided')
         setLoading(false)
         return
       }
 
       try {
-        console.log('Starting verification process...')
         await new Promise((resolve) => setTimeout(resolve, 1000))
 
-        console.log(
-          'Making request to:',
-          `http://localhost:8080/verify-email/${token}`
-        )
         const response = await fetch(
           `http://localhost:8080/verify-email/${token}`,
           {
@@ -44,34 +36,23 @@ const VerifyEmail: React.FC = () => {
           }
         )
 
-        console.log('Response status:', response.status)
-        console.log(
-          'Response headers:',
-          Object.fromEntries(response.headers.entries())
-        )
-
         if (!response.ok) {
           const errorData = await response.json()
-          console.log('Error response data:', errorData)
           throw new Error(errorData.error || 'Verification failed')
         }
 
         const data = await response.json()
-        console.log('Success response data:', data)
 
         if (
           data.message === 'User verified successfully' ||
           data.message === 'User already verified'
         ) {
-          console.log('Verification successful')
           await new Promise((resolve) => setTimeout(resolve, 1000))
           setVerified(true)
         } else {
-          console.log('Invalid response format:', data)
           throw new Error('Invalid response from server')
         }
       } catch (err) {
-        console.error('Verification error:', err)
         setError(
           err instanceof Error
             ? err.message

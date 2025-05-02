@@ -67,13 +67,31 @@ func (server *ApiServer) handleCreateProfessor(w http.ResponseWriter, r *http.Re
 		return NewHttpError(http.StatusBadRequest, err)
 	}
 
-	if err := server.userService.CreateProfessor(request); err != nil {
+	user, plainPassword, err := server.userService.CreateProfessor(request)
+	if err != nil {
 		return err
 	}
 
-	return writeResponse(w, http.StatusOK, "Professor created successfully")
-}
+	// Send email with credentials
+	subject := "Your Account Credentials"
+	body := fmt.Sprintf(
+		"Dear %s,\n\n"+
+			"A professor account has been created for you on our platform.\n\n"+
+			"Your login credentials are:\n"+
+			"Email: %s\n"+
+			"Password: %s\n\n"+
+			"Please keep this information secure. We recommend changing your password after your first login.\n\n"+
+			"Best regards,\n"+
+			"Administration",
+		user.Name, user.Mail, plainPassword)
 
+	if err := server.emailService.SendEmail(request.Mail, subject, body); err != nil {
+		// Log the error but don't return it to the user
+		log.Printf("Error sending credentials email: %v", err)
+	}
+
+	return writeResponse(w, http.StatusOK, "Professor created successfully. Credentials have been sent to their email.")
+}
 func (server *ApiServer) handleCreateSubject(w http.ResponseWriter, r *http.Request) error {
 	var request CreateSubjectRequest
 

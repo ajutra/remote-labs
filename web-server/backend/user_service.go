@@ -5,12 +5,13 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"golang.org/x/exp/rand"
 )
 
 type UserService interface {
 	CreateUser(request CreateUserRequest) error
 	CreateUnverifiedUser(request CreateUserRequest, verificationToken uuid.UUID) error
-	CreateProfessor(request CreateProfessorRequest) error
+	CreateProfessor(request CreateProfessorRequest) (User, string, error)
 	ListAllUsersBySubjectId(subjectId string) ([]UserResponse, error)
 	ValidateUser(request ValidateUserRequest) (ValidateUserResponse, error)
 	GetUser(userId string) (UserResponse, error)
@@ -39,9 +40,13 @@ func (s *UserServiceImpl) CreateUnverifiedUser(request CreateUserRequest, verifi
 	return s.db.CreateUnverifiedUser(user, verificationToken)
 }
 
-func (s *UserServiceImpl) CreateProfessor(request CreateProfessorRequest) error {
-	user := request.toUser()
-	return s.db.CreateUser(user)
+func (s *UserServiceImpl) CreateProfessor(request CreateProfessorRequest) (User, string, error) {
+	user, plainPassword := request.toUser()
+	err := s.db.CreateUser(user)
+	if err != nil {
+		return User{}, "", err
+	}
+	return user, plainPassword, nil
 }
 
 func (s *UserServiceImpl) ListAllUsersBySubjectId(subjectId string) ([]UserResponse, error) {
@@ -101,15 +106,32 @@ func (createUsrReq *CreateUserRequest) toUser() User {
 	}
 }
 
-func (createProfReq *CreateProfessorRequest) toUser() User {
-	return User{
-		ID:   uuid.New(),
-		Role: Professor,
-		Name: createProfReq.Name,
-		Mail: createProfReq.Mail,
-		// TODO: Generate random password
-		Password: "randomPassword",
+func (createProfReq *CreateProfessorRequest) toUser() (User, string) {
+	// Generar una contraseña aleatoria de 10 caracteres
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+	password := make([]byte, 10)
+	for i := range password {
+		password[i] = charset[rand.Intn(len(charset))]
 	}
+
+	plainPassword := string(password)
+
+	// Imprimir la contraseña en texto plano para desarrollo
+	fmt.Printf("Contraseña generada para el profesor %s: %s\n",
+		createProfReq.Name, plainPassword)
+
+	// Crear hash de la contraseña
+	hashedPassword, _ := HashPassword(plainPassword)
+
+	user := User{
+		ID:       uuid.New(),
+		Role:     Professor,
+		Name:     createProfReq.Name,
+		Mail:     createProfReq.Mail,
+		Password: hashedPassword,
+	}
+
+	return user, plainPassword
 }
 
 func (user User) toUserResponse() UserResponse {

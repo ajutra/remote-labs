@@ -39,8 +39,9 @@ type CreateUserRequest struct {
 }
 
 type CreateProfessorRequest struct {
-	Name string `json:"name"`
-	Mail string `json:"mail"`
+	Name     string `json:"name"`
+	Mail     string `json:"mail"`
+	Password string `json:"password"`
 }
 
 type CreateSubjectRequest struct {
