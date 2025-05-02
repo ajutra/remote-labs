@@ -12,6 +12,12 @@ import (
 	"time"
 )
 
+const DEFAULT_OS_VARIANT = "debian11"
+const DEFAULT_NETWORK_BRIDGE = "virbr0"
+const SHUTDOWN_WAIT_TIME = 500 * time.Millisecond
+const MAX_SHUTDOWN_WAIT_TIME_RETRIES = 20
+const SHUTOFF_STATUS = "shut off"
+
 //go:embed templates/*.tmpl
 var templateFS embed.FS
 
@@ -31,6 +37,27 @@ type ServerAgentImpl struct {
 	cloudInitImagesPath string
 }
 
+type VmType string
+
+const (
+	TemplateVm VmType = "template"
+	InstanceVm VmType = "instance"
+)
+
+type CreateVmRequest struct {
+	VmType        VmType
+	VmId          string
+	SourceVmId    string
+	SourceIsBase  bool
+	DirPath       string
+	SizeMB        int
+	VramMB        int
+	VcpuCount     int
+	Username      string
+	Password      string
+	PublicSshKeys []string
+}
+
 type CloudInitMetadata struct {
 	InstanceId    string
 	LocalHostname string
@@ -42,23 +69,7 @@ type CloudInitUserData struct {
 	PublicSshKeys []string
 }
 
-type CreateDiskImageData struct {
-	sourceVmId   string
-	sourceIsBase bool
-	SizeMB       int
-}
-
-type InstallVmData struct {
-	Path          string
-	Name          string
-	RamMB         int
-	VcpuCount     int
-	OsVariant     string
-	NetworkBridge string
-}
-
 func (agent *ServerAgentImpl) ListBaseImages() ([]ListBaseImagesResponse, error) {
-	// TODO: Figure out how to rename the base images to it's id once it's generated
 	log.Printf("Getting base images...")
 
 	cmd := exec.Command(
@@ -83,60 +94,36 @@ func (agent *ServerAgentImpl) ListBaseImages() ([]ListBaseImagesResponse, error)
 }
 
 func (agent *ServerAgentImpl) DefineTemplate(request DefineTemplateRequest) error {
-	log.Printf("Defining template...")
-
-	dirPath := agent.vmsStoragePath + "/" + request.TemplateId
-
-	if err := createDir(dirPath); err != nil {
-		return logAndReturnError("Error creating template directory: ", err.Error())
-	}
-
-	if err := agent.createTemplateMetadataFiles(dirPath, request); err != nil {
-		return err
-	}
-
-	createDiskImageData := CreateDiskImageData{
-		sourceVmId:   request.SourceInstanceId,
-		sourceIsBase: false,
+	createVmRequest := CreateVmRequest{
+		VmType:       TemplateVm,
+		VmId:         request.TemplateId,
+		SourceVmId:   request.SourceInstanceId,
+		SourceIsBase: false,
+		DirPath:      agent.vmsStoragePath + "/" + request.TemplateId,
 		SizeMB:       request.SizeMB,
+		VramMB:       request.VramMB,
+		VcpuCount:    request.VcpuCount,
 	}
 
-	if err := agent.createDiskImage(dirPath, createDiskImageData); err != nil {
-		return err
-	}
-
-	if err := agent.removeBackingFileFromTemplateDiskImage(dirPath, request.TemplateId); err != nil {
-		return err
-	}
-
-	installVmData := InstallVmData{
-		Path:          dirPath,
-		Name:          request.TemplateId,
-		RamMB:         request.SizeMB,
-		VcpuCount:     request.VcpuCount,
-		OsVariant:     "debian11",
-		NetworkBridge: "virbr0",
-	}
-
-	if err := agent.installVm(installVmData); err != nil {
-		return err
-	}
-
-	if err := agent.StopInstance(request.TemplateId); err != nil {
-		return err
-	}
-
-	log.Printf("Template '%s' defined successfully!", request.TemplateId)
-
-	return nil
+	return agent.createVm(createVmRequest)
 }
 
 func (agent *ServerAgentImpl) CreateInstance(request CreateInstanceRequest) error {
-	log.Printf("Creating instance '%s'...", request.InstanceId)
+	createVmRequest := CreateVmRequest{
+		VmType:        InstanceVm,
+		VmId:          request.InstanceId,
+		SourceVmId:    request.SourceVmId,
+		SourceIsBase:  request.SourceIsBase,
+		DirPath:       agent.vmsStoragePath + "/" + request.InstanceId,
+		SizeMB:        request.SizeMB,
+		VramMB:        request.VramMB,
+		VcpuCount:     request.VcpuCount,
+		Username:      request.Username,
+		Password:      request.Password,
+		PublicSshKeys: request.PublicSshKeys,
+	}
 
-	// TODO: Implement
-
-	return nil
+	return agent.createVm(createVmRequest)
 }
 
 func (agent *ServerAgentImpl) DeleteVm(vmId string) error {
@@ -190,29 +177,27 @@ func (agent *ServerAgentImpl) StopInstance(instanceId string) error {
 		"virsh", "shutdown", instanceId,
 	)
 
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
+	if output, err := cmd.CombinedOutput(); err != nil {
 		return logAndReturnError("Error stopping instance '"+instanceId+"': ", string(output))
 	}
 
 	// Wait for the instance to shut down
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(SHUTDOWN_WAIT_TIME)
 
 	// Check if the instance is shut down
 	for {
-		times := 0
+		retryCount := 0
 
 		statuses, err := agent.ListInstancesStatus()
 		if err != nil {
-			return logAndReturnError("Error listing instances status: ", err.Error())
+			return err
 		}
 
 		for _, status := range statuses {
-			if status.InstanceId == instanceId && status.Status != "shut off" {
-				time.Sleep(500 * time.Millisecond)
-				times++
-			} else if times > 10 {
+			if status.InstanceId == instanceId && status.Status != SHUTOFF_STATUS {
+				time.Sleep(SHUTDOWN_WAIT_TIME)
+				retryCount++
+			} else if retryCount > MAX_SHUTDOWN_WAIT_TIME_RETRIES {
 				return agent.forceStopVM(instanceId)
 			} else {
 				log.Printf("Stopped instance '%s' successfully!", instanceId)
@@ -248,9 +233,8 @@ func (agent *ServerAgentImpl) ListInstancesStatus() ([]ListInstancesStatusRespon
 	)
 
 	output, err := cmd.CombinedOutput()
-
 	if err != nil {
-		return nil, logAndReturnError("", string(output))
+		return nil, logAndReturnError("Error listing VMs status: ", string(output))
 	}
 
 	lines := strings.Split(string(output), "\n")
@@ -273,93 +257,156 @@ func (agent *ServerAgentImpl) ListInstancesStatus() ([]ListInstancesStatusRespon
 	return toListInstancesStatusResponse(vmStatusMap), nil
 }
 
+func (agent *ServerAgentImpl) createVm(request CreateVmRequest) error {
+	log.Printf("Creating %s '%s'...", request.VmType, request.VmId)
+
+	if err := createDir(request.DirPath); err != nil {
+		return err
+	}
+
+	if err := agent.createVmConfigurationFiles(request); err != nil {
+		return err
+	}
+
+	if err := agent.createDiskImage(request); err != nil {
+		return err
+	}
+
+	if request.VmType == TemplateVm {
+		if err := agent.removeBackingFileFromTemplateDiskImage(request.DirPath, request.VmId); err != nil {
+			return err
+		}
+	}
+
+	if err := agent.installVm(request); err != nil {
+		return err
+	}
+
+	if err := agent.StopInstance(request.VmId); err != nil {
+		return err
+	}
+
+	log.Printf("%s '%s' created successfully!", request.VmType, request.VmId)
+	return nil
+}
+
 func toListBaseImagesResponse(fileNames []string) []ListBaseImagesResponse {
 	response := []ListBaseImagesResponse{}
 	response = append(response, ListBaseImagesResponse{FileNames: fileNames})
 	return response
 }
 
-func createDir(path string) error {
-	log.Printf("Creating directory '%s'...", path)
+func createDir(dirPath string) error {
+	log.Printf("Creating directory '%s'...", dirPath)
 
-	if err := os.MkdirAll(path, 0755); err != nil {
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
 		return logAndReturnError("Error creating directory: ", err.Error())
 	}
 
-	log.Printf("Directory '%s' created successfully!", path)
+	log.Printf("Directory '%s' created successfully!", dirPath)
 	return nil
 }
 
-func (agent *ServerAgentImpl) createTemplateMetadataFiles(
-	templatePath string,
-	request DefineTemplateRequest,
-) error {
-	log.Printf("Creating template metadata files...")
+func (agent *ServerAgentImpl) createVmConfigurationFiles(request CreateVmRequest) error {
+	log.Printf("Creating %s configuration files...", request.VmType)
 
+	// Create meta-data.yaml file
 	cloudInitMetadata := CloudInitMetadata{
-		InstanceId:    request.TemplateId,
-		LocalHostname: "template-" + request.TemplateId,
+		InstanceId:    request.VmId,
+		LocalHostname: string(request.VmType) + "-" + request.VmId,
 	}
 
-	// Create meta-data.yaml file from template
-	tmpl, err := template.ParseFS(templateFS, "templates/meta-data.yaml.tmpl")
+	if err := createFileFromTemplate(request.DirPath, "meta-data.yaml", cloudInitMetadata); err != nil {
+		return err
+	}
+
+	// Handle user-data.yaml based on type
+	if request.VmType == TemplateVm {
+		// For templates, copy user-data.yaml from source instance
+		// because the template shouldn't need to configure new user-data, as they won't be started.
+		copyCmd := exec.Command(
+			"cp",
+			agent.vmsStoragePath+"/"+request.SourceVmId+"/user-data.yaml",
+			request.DirPath+"/user-data.yaml",
+		)
+
+		copyCmdOutput, err := copyCmd.CombinedOutput()
+		if err != nil {
+			return logAndReturnError("Error copying user-data.yaml file: ", string(copyCmdOutput))
+		}
+	} else {
+		// For instances, create user-data.yaml from template
+		cloudInitUserData := CloudInitUserData{
+			Username:      request.Username,
+			Password:      request.Password,
+			PublicSshKeys: request.PublicSshKeys,
+		}
+
+		if err := createFileFromTemplate(request.DirPath, "user-data.yaml", cloudInitUserData); err != nil {
+			return err
+		}
+	}
+
+	// Create cidata.iso
+	if err := createCidataIso(request.DirPath); err != nil {
+		return err
+	}
+
+	log.Printf("%s configuration files created successfully!", request.VmType)
+	return nil
+}
+
+func createFileFromTemplate(newFilePath string, fileName string, data interface{}) error {
+	log.Printf("Creating file %s...", fileName)
+
+	tmpl, err := template.ParseFS(templateFS, "templates/"+fileName+".tmpl")
 	if err != nil {
-		return logAndReturnError("Error parsing meta-data.yaml template: ", err.Error())
+		return logAndReturnError("Error parsing "+fileName+" template: ", err.Error())
 	}
 
-	metaDataFile, err := os.Create(templatePath + "/meta-data.yaml")
+	file, err := os.Create(newFilePath + "/" + fileName)
 	if err != nil {
-		return logAndReturnError("Error creating meta-data.yaml file: ", err.Error())
+		return logAndReturnError("Error creating "+fileName+" file: ", err.Error())
 	}
 
-	if err := tmpl.Execute(metaDataFile, cloudInitMetadata); err != nil {
-		return logAndReturnError("Error executing meta-data.yaml template: ", err.Error())
+	if err := tmpl.Execute(file, data); err != nil {
+		return logAndReturnError("Error executing "+fileName+" template: ", err.Error())
 	}
 
-	metaDataFile.Close()
+	file.Close()
 
-	// Copy user-data.yaml file from the instance used to create the template,
-	// this is because the template shouldn't need to configure new user-data,
-	// as they will never be started.
-	instancePath := agent.vmsStoragePath + "/" + request.SourceInstanceId
-	copyCmd := exec.Command(
-		"cp",
-		instancePath+"/user-data.yaml",
-		templatePath+"/user-data.yaml",
-	)
+	log.Printf("File %s created successfully!", fileName)
+	return nil
+}
 
-	copyCmdOutput, err := copyCmd.CombinedOutput()
-	if err != nil {
-		return logAndReturnError("Error copying user-data.yaml file: ", string(copyCmdOutput))
-	}
+func createCidataIso(dirPath string) error {
+	log.Printf("Creating cidata.iso...")
 
-	// Create cidata.iso using genisoimage
 	createIsoCmd := exec.Command(
 		"genisoimage",
-		"-output", templatePath+"/cidata.iso",
+		"-output", dirPath+"/cidata.iso",
 		"-V", "cidata",
 		"-r",
-		"-J", templatePath+"/meta-data.yaml", templatePath+"/user-data.yaml",
+		"-J", dirPath+"/meta-data.yaml", dirPath+"/user-data.yaml",
 	)
 
 	createIsoCmdOutput, err := createIsoCmd.CombinedOutput()
-
 	if err != nil {
 		return logAndReturnError("Error creating cidata.iso: ", string(createIsoCmdOutput))
 	}
 
-	log.Printf("Template metadata files created successfully!")
+	log.Printf("Cidata.iso created successfully!")
 	return nil
 }
 
-func (agent *ServerAgentImpl) createDiskImage(path string, data CreateDiskImageData) error {
+func (agent *ServerAgentImpl) createDiskImage(request CreateVmRequest) error {
 	log.Printf("Creating disk image...")
 
 	var sourceVmPath string
-	if data.sourceIsBase {
-		sourceVmPath = agent.vmsStoragePath + "/" + agent.cloudInitImagesPath + "/" + data.sourceVmId + ".qcow2"
+	if request.SourceIsBase {
+		sourceVmPath = agent.vmsStoragePath + "/" + agent.cloudInitImagesPath + "/" + request.SourceVmId + ".qcow2"
 	} else {
-		sourceVmPath = agent.vmsStoragePath + "/" + data.sourceVmId + "/" + data.sourceVmId + ".qcow2"
+		sourceVmPath = agent.vmsStoragePath + "/" + request.SourceVmId + "/" + request.SourceVmId + ".qcow2"
 	}
 
 	createDiskImageCmd := exec.Command(
@@ -368,8 +415,8 @@ func (agent *ServerAgentImpl) createDiskImage(path string, data CreateDiskImageD
 		"-b", sourceVmPath,
 		"-f", "qcow2",
 		"-F", "qcow2",
-		path+"/"+data.sourceVmId+".qcow2",
-		strconv.Itoa(data.SizeMB)+"M",
+		request.DirPath+"/"+request.VmId+".qcow2",
+		strconv.Itoa(request.SizeMB)+"M",
 	)
 
 	createDiskImageCmdOutput, err := createDiskImageCmd.CombinedOutput()
@@ -381,7 +428,7 @@ func (agent *ServerAgentImpl) createDiskImage(path string, data CreateDiskImageD
 	return nil
 }
 
-func (agent *ServerAgentImpl) removeBackingFileFromTemplateDiskImage(dirPath string, id string) error {
+func (agent *ServerAgentImpl) removeBackingFileFromTemplateDiskImage(dirPath string, templateId string) error {
 	log.Printf("Removing backing file from template disk image...")
 
 	removeBackingFileCmd := exec.Command(
@@ -389,7 +436,7 @@ func (agent *ServerAgentImpl) removeBackingFileFromTemplateDiskImage(dirPath str
 		"rebase",
 		"-b", "",
 		"-f", "qcow2",
-		dirPath+"/"+id+".qcow2",
+		dirPath+"/"+templateId+".qcow2",
 	)
 
 	if removeBackingFileOutput, err := removeBackingFileCmd.CombinedOutput(); err != nil {
@@ -403,19 +450,19 @@ func (agent *ServerAgentImpl) removeBackingFileFromTemplateDiskImage(dirPath str
 	return nil
 }
 
-func (agent *ServerAgentImpl) installVm(data InstallVmData) error {
+func (agent *ServerAgentImpl) installVm(request CreateVmRequest) error {
 	log.Printf("Installing VM...")
 
 	installVmCmd := exec.Command(
 		"virt-install",
-		"--name", data.Name,
-		"--ram", strconv.Itoa(data.RamMB),
-		"--vcpus", strconv.Itoa(data.VcpuCount),
+		"--name", request.VmId,
+		"--ram", strconv.Itoa(request.VramMB),
+		"--vcpus", strconv.Itoa(request.VcpuCount),
 		"--import",
-		"--disk", "path="+data.Path+"/"+data.Name+".qcow2,format=qcow2",
-		"--disk", "path="+data.Path+"/cidata.iso,device=cdrom",
-		"--os-variant", data.OsVariant,
-		"--network", "bridge="+data.NetworkBridge+",model=virtio",
+		"--disk", "path="+request.DirPath+"/"+request.VmId+".qcow2,format=qcow2",
+		"--disk", "path="+request.DirPath+"/cidata.iso,device=cdrom",
+		"--os-variant", DEFAULT_OS_VARIANT,
+		"--network", "bridge="+DEFAULT_NETWORK_BRIDGE+",model=virtio",
 		"--graphics", "vnc,listen=0.0.0.0",
 		"--noautoconsole",
 	)
@@ -444,11 +491,6 @@ func (agent *ServerAgentImpl) forceStopVM(vmId string) error {
 
 	log.Printf("Force stopped VM '%s' successfully!", vmId)
 
-	return nil
-}
-
-func (agent *ServerAgentImpl) createInstanceMetadataFile(path string, request CreateInstanceRequest) error {
-	// TODO: Implement
 	return nil
 }
 
