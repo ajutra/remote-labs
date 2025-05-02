@@ -165,7 +165,6 @@ func (agent *ServerAgentImpl) DeleteVm(vmId string) error {
 	return nil
 }
 
-// TODO: Implement
 func (agent *ServerAgentImpl) StartInstance(instanceId string) error {
 	log.Printf("Starting instance '%s'...", instanceId)
 
@@ -223,7 +222,6 @@ func (agent *ServerAgentImpl) StopInstance(instanceId string) error {
 	}
 }
 
-// TODO: Implement
 func (agent *ServerAgentImpl) RestartInstance(instanceId string) error {
 	log.Printf("Restarting instance '%s'...", instanceId)
 
