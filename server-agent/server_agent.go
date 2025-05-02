@@ -139,7 +139,6 @@ func (agent *ServerAgentImpl) CreateInstance(request CreateInstanceRequest) erro
 	return nil
 }
 
-// TODO: Implement
 func (agent *ServerAgentImpl) DeleteVm(vmId string) error {
 	log.Printf("Deleting VM '%s'...", vmId)
 
@@ -152,6 +151,14 @@ func (agent *ServerAgentImpl) DeleteVm(vmId string) error {
 	if err != nil {
 		return logAndReturnError("Error deleting VM '"+vmId+"': ", string(output))
 	}
+
+	log.Printf("Removing VM '%s' files from storage...", vmId)
+
+	if err := os.RemoveAll(agent.vmsStoragePath + "/" + vmId); err != nil {
+		return logAndReturnError("Error deleting VM '"+vmId+"' files from storage: ", err.Error())
+	}
+
+	log.Printf("VM '%s' files removed from storage successfully!", vmId)
 
 	log.Printf("Deleted VM '%s' successfully!", vmId)
 
