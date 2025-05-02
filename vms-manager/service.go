@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const RUNNING_STATUS = "running"
+
 type Service interface {
 	ListBaseImages() ([]ListBaseImagesResponse, error)
 	DefineTemplate(request DefineTemplateRequest) (DefineTemplateResponse, error)
@@ -454,13 +456,13 @@ func (s *ServiceImpl) checkIfVmIsRunning(vmId string, wantRunning bool) error {
 	for _, vm := range statuses {
 		if vm.InstanceId == vmId {
 			// TODO: add compatibility with other languages
-			if vm.Status == "running" && !wantRunning {
+			if vm.Status == RUNNING_STATUS && !wantRunning {
 				return NewHttpError(
 					http.StatusBadRequest,
 					fmt.Errorf("VM '%s' is running", vmId),
 				)
 			}
-			if vm.Status != "running" && wantRunning {
+			if vm.Status != RUNNING_STATUS && wantRunning {
 				return NewHttpError(
 					http.StatusBadRequest,
 					fmt.Errorf("VM '%s' is not running", vmId),
