@@ -447,14 +447,14 @@ func (s *ServiceImpl) getBaseImagesNames() ([]string, error) {
 		return nil, NewHttpError(resp.StatusCode, fmt.Errorf("failed to list base VMs"))
 	}
 
-	var baseImagesAgentResponse ListBaseImagesAgentResponse
+	var baseImagesAgentResponse []ListBaseImagesAgentResponse
 	if err := json.NewDecoder(resp.Body).Decode(&baseImagesAgentResponse); err != nil {
 		return nil, err
 	}
 
 	var baseImages []string
-	for _, baseImage := range baseImagesAgentResponse.FileNames {
-		baseImages = append(baseImages, strings.TrimSuffix(baseImage, filepath.Ext(baseImage)))
+	for _, baseImage := range baseImagesAgentResponse {
+		baseImages = append(baseImages, strings.TrimSuffix(baseImage.FileNames[0], filepath.Ext(baseImage.FileNames[0])))
 	}
 
 	return baseImages, nil
