@@ -8,7 +8,6 @@ type ListBaseImagesResponse struct {
 
 type DefineTemplateRequest struct {
 	SourceInstanceId string `json:"sourceInstanceId"`
-	TemplateId       string `json:"templateId"`
 	SizeMB           int    `json:"sizeMB"`
 	VcpuCount        int    `json:"vcpuCount"`
 	VramMB           int    `json:"vramMB"`
