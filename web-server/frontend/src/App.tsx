@@ -14,6 +14,7 @@ import ControlPlane from './pages/ControlPlane'
 import useIsAdmin from '@/hooks/useIsAdmin'
 import VerifyEmail from './pages/VerifyEmail'
 import { Layout } from '@/pages/Layout'
+import UserSettings from './pages/UserSettings'
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const isAdmin = useIsAdmin()
@@ -41,6 +42,10 @@ const App: React.FC = () => {
                         element={<SubjectDetail />}
                       />
                       <Route path={AppRoutes.MYLABS} element={<MyLabs />} />
+                      <Route
+                        path={AppRoutes.USER_SETTINGS}
+                        element={<UserSettings />}
+                      />
                       <Route
                         path={AppRoutes.CONTROL_PLANE}
                         element={

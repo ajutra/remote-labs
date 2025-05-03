@@ -36,7 +36,7 @@ type Database interface {
 	DeleteInstance(instanceId string) error
 	CreateTemplate(templateId string, subjectId string, sourceInstanceId string, sizeMB int, vcpuCount int, vramMB int) error
 	DeleteTemplate(templateId string, subjectId string) error
-	UpdateUser(userId string, name string, mail string, password string, publicSshKeys []string) error
+	UpdateUser(userId string, password string, publicSshKeys []string) error
 }
 
 type PostgresDatabase struct {
@@ -58,15 +58,23 @@ type DatabaseSubject struct {
 	ProfessorMail string
 }
 
-func (postgres *PostgresDatabase) UpdateUser(userId string, name string, mail string, password string, publicSshKeys []string) error {
-	query := `
-	UPDATE users SET name = @name, mail = @mail, password = @password, public_ssh_keys = @public_ssh_keys WHERE id = @id`
-	args := pgx.NamedArgs{
-		"id":              userId,
-		"name":            name,
-		"mail":            mail,
-		"password":        password,
-		"public_ssh_keys": publicSshKeys,
+func (postgres *PostgresDatabase) UpdateUser(userId string, password string, publicSshKeys []string) error {
+	//if password is empty, don't update it
+	var query string
+	var args pgx.NamedArgs
+	if password != "" {
+		query = `
+		UPDATE users SET password = @password, public_ssh_keys = @public_ssh_keys WHERE id = @id`
+		args = pgx.NamedArgs{
+			"password":        password,
+			"public_ssh_keys": publicSshKeys,
+		}
+	} else {
+		query = `
+		UPDATE users SET public_ssh_keys = @public_ssh_keys WHERE id = @id`
+		args = pgx.NamedArgs{
+			"public_ssh_keys": publicSshKeys,
+		}
 	}
 
 	_, err := postgres.db.Exec(context.Background(), query, args)

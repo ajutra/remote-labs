@@ -459,7 +459,7 @@ func (server *ApiServer) Run() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /users", createHttpHandler(server.handleCreateUser))
 	mux.HandleFunc("POST /users/professors", createHttpHandler(server.handleCreateProfessor))
-	mux.HandleFunc("POST /users/update", createHttpHandler(server.handleUpdateUser))
+	mux.HandleFunc("PUT /users/update", createHttpHandler(server.handleUpdateUser))
 	mux.HandleFunc("POST /subjects", createHttpHandler(server.handleCreateSubject))
 	mux.HandleFunc("GET /users/{id}/subjects", createHttpHandler(server.handleListAllSubjectsByUserId))
 	mux.HandleFunc("GET /subjects/{id}/users", createHttpHandler(server.handleListAllUsersBySubjectId))

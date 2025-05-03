@@ -95,8 +95,6 @@ type DefineTemplateRequest struct {
 
 type UpdateUserRequest struct {
 	UserId        string   `json:"userId"`
-	Name          string   `json:"name"`
-	Mail          string   `json:"mail"`
 	Password      string   `json:"password"`
 	PublicSshKeys []string `json:"publicSshKeys"`
 }
