@@ -13,8 +13,10 @@ import (
 
 const DEFAULT_OS_VARIANT = "debian11"
 const DEFAULT_NETWORK_BRIDGE = "virbr0"
-const SHUTDOWN_WAIT_TIME = 500 * time.Millisecond
-const MAX_SHUTDOWN_WAIT_TIME_RETRIES = 20
+const AFTER_INSTALL_WAIT_TIME = 10 * time.Second
+const SHUTDOWN_WAIT_TIME = 3 * time.Second
+const RETRY_SHUTDOWN_WAIT_TIME = 5 * time.Second
+const FORCE_SHUTDOWN_WAIT_TIME = 10 * time.Second
 const SHUTOFF_STATUS = "shut off"
 
 //go:embed templates/*.tmpl
@@ -171,7 +173,6 @@ func (agent *ServerAgentImpl) StartInstance(instanceId string) error {
 
 func (agent *ServerAgentImpl) StopInstance(instanceId string) error {
 	log.Printf("Stopping instance '%s'...", instanceId)
-	//TODO: check why is not stopping on some cases
 	cmd := exec.Command(
 		"virsh", "shutdown", instanceId,
 	)
@@ -184,23 +185,35 @@ func (agent *ServerAgentImpl) StopInstance(instanceId string) error {
 	time.Sleep(SHUTDOWN_WAIT_TIME)
 
 	// Check if the instance is shut down
+	currentTime := time.Now()
+	retryShutdown := true
 	for {
-		retryCount := 0
-
 		statuses, err := agent.ListInstancesStatus()
 		if err != nil {
 			return err
 		}
 
 		for _, status := range statuses {
-			if status.InstanceId == instanceId && status.Status != SHUTOFF_STATUS {
-				time.Sleep(SHUTDOWN_WAIT_TIME)
-				retryCount++
-			} else if retryCount > MAX_SHUTDOWN_WAIT_TIME_RETRIES {
-				return agent.forceStopVM(instanceId)
-			} else { //Check condition, when creating a new vm, sometimesit returns without status SHUTOFF_STATUS
-				log.Printf("Stopped instance '%s' successfully!", instanceId)
-				return nil
+			if status.InstanceId == instanceId {
+				if status.Status != SHUTOFF_STATUS {
+					log.Printf("Time since current time: %s, retryShutdown: %t", time.Since(currentTime), retryShutdown)
+					if time.Since(currentTime) >= FORCE_SHUTDOWN_WAIT_TIME {
+						return agent.forceStopVM(instanceId)
+					} else if time.Since(currentTime) >= RETRY_SHUTDOWN_WAIT_TIME && retryShutdown {
+						retryShutdown = false
+						retryShutdownCmd := exec.Command(
+							"virsh", "shutdown", instanceId,
+						)
+						if output, err := retryShutdownCmd.CombinedOutput(); err != nil {
+							return logAndReturnError("Error stopping instance '"+instanceId+"': ", string(output))
+						}
+					} else {
+						time.Sleep(SHUTDOWN_WAIT_TIME)
+					}
+				} else {
+					log.Printf("Stopped instance '%s' successfully!", instanceId)
+					return nil
+				}
 			}
 		}
 	}
@@ -472,6 +485,10 @@ func (agent *ServerAgentImpl) installVm(request CreateVmRequest) error {
 	}
 
 	log.Printf("VM installed successfully!")
+
+	// We need to wait for the VM to be started
+	time.Sleep(AFTER_INSTALL_WAIT_TIME)
+
 	return nil
 }
 
