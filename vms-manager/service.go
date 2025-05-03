@@ -87,10 +87,12 @@ func (s *ServiceImpl) DefineTemplate(request DefineTemplateRequest) (DefineTempl
 		)
 	}
 
-	if request.SizeMB <= 0 {
+	if request.SizeMB <= 0 ||
+		request.VcpuCount <= 0 ||
+		request.VramMB <= 0 {
 		return DefineTemplateResponse{}, NewHttpError(
 			http.StatusBadRequest,
-			fmt.Errorf("sizeMB must be greater than 0"),
+			fmt.Errorf("sizeMB, vcpuCount and vramMB must be greater than 0"),
 		)
 	}
 	templateId, err := s.generateNewVmId()
@@ -202,6 +204,8 @@ func (s *ServiceImpl) DeleteTemplate(templateId string) error {
 
 func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInstanceResponse, error) {
 	if request.SizeMB <= 0 ||
+		request.VcpuCount <= 0 ||
+		request.VramMB <= 0 ||
 		request.Username == "" ||
 		request.Password == "" {
 		return CreateInstanceResponse{}, NewHttpError(
