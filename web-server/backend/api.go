@@ -94,6 +94,20 @@ func (server *ApiServer) handleCreateProfessor(w http.ResponseWriter, r *http.Re
 	return writeResponse(w, http.StatusOK, "Professor created successfully. Credentials have been sent to their email.")
 }
 
+func (server *ApiServer) handleUpdateUser(w http.ResponseWriter, r *http.Request) error {
+	var request UpdateUserRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return NewHttpError(http.StatusBadRequest, err)
+	}
+
+	if err := server.userService.UpdateUser(request); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, "User updated successfully")
+}
+
 func (server *ApiServer) handleCreateSubject(w http.ResponseWriter, r *http.Request) error {
 	var request CreateSubjectRequest
 
@@ -445,6 +459,7 @@ func (server *ApiServer) Run() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /users", createHttpHandler(server.handleCreateUser))
 	mux.HandleFunc("POST /users/professors", createHttpHandler(server.handleCreateProfessor))
+	mux.HandleFunc("POST /users/update", createHttpHandler(server.handleUpdateUser))
 	mux.HandleFunc("POST /subjects", createHttpHandler(server.handleCreateSubject))
 	mux.HandleFunc("GET /users/{id}/subjects", createHttpHandler(server.handleListAllSubjectsByUserId))
 	mux.HandleFunc("GET /subjects/{id}/users", createHttpHandler(server.handleListAllUsersBySubjectId))

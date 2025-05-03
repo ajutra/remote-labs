@@ -36,6 +36,7 @@ type Database interface {
 	DeleteInstance(instanceId string) error
 	CreateTemplate(templateId string, subjectId string, sourceInstanceId string, sizeMB int, vcpuCount int, vramMB int) error
 	DeleteTemplate(templateId string, subjectId string) error
+	UpdateUser(userId string, name string, mail string, password string, publicSshKeys []string) error
 }
 
 type PostgresDatabase struct {
@@ -55,6 +56,25 @@ type DatabaseSubject struct {
 	Name          string
 	Code          string
 	ProfessorMail string
+}
+
+func (postgres *PostgresDatabase) UpdateUser(userId string, name string, mail string, password string, publicSshKeys []string) error {
+	query := `
+	UPDATE users SET name = @name, mail = @mail, password = @password, public_ssh_keys = @public_ssh_keys WHERE id = @id`
+	args := pgx.NamedArgs{
+		"id":              userId,
+		"name":            name,
+		"mail":            mail,
+		"password":        password,
+		"public_ssh_keys": publicSshKeys,
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error updating user: %w", err)
+	}
+
+	return nil
 }
 
 func (postgres *PostgresDatabase) CreateTemplate(templateId string, subjectId string, sourceInstanceId string, sizeMB int, vcpuCount int, vramMB int) error {
@@ -359,7 +379,7 @@ func (postgres *PostgresDatabase) ValidateUser(mail, password string) (User, err
 
 func (postgres *PostgresDatabase) GetUser(userId string) (User, error) {
 	query := `
-	SELECT u.id, r.role, u.name, u.mail, u.password
+	SELECT u.id, r.role, u.name, u.mail, u.password, u.public_ssh_keys
 	FROM users u
 	JOIN roles r ON u.role_id = r.id
 	WHERE u.id = @id`
@@ -611,7 +631,8 @@ func getDDLStatements() string {
 			role_id INTEGER NOT NULL REFERENCES roles(id),
 			name VARCHAR(100) NOT NULL,
 			mail VARCHAR(100) NOT NULL UNIQUE,
-			password VARCHAR(100) NOT NULL
+			password VARCHAR(100) NOT NULL,
+			public_ssh_keys TEXT[] DEFAULT NULL
 		);
 
 		CREATE TABLE IF NOT EXISTS unverified_users (
