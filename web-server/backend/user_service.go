@@ -18,6 +18,7 @@ type UserService interface {
 	DeleteUser(userId string) error
 	VerifyUser(token string) error
 	UpdateVerificationToken(email string, token uuid.UUID) error
+	UpdateUser(request UpdateUserRequest) error
 }
 
 type UserServiceImpl struct {
