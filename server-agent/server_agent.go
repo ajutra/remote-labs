@@ -363,7 +363,7 @@ func createFileFromTemplate(newFilePath string, fileName string, data interface{
 	if err != nil {
 		return logAndReturnError("Error parsing "+fileName+" template: ", err.Error())
 	}
-	//TODO: check why there are whitespaces in the file
+
 	file, err := os.Create(newFilePath + "/" + fileName)
 	if err != nil {
 		return logAndReturnError("Error creating "+fileName+" file: ", err.Error())
