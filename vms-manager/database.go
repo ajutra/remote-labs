@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/jackc/pgx/v5"
@@ -40,7 +39,7 @@ func (postgres *PostgresDatabase) VmExistsById(vmId string) (bool, error) {
 
 	var exists bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
-		return false, fmt.Errorf("Error checking if VM exists by id: %v", err)
+		return false, logAndReturnError("Error checking if VM exists by id: ", err.Error())
 	}
 
 	return exists, nil
@@ -52,7 +51,7 @@ func (postgres *PostgresDatabase) VmExistsByDescription(description string) (boo
 
 	var exists bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
-		return false, fmt.Errorf("Error checking if VM exists by description: %v", err)
+		return false, logAndReturnError("Error checking if VM exists by description: ", err.Error())
 	}
 
 	return exists, nil
@@ -64,7 +63,7 @@ func (postgres *PostgresDatabase) VmHasInstancesThatDependOnIt(vmId string) (boo
 
 	var exists bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
-		return false, fmt.Errorf("Error checking if VM has instances that depend on it: %v", err)
+		return false, logAndReturnError("Error checking if VM has instances that depend on it: ", err.Error())
 	}
 
 	return exists, nil
@@ -76,7 +75,7 @@ func (postgres *PostgresDatabase) VmIsTemplate(vmId string) (bool, error) {
 
 	var isTemplate bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&isTemplate); err != nil {
-		return false, fmt.Errorf("Error checking if VM is a template: %v", err)
+		return false, logAndReturnError("Error checking if VM is a template: ", err.Error())
 	}
 
 	return isTemplate, nil
@@ -88,7 +87,7 @@ func (postgres *PostgresDatabase) VmIsBase(vmId string) (bool, error) {
 
 	var isBase bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&isBase); err != nil {
-		return false, fmt.Errorf("Error checking if VM is base: %v", err)
+		return false, logAndReturnError("Error checking if VM is base: ", err.Error())
 	}
 
 	return isBase, nil
@@ -110,7 +109,7 @@ func (postgres *PostgresDatabase) AddVm(vm Vm, isBase bool, isTemplate bool) err
 	}
 
 	if _, err := postgres.db.Exec(context.Background(), query, args); err != nil {
-		return fmt.Errorf("Error adding VM to database: %v", err)
+		return logAndReturnError("Error adding VM to database: ", err.Error())
 	}
 
 	return nil
@@ -121,7 +120,7 @@ func (postgres *PostgresDatabase) DeleteVm(vmId string) error {
 	args := pgx.NamedArgs{"id": vmId}
 
 	if _, err := postgres.db.Exec(context.Background(), query, args); err != nil {
-		return fmt.Errorf("Error deleting VM: %v", err)
+		return logAndReturnError("Error deleting VM: ", err.Error())
 	}
 
 	return nil
@@ -132,7 +131,7 @@ func (postgres *PostgresDatabase) GetBaseImages() ([]Vm, error) {
 
 	rows, err := postgres.db.Query(context.Background(), query)
 	if err != nil {
-		return nil, fmt.Errorf("Error getting base images: %v", err)
+		return nil, logAndReturnError("Error getting base images: ", err.Error())
 	}
 	defer rows.Close()
 
@@ -140,7 +139,7 @@ func (postgres *PostgresDatabase) GetBaseImages() ([]Vm, error) {
 	for rows.Next() {
 		var dbVm DatabaseVM
 		if err := rows.Scan(&dbVm.ID, &dbVm.Description); err != nil {
-			return nil, fmt.Errorf("Error getting base images: %v", err)
+			return nil, logAndReturnError("Error getting base images: ", err.Error())
 		}
 
 		baseImages = append(baseImages, postgres.toVm(dbVm))
@@ -155,7 +154,7 @@ func (postgres *PostgresDatabase) GetDescriptionById(vmId string) (string, error
 
 	var description string
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&description); err != nil {
-		return "", fmt.Errorf("Error getting description by id: %v", err)
+		return "", logAndReturnError("Error getting description by id: ", err.Error())
 	}
 
 	return description, nil
@@ -182,11 +181,11 @@ func (postgres *PostgresDatabase) toDatabaseVM(vm Vm, isBase bool, isTemplate bo
 func NewDatabase(databaseURL string) (Database, error) {
 	dbpool, err := pgxpool.New(context.Background(), databaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("Error creating database connection pool: %v", err)
+		return nil, logAndReturnError("Error creating database connection pool: ", err.Error())
 	}
 
 	if err := dbpool.Ping(context.Background()); err != nil {
-		return nil, fmt.Errorf("Error pinging database: %v", err)
+		return nil, logAndReturnError("Error pinging database: ", err.Error())
 	}
 
 	log.Printf("Connected to database")
@@ -222,7 +221,7 @@ func (postgres *PostgresDatabase) createTablesIfNotExist() error {
 		)
 	`)
 	if err != nil {
-		return fmt.Errorf("Error creating vms table: %v", err)
+		return logAndReturnError("Error creating vms table: ", err.Error())
 	}
 
 	return nil

@@ -33,7 +33,7 @@ func (server *ApiServer) handleListBaseImages(w http.ResponseWriter, r *http.Req
 func (server *ApiServer) handleDefineTemplate(w http.ResponseWriter, r *http.Request) error {
 	var request DefineTemplateRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		return err
+		return logAndReturnError("Error decoding request body: ", err.Error())
 	}
 
 	response, err := server.service.DefineTemplate(request)
@@ -57,7 +57,7 @@ func (server *ApiServer) handleDeleteTemplate(w http.ResponseWriter, r *http.Req
 func (server *ApiServer) handleCreateInstance(w http.ResponseWriter, r *http.Request) error {
 	var request CreateInstanceRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		return err
+		return logAndReturnError("Error decoding request body: ", err.Error())
 	}
 
 	response, err := server.service.CreateInstance(request)
