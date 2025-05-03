@@ -12,10 +12,11 @@ import (
 type apiFunc func(w http.ResponseWriter, r *http.Request) error
 
 type ApiServer struct {
-	listenAddr     string
-	userService    UserService
-	subjectService SubjectService
-	emailService   EmailService
+	listenAddr      string
+	userService     UserService
+	subjectService  SubjectService
+	emailService    EmailService
+	instanceService InstanceService
 }
 
 type ApiError struct {
@@ -92,6 +93,7 @@ func (server *ApiServer) handleCreateProfessor(w http.ResponseWriter, r *http.Re
 
 	return writeResponse(w, http.StatusOK, "Professor created successfully. Credentials have been sent to their email.")
 }
+
 func (server *ApiServer) handleCreateSubject(w http.ResponseWriter, r *http.Request) error {
 	var request CreateSubjectRequest
 
@@ -288,6 +290,78 @@ func (server *ApiServer) handleVerifyUser(w http.ResponseWriter, r *http.Request
 	})
 }
 
+func (server *ApiServer) handleCreateInstance(w http.ResponseWriter, r *http.Request) error {
+	var request CreateInstanceFrontendRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return NewHttpError(http.StatusBadRequest, err)
+	}
+
+	response, err := server.instanceService.CreateInstance(request)
+	if err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, response)
+}
+
+func (server *ApiServer) handleStartInstance(w http.ResponseWriter, r *http.Request) error {
+	instanceId := r.PathValue("instanceId")
+	if instanceId == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing instance id"))
+	}
+
+	if err := server.instanceService.StartInstance(instanceId); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, "Instance started successfully")
+}
+
+func (server *ApiServer) handleStopInstance(w http.ResponseWriter, r *http.Request) error {
+	instanceId := r.PathValue("instanceId")
+	if instanceId == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing instance id"))
+	}
+
+	if err := server.instanceService.StopInstance(instanceId); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, "Instance stopped successfully")
+}
+
+func (server *ApiServer) handleDeleteInstance(w http.ResponseWriter, r *http.Request) error {
+	instanceId := r.PathValue("instanceId")
+	if instanceId == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing instance id"))
+	}
+
+	if err := server.instanceService.DeleteInstance(instanceId); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, "Instance deleted successfully")
+}
+
+func (server *ApiServer) handleGetInstanceStatus(w http.ResponseWriter, r *http.Request) error {
+	statuses, err := server.instanceService.GetInstanceStatus()
+	if err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, statuses)
+}
+
+func (server *ApiServer) handleBases(w http.ResponseWriter, r *http.Request) error {
+	bases, err := server.instanceService.Bases()
+	if err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, bases)
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -308,12 +382,13 @@ func createHttpHandler(fn apiFunc) http.HandlerFunc {
 	}
 }
 
-func NewApiServer(listenAddr string, userService UserService, subjectService SubjectService, emailService EmailService) *ApiServer {
+func NewApiServer(listenAddr string, userService UserService, subjectService SubjectService, emailService EmailService, instanceService InstanceService) *ApiServer {
 	return &ApiServer{
-		listenAddr:     listenAddr,
-		userService:    userService,
-		subjectService: subjectService,
-		emailService:   emailService,
+		listenAddr:      listenAddr,
+		userService:     userService,
+		subjectService:  subjectService,
+		emailService:    emailService,
+		instanceService: instanceService,
 	}
 }
 
@@ -350,6 +425,12 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("POST /test-email", createHttpHandler(server.handleTestEmail))
 	mux.HandleFunc("POST /verify-email", createHttpHandler(server.handleVerifyEmail))
 	mux.HandleFunc("GET /verify-email/{token}", createHttpHandler(server.handleVerifyUser))
+	mux.HandleFunc("POST /instances/create", createHttpHandler(server.handleCreateInstance))
+	mux.HandleFunc("POST /instances/start/{instanceId}", createHttpHandler(server.handleStartInstance))
+	mux.HandleFunc("POST /instances/stop/{instanceId}", createHttpHandler(server.handleStopInstance))
+	mux.HandleFunc("DELETE /instances/delete/{instanceId}", createHttpHandler(server.handleDeleteInstance))
+	mux.HandleFunc("GET /instances/status", createHttpHandler(server.handleGetInstanceStatus))
+	mux.HandleFunc("GET /bases", createHttpHandler(server.handleBases))
 
 	log.Println("Starting server on port", server.listenAddr)
 

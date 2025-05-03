@@ -65,3 +65,22 @@ type ValidateUserRequest struct {
 type ValidateUserResponse struct {
 	ID uuid.UUID `json:"id"`
 }
+
+type CreateInstanceFrontendRequest struct {
+	UserId        string   `json:"user_id"`
+	SubjectId     string   `json:"subject_id"`
+	TemplateId    string   `json:"template_id"`
+	Username      string   `json:"username"`
+	Password      string   `json:"password"`
+	PublicSshKeys []string `json:"publicSshKeys"`
+}
+
+type CreateInstanceFrontendResponse struct {
+	InstanceId string `json:"instanceId"`
+}
+
+type TemplateConfig struct {
+	SizeMB    int `json:"sizeMB"`
+	VcpuCount int `json:"vcpuCount"`
+	VramMB    int `json:"vramMB"`
+}
