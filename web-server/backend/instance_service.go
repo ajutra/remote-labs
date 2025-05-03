@@ -13,6 +13,7 @@ type InstanceService interface {
 	StopInstance(instanceId string) error
 	DeleteInstance(instanceId string) error
 	GetInstanceStatus() ([]InstanceStatus, error)
+	Bases() ([]Base, error)
 }
 
 type InstanceStatus struct {
@@ -203,7 +204,7 @@ func (s *InstanceServiceImpl) Bases() ([]Base, error) {
 		return nil, fmt.Errorf("VM manager API returned status code %d", resp.StatusCode)
 	}
 
-	var bases []Base
+	var bases []ListBasesResponse
 	if err := json.NewDecoder(resp.Body).Decode(&bases); err != nil {
 		return nil, fmt.Errorf("error decoding response: %w", err)
 	}
