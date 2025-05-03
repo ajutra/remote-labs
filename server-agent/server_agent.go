@@ -2,7 +2,6 @@ package main
 
 import (
 	"embed"
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -500,15 +499,6 @@ func toListInstancesStatusResponse(vmStatusMap map[string]string) []ListInstance
 		response = append(response, ListInstancesStatusResponse{InstanceId: vmName, Status: status})
 	}
 	return response
-}
-
-func logAndReturnError(customMsg string, err string) error {
-	err = strings.TrimPrefix(err, "error")
-	err = strings.TrimPrefix(err, "ERROR")
-	err = strings.TrimPrefix(err, ":")
-	err = strings.TrimSpace(err)
-	log.Printf("%s%s", customMsg, err)
-	return fmt.Errorf("%s%s", customMsg, err)
 }
 
 func NewServerAgent(vmsStoragePath string, cloudInitImagesPath string) ServerAgent {
