@@ -156,3 +156,7 @@ func (s *UserServiceImpl) VerifyUser(token string) error {
 func (s *UserServiceImpl) UpdateVerificationToken(email string, token uuid.UUID) error {
 	return s.db.UpdateVerificationToken(email, token)
 }
+
+func (s *UserServiceImpl) UpdateUser(request UpdateUserRequest) error {
+	return s.db.UpdateUser(request.UserId, request.Name, request.Mail, request.Password, request.PublicSshKeys)
+}
