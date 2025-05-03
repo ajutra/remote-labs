@@ -10,6 +10,7 @@ interface User {
   name: string
   mail: string
   role: string
+  publicSshKeys: string[]
 }
 
 interface AuthContextType {
@@ -58,6 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         name: userData.name,
         mail: userData.mail,
         role: userData.role,
+        publicSshKeys: userData.publicSshKeys,
       })
       setIsLoggedIn(true)
     } else {

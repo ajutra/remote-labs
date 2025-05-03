@@ -9,11 +9,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { Home, Book, LogOut, Laptop, Settings } from 'lucide-react'
+import { Home, Book, Laptop, Settings } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { AppRoutes } from '@/enums/AppRoutes'
-import { useAuth } from '@/context/AuthContext'
 import useIsAdmin from '@/hooks/useIsAdmin'
+import { NavUser } from './nav-user'
 
 const items = [
   {
@@ -34,7 +34,6 @@ const items = [
 ]
 
 export function AppSidebar() {
-  const { logout } = useAuth()
   const isAdmin = useIsAdmin()
 
   return (
@@ -69,14 +68,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={logout}>
-              <LogOut />
-              <span>Logout</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <NavUser />
       </SidebarFooter>
     </Sidebar>
   )

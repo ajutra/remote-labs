@@ -159,13 +159,11 @@ func (s *UserServiceImpl) UpdateVerificationToken(email string, token uuid.UUID)
 }
 
 func (s *UserServiceImpl) UpdateUser(request UpdateUserRequest) error {
-	//verify all fields are provided
-	if request.Name == "" || request.Mail == "" || request.Password == "" {
-		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing fields"))
+
+	if request.Password != "" {
+		hashedPassword, _ := HashPassword(request.Password)
+		request.Password = hashedPassword
 	}
 
-	//hash password
-	hashedPassword, _ := HashPassword(request.Password)
-
-	return s.db.UpdateUser(request.UserId, request.Name, request.Mail, hashedPassword, request.PublicSshKeys)
+	return s.db.UpdateUser(request.UserId, request.Password, request.PublicSshKeys)
 }
