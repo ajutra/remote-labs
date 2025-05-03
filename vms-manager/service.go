@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -107,7 +108,7 @@ func (s *ServiceImpl) DefineTemplate(request DefineTemplateRequest) (DefineTempl
 
 	jsonData, err := json.Marshal(agentRequest)
 	if err != nil {
-		return DefineTemplateResponse{}, err
+		return DefineTemplateResponse{}, logAndReturnError("Error marshalling define template agent request: ", err.Error())
 	}
 
 	vmMutex := s.getMutex(request.SourceInstanceId)
@@ -171,17 +172,24 @@ func (s *ServiceImpl) DeleteTemplate(templateId string) error {
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
-	resp, err := http.Post(
-		// Calling deleteInstaceEndpoint because the server agent
-		// makes no difference between a template and an instance
+	// Calling deleteInstaceEndpoint because the server agent
+	// makes no difference between a template and an instance
+	req, err := http.NewRequest(
+		http.MethodDelete,
 		s.serverAgentsURLs+s.deleteInstanceEndpoint+"/"+templateId,
-		"application/json",
 		nil,
 	)
 	if err != nil {
-		return err
+		return logAndReturnError("Error creating delete template request: ", err.Error())
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return logAndReturnError("Error sending delete template request: ", err.Error())
 	}
 	defer resp.Body.Close()
+
 	if err := checkIfStatusCodeIsOk(resp); err != nil {
 		return err
 	}
@@ -257,7 +265,7 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 
 	jsonData, err := json.Marshal(agentRequest)
 	if err != nil {
-		return CreateInstanceResponse{}, err
+		return CreateInstanceResponse{}, logAndReturnError("Error marshalling create instance agent request: ", err.Error())
 	}
 
 	vmMutex := s.getMutex(request.SourceVmId)
@@ -307,15 +315,22 @@ func (s *ServiceImpl) DeleteInstance(instanceId string) error {
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
-	resp, err := http.Post(
+	req, err := http.NewRequest(
+		http.MethodDelete,
 		s.serverAgentsURLs+s.deleteInstanceEndpoint+"/"+instanceId,
-		"application/json",
 		nil,
 	)
 	if err != nil {
-		return err
+		return logAndReturnError("Error creating delete instance request: ", err.Error())
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return logAndReturnError("Error sending delete instance request: ", err.Error())
 	}
 	defer resp.Body.Close()
+
 	if err := checkIfStatusCodeIsOk(resp); err != nil {
 		return err
 	}
@@ -430,7 +445,7 @@ func (s *ServiceImpl) ListInstancesStatus() ([]ListInstancesStatusResponse, erro
 
 	var statuses []ListInstancesStatusResponse
 	if err := json.NewDecoder(resp.Body).Decode(&statuses); err != nil {
-		return nil, err
+		return nil, logAndReturnError("Error decoding list instances status response: ", err.Error())
 	}
 
 	return statuses, nil
@@ -449,7 +464,7 @@ func (s *ServiceImpl) getBaseImagesNames() ([]string, error) {
 
 	var baseImagesAgentResponse []ListBaseImagesAgentResponse
 	if err := json.NewDecoder(resp.Body).Decode(&baseImagesAgentResponse); err != nil {
-		return nil, err
+		return nil, logAndReturnError("Error decoding list base images agent response: ", err.Error())
 	}
 
 	var baseImages []string
@@ -468,7 +483,6 @@ func (s *ServiceImpl) checkIfVmIsRunning(vmId string, wantRunning bool) error {
 
 	for _, vm := range statuses {
 		if vm.InstanceId == vmId {
-			// TODO: add compatibility with other languages
 			if vm.Status == RUNNING_STATUS && !wantRunning {
 				return NewHttpError(
 					http.StatusBadRequest,
@@ -534,7 +548,6 @@ func (s *ServiceImpl) addBaseImagesToDb() error {
 func (s *ServiceImpl) checkIfVmExists(vmId string) error {
 	exists, err := s.db.VmExistsById(vmId)
 	if err != nil {
-		log.Println(err.Error())
 		return err
 	}
 
@@ -562,7 +575,12 @@ func checkIfStatusCodeIsOk(resp *http.Response) error {
 	if resp.StatusCode != http.StatusOK {
 		var apiErr ApiError
 		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err != nil {
-			return err
+			// If JSON decoding fails, read the response body as a string
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return logAndReturnError("Error reading response body: ", err.Error())
+			}
+			return NewHttpError(resp.StatusCode, fmt.Errorf("%s", string(body)))
 		}
 		return NewHttpError(resp.StatusCode, fmt.Errorf(apiErr.Error))
 	}
@@ -581,7 +599,7 @@ func (s *ServiceImpl) generateNewVmId() (string, error) {
 
 		errorCount++
 		if errorCount > 10 {
-			return "", fmt.Errorf("failed to generate a new VM ID")
+			return "", logAndReturnError("Failed to generate a new VM ID", "")
 		}
 	}
 
