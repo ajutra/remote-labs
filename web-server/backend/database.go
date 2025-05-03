@@ -34,6 +34,8 @@ type Database interface {
 	GetTemplateConfig(templateId string, subjectId string) (TemplateConfig, error)
 	CreateInstance(instanceId string, userId string, subjectId string, templateId string) error
 	DeleteInstance(instanceId string) error
+	CreateTemplate(templateId string, subjectId string, sourceInstanceId string, sizeMB int, vcpuCount int, vramMB int) error
+	DeleteTemplate(templateId string, subjectId string) error
 }
 
 type PostgresDatabase struct {
@@ -53,6 +55,43 @@ type DatabaseSubject struct {
 	Name          string
 	Code          string
 	ProfessorMail string
+}
+
+func (postgres *PostgresDatabase) CreateTemplate(templateId string, subjectId string, sourceInstanceId string, sizeMB int, vcpuCount int, vramMB int) error {
+	query := `
+	INSERT INTO templates (id, subject_id, source_instance_id, size_mb, vcpu_count, vram_mb)
+	VALUES (@id, @subject_id, @source_instance_id, @size_mb, @vcpu_count, @vram_mb)`
+	args := pgx.NamedArgs{
+		"id":                 templateId,
+		"subject_id":         subjectId,
+		"source_instance_id": sourceInstanceId,
+		"size_mb":            sizeMB,
+		"vcpu_count":         vcpuCount,
+		"vram_mb":            vramMB,
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error creating template: %w", err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) DeleteTemplate(templateId string, subjectId string) error {
+	query := `
+	DELETE FROM templates WHERE id = @template_id AND subject_id = @subject_id`
+	args := pgx.NamedArgs{
+		"template_id": templateId,
+		"subject_id":  subjectId,
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error deleting template: %w", err)
+	}
+
+	return nil
 }
 
 func (postgres *PostgresDatabase) GetTemplateConfig(templateId string, subjectId string) (TemplateConfig, error) {

@@ -84,3 +84,11 @@ type TemplateConfig struct {
 	VcpuCount int `json:"vcpuCount"`
 	VramMB    int `json:"vramMB"`
 }
+
+type DefineTemplateRequest struct {
+	SourceInstanceId string `json:"sourceInstanceId"`
+	SizeMB           int    `json:"sizeMB"`
+	VcpuCount        int    `json:"vcpuCount"`
+	VramMB           int    `json:"vramMB"`
+	SubjectId        string `json:"subjectId"`
+}
