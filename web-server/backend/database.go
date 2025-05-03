@@ -31,6 +31,9 @@ type Database interface {
 	DeleteSubject(subjectId string) error
 	DeleteUser(userId string) error
 	UpdateVerificationToken(email string, token uuid.UUID) error
+	GetTemplateConfig(templateId string, subjectId string) (TemplateConfig, error)
+	CreateInstance(instanceId string, userId string, subjectId string, templateId string) error
+	DeleteInstance(instanceId string) error
 }
 
 type PostgresDatabase struct {
@@ -50,6 +53,55 @@ type DatabaseSubject struct {
 	Name          string
 	Code          string
 	ProfessorMail string
+}
+
+func (postgres *PostgresDatabase) GetTemplateConfig(templateId string, subjectId string) (TemplateConfig, error) {
+	query := `
+	SELECT size_mb, vcpu_count, vram_mb
+	FROM templates
+	WHERE id = @template_id AND subject_id = @subject_id`
+	args := pgx.NamedArgs{
+		"template_id": templateId,
+		"subject_id":  subjectId,
+	}
+
+	var templateConfig TemplateConfig
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&templateConfig.SizeMB, &templateConfig.VcpuCount, &templateConfig.VramMB); err != nil {
+		return TemplateConfig{}, fmt.Errorf("error getting template config: %w", err)
+	}
+
+	return templateConfig, nil
+}
+
+func (postgres *PostgresDatabase) CreateInstance(instanceId string, userId string, subjectId string, templateId string) error {
+	query := `
+	INSERT INTO instances (id, user_id, subject_id, template_id)
+	VALUES (@id, @user_id, @subject_id, @template_id)`
+	args := pgx.NamedArgs{
+		"id":          instanceId,
+		"user_id":     userId,
+		"subject_id":  subjectId,
+		"template_id": templateId,
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error creating instance: %w", err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) DeleteInstance(instanceId string) error {
+	query := `
+	DELETE FROM instances WHERE id = @id`
+	args := pgx.NamedArgs{"id": instanceId}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error deleting instance: %w", err)
+	}
+	return nil
 }
 
 func (postgres *PostgresDatabase) CreateUser(user User) error {
@@ -544,6 +596,23 @@ func getDDLStatements() string {
 			user_id UUID NOT NULL REFERENCES users(id),
 			subject_id UUID NOT NULL REFERENCES subjects(id),
 			PRIMARY KEY (user_id, subject_id)
+		);
+
+		CREATE TABLE IF NOT EXISTS instances (
+			id VARCHAR(100) PRIMARY KEY,
+			user_id UUID NOT NULL REFERENCES users(id),
+			subject_id UUID NOT NULL REFERENCES subjects(id),
+			template_id VARCHAR(100) NOT NULL REFERENCES templates(id),
+
+		);
+
+		CREATE TABLE IF NOT EXISTS templates (
+			id VARCHAR(100) NOT NULL,
+			subject_id UUID NOT NULL REFERENCES subjects(id),
+			size_mb INTEGER NOT NULL,
+			vcpu_count INTEGER NOT NULL,
+			vram_mb INTEGER NOT NULL,
+			PRIMARY KEY (id, subject_id)
 		);
 	`
 }
