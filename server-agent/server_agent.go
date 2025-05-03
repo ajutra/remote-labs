@@ -172,7 +172,7 @@ func (agent *ServerAgentImpl) StartInstance(instanceId string) error {
 
 func (agent *ServerAgentImpl) StopInstance(instanceId string) error {
 	log.Printf("Stopping instance '%s'...", instanceId)
-
+	//TODO: check why is not stopping on some cases
 	cmd := exec.Command(
 		"virsh", "shutdown", instanceId,
 	)
@@ -199,7 +199,7 @@ func (agent *ServerAgentImpl) StopInstance(instanceId string) error {
 				retryCount++
 			} else if retryCount > MAX_SHUTDOWN_WAIT_TIME_RETRIES {
 				return agent.forceStopVM(instanceId)
-			} else {
+			} else { //Check condition, when creating a new vm, sometimesit returns without status SHUTOFF_STATUS
 				log.Printf("Stopped instance '%s' successfully!", instanceId)
 				return nil
 			}
@@ -310,39 +310,39 @@ func createDir(dirPath string) error {
 func (agent *ServerAgentImpl) createVmConfigurationFiles(request CreateVmRequest) error {
 	log.Printf("Creating %s configuration files...", request.VmType)
 
-	// Create meta-data.yaml file
+	// Create meta-data file
 	cloudInitMetadata := CloudInitMetadata{
 		InstanceId:    request.VmId,
 		LocalHostname: string(request.VmType) + "-" + request.VmId,
 	}
 
-	if err := createFileFromTemplate(request.DirPath, "meta-data.yaml", cloudInitMetadata); err != nil {
+	if err := createFileFromTemplate(request.DirPath, "meta-data", cloudInitMetadata); err != nil {
 		return err
 	}
 
-	// Handle user-data.yaml based on type
+	// Handle user-data based on type
 	if request.VmType == TemplateVm {
-		// For templates, copy user-data.yaml from source instance
+		// For templates, copy user-data from source instance
 		// because the template shouldn't need to configure new user-data, as they won't be started.
 		copyCmd := exec.Command(
 			"cp",
-			agent.vmsStoragePath+"/"+request.SourceVmId+"/user-data.yaml",
-			request.DirPath+"/user-data.yaml",
+			agent.vmsStoragePath+"/"+request.SourceVmId+"/user-data",
+			request.DirPath+"/user-data",
 		)
 
 		copyCmdOutput, err := copyCmd.CombinedOutput()
 		if err != nil {
-			return logAndReturnError("Error copying user-data.yaml file: ", string(copyCmdOutput))
+			return logAndReturnError("Error copying user-data file: ", string(copyCmdOutput))
 		}
 	} else {
-		// For instances, create user-data.yaml from template
+		// For instances, create user-data from template
 		cloudInitUserData := CloudInitUserData{
 			Username:      request.Username,
 			Password:      request.Password,
 			PublicSshKeys: request.PublicSshKeys,
 		}
 
-		if err := createFileFromTemplate(request.DirPath, "user-data.yaml", cloudInitUserData); err != nil {
+		if err := createFileFromTemplate(request.DirPath, "user-data", cloudInitUserData); err != nil {
 			return err
 		}
 	}
@@ -363,7 +363,7 @@ func createFileFromTemplate(newFilePath string, fileName string, data interface{
 	if err != nil {
 		return logAndReturnError("Error parsing "+fileName+" template: ", err.Error())
 	}
-
+	//TODO: check why there are whitespaces in the file
 	file, err := os.Create(newFilePath + "/" + fileName)
 	if err != nil {
 		return logAndReturnError("Error creating "+fileName+" file: ", err.Error())
@@ -387,7 +387,7 @@ func createCidataIso(dirPath string) error {
 		"-output", dirPath+"/cidata.iso",
 		"-V", "cidata",
 		"-r",
-		"-J", dirPath+"/meta-data.yaml", dirPath+"/user-data.yaml",
+		"-J", dirPath+"/meta-data", dirPath+"/user-data",
 	)
 
 	createIsoCmdOutput, err := createIsoCmd.CombinedOutput()
@@ -404,7 +404,7 @@ func (agent *ServerAgentImpl) createDiskImage(request CreateVmRequest) error {
 
 	var sourceVmPath string
 	if request.SourceIsBase {
-		sourceVmPath = agent.vmsStoragePath + "/" + agent.cloudInitImagesPath + "/" + request.SourceVmId + ".qcow2"
+		sourceVmPath = agent.cloudInitImagesPath + "/" + request.SourceVmId + ".qcow2"
 	} else {
 		sourceVmPath = agent.vmsStoragePath + "/" + request.SourceVmId + "/" + request.SourceVmId + ".qcow2"
 	}
