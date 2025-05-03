@@ -14,6 +14,8 @@ type InstanceService interface {
 	DeleteInstance(instanceId string) error
 	GetInstanceStatus() ([]InstanceStatus, error)
 	Bases() ([]Base, error)
+	DefineTemplate(request DefineTemplateRequest) error
+	DeleteTemplate(templateId string, subjectId string) error
 }
 
 type InstanceStatus struct {
@@ -50,6 +52,10 @@ type CreateInstanceRequest struct {
 
 type CreateInstanceResponse struct {
 	InstanceId string `json:"instanceId"`
+}
+
+type DefineTemplateResponse struct {
+	TemplateId string `json:"templateId"`
 }
 
 func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendRequest) (CreateInstanceFrontendResponse, error) {
@@ -162,7 +168,7 @@ func (s *InstanceServiceImpl) DeleteInstance(instanceId string) error {
 		return fmt.Errorf("VM manager API returned status code %d", resp.StatusCode)
 	}
 
-	s.db.DeleteInstance(instanceId)
+	err = s.db.DeleteInstance(instanceId)
 	if err != nil {
 		return fmt.Errorf("error deleting instance: %w", err)
 	}
@@ -204,10 +210,66 @@ func (s *InstanceServiceImpl) Bases() ([]Base, error) {
 		return nil, fmt.Errorf("VM manager API returned status code %d", resp.StatusCode)
 	}
 
-	var bases []ListBasesResponse
+	var bases []Base
 	if err := json.NewDecoder(resp.Body).Decode(&bases); err != nil {
 		return nil, fmt.Errorf("error decoding response: %w", err)
 	}
 
 	return bases, nil
+}
+
+func (s *InstanceServiceImpl) DefineTemplate(request DefineTemplateRequest) error {
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("error marshaling define template request: %w", err)
+	}
+
+	resp, err := http.Post(
+		fmt.Sprintf("%s/templates/define", s.vmManagerBaseUrl),
+		"application/json",
+		bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		return fmt.Errorf("error calling VM manager API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("VM manager API returned status code %d", resp.StatusCode)
+	}
+
+	var response DefineTemplateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return fmt.Errorf("error decoding response: %w", err)
+	}
+
+	err = s.db.CreateTemplate(response.TemplateId, request.SubjectId, request.SourceInstanceId, request.SizeMB, request.VcpuCount, request.VramMB)
+	if err != nil {
+		return fmt.Errorf("error creating template: %w", err)
+	}
+
+	return nil
+}
+
+func (s *InstanceServiceImpl) DeleteTemplate(templateId string, subjectId string) error {
+	resp, err := http.Post(
+		fmt.Sprintf("%s/templates/delete/%s", s.vmManagerBaseUrl, templateId),
+		"application/json",
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("error calling VM manager API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("VM manager API returned status code %d", resp.StatusCode)
+	}
+
+	err = s.db.DeleteTemplate(templateId, subjectId)
+	if err != nil {
+		return fmt.Errorf("error deleting template: %w", err)
+	}
+
+	return nil
 }

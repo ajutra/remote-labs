@@ -362,6 +362,38 @@ func (server *ApiServer) handleBases(w http.ResponseWriter, r *http.Request) err
 	return writeResponse(w, http.StatusOK, bases)
 }
 
+func (server *ApiServer) handleDefineTemplate(w http.ResponseWriter, r *http.Request) error {
+	var request DefineTemplateRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return NewHttpError(http.StatusBadRequest, err)
+	}
+
+	if err := server.instanceService.DefineTemplate(request); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, "Template defined successfully")
+}
+
+func (server *ApiServer) handleDeleteTemplate(w http.ResponseWriter, r *http.Request) error {
+	templateId := r.PathValue("templateId")
+	if templateId == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing template id"))
+	}
+
+	subjectId := r.PathValue("subjectId")
+	if subjectId == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing subject id"))
+	}
+
+	if err := server.instanceService.DeleteTemplate(templateId, subjectId); err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, "Template deleted successfully")
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -431,6 +463,8 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("DELETE /instances/delete/{instanceId}", createHttpHandler(server.handleDeleteInstance))
 	mux.HandleFunc("GET /instances/status", createHttpHandler(server.handleGetInstanceStatus))
 	mux.HandleFunc("GET /bases", createHttpHandler(server.handleBases))
+	mux.HandleFunc("POST /templates/define", createHttpHandler(server.handleDefineTemplate))
+	mux.HandleFunc("POST /templates/delete/{templateId}/{subjectId}", createHttpHandler(server.handleDeleteTemplate))
 
 	log.Println("Starting server on port", server.listenAddr)
 
