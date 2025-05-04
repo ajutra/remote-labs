@@ -6,7 +6,6 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-  SheetClose,
 } from '@/components/ui/sheet'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from './ui/button'
@@ -22,15 +21,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select'
+import { AlertCircle } from 'lucide-react'
+import VirtualMachineConfig from './VirtualMachineConfig'
+import { Checkbox } from './ui/checkbox'
+import { useAuth } from '@/context/AuthContext'
 
 const CreateSubjectSheet: React.FC = () => {
   const { toast } = useToast()
+  const [open, setOpen] = React.useState(false)
+  const [customizeVm, setCustomizeVm] = React.useState(false)
+  const [vmUsername, setVmUsername] = React.useState('')
+  const [vmPassword, setVmPassword] = React.useState('')
+  const { user } = useAuth()
+
+  // Set default values for VM configuration
+  React.useEffect(() => {
+    setVmOs('debian12')
+    setVmRam('4')
+    setVmCpu('2')
+    setVmStorage('10')
+  }, [])
 
   const handleSuccess = () => {
     toast({
       title: 'Subject Created',
       description: 'The subject has been created successfully.',
     })
+    setOpen(false)
   }
 
   const {
@@ -58,14 +75,43 @@ const CreateSubjectSheet: React.FC = () => {
     setVmCpu,
     vmStorage,
     setVmStorage,
-    useQcow2,
-    setUseQcow2,
-    qcow2File,
-    setQcow2File,
   } = useCreateSubject(handleSuccess)
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (customizeVm) {
+      if (!vmUsername || !vmPassword) {
+        toast({
+          title: 'Error',
+          description:
+            'Please fill in all virtual machine configuration fields.',
+          variant: 'destructive',
+        })
+        return
+      }
+      if (!user?.publicSshKeys || user.publicSshKeys.length === 0) {
+        toast({
+          title: 'Error',
+          description:
+            'You must have at least one SSH key to create a subject with a customized virtual machine.',
+          variant: 'destructive',
+        })
+        return
+      }
+    }
+    if (!vmOs || !vmRam || !vmCpu || !vmStorage) {
+      toast({
+        title: 'Error',
+        description: 'Please select all virtual machine configuration options.',
+        variant: 'destructive',
+      })
+      return
+    }
+    await handleCreateSubject()
+  }
+
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <Button className="w-full">Create a new subject</Button>
       </SheetTrigger>
@@ -73,11 +119,12 @@ const CreateSubjectSheet: React.FC = () => {
         <SheetHeader>
           <SheetTitle>Create a new subject</SheetTitle>
           <SheetDescription>
-            Fill in the details to create a new subject.
+            Fill in the details to create a new subject. All fields are
+            required.
           </SheetDescription>
         </SheetHeader>
         <ScrollArea className="h-full">
-          <div className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <Label htmlFor="subjectName">Subject Name</Label>
               <Input
@@ -85,9 +132,14 @@ const CreateSubjectSheet: React.FC = () => {
                 value={subjectName}
                 onChange={(e) => setSubjectName(e.target.value)}
                 placeholder="Enter subject name"
+                className={
+                  error === 'Subject name is required' ? 'border-red-500' : ''
+                }
               />
               {error === 'Subject name is required' && (
-                <p className="text-red-500">{error}</p>
+                <p className="mt-1 text-sm text-red-500">
+                  Subject name is required
+                </p>
               )}
             </div>
             <div>
@@ -97,38 +149,58 @@ const CreateSubjectSheet: React.FC = () => {
                 value={subjectCode}
                 onChange={handleSubjectCodeChange}
                 placeholder="Enter subject code"
+                className={
+                  codeError || error === 'Subject code is required'
+                    ? 'border-red-500'
+                    : ''
+                }
               />
-              <p className="text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Subject code must be numeric
               </p>
-              {codeError && <p className="text-red-500">{codeError}</p>}
+              {codeError && (
+                <p className="mt-1 text-sm text-red-500">{codeError}</p>
+              )}
               {error === 'Subject code is required' && (
-                <p className="text-red-500">{error}</p>
+                <p className="mt-1 text-sm text-red-500">
+                  Subject code is required
+                </p>
               )}
             </div>
             <div>
-              <Label htmlFor="professorEmails">Professor Emails</Label>
+              <Label htmlFor="professorEmails">Other Professors' Emails</Label>
               <div className="flex space-x-2">
                 <Input
                   id="professorEmails"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
                   placeholder="Enter professor email"
+                  className={
+                    error === 'Email must be a valid @tecnocampus.cat address'
+                      ? 'border-red-500'
+                      : ''
+                  }
                 />
-                <Button onClick={handleAddEmail}>Add</Button>
+                <Button type="button" onClick={handleAddEmail}>
+                  Add
+                </Button>
               </div>
               {error === 'Email must be a valid @tecnocampus.cat address' && (
-                <p className="text-red-500">{error}</p>
+                <p className="mt-1 text-sm text-red-500">
+                  Email must be a valid @tecnocampus.cat address
+                </p>
               )}
               <div className="mt-2 space-y-1">
                 {professorEmails.map((email) => (
                   <div
                     key={email}
-                    className="flex items-center justify-between"
+                    className="flex items-center justify-between rounded-md bg-muted p-2"
                   >
-                    <span>{email}</span>
+                    <span className="text-sm">{email}</span>
                     <Button
-                      variant="destructive"
+                      type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleRemoveEmail(email)}
                     >
                       Remove
@@ -145,10 +217,20 @@ const CreateSubjectSheet: React.FC = () => {
                 onChange={(e) => setStudentEmails(e.target.value)}
                 placeholder="Enter student emails, one per line"
                 rows={5}
+                className={
+                  error === 'Some student emails are invalid'
+                    ? 'border-red-500'
+                    : ''
+                }
               />
-              <p className="text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Enter each student email on a new line
               </p>
+              {error === 'Some student emails are invalid' && (
+                <p className="mt-1 text-sm text-red-500">
+                  Some student emails are invalid
+                </p>
+              )}
             </div>
 
             {/* VM Configuration Section */}
@@ -157,122 +239,135 @@ const CreateSubjectSheet: React.FC = () => {
                 Virtual Machine Configuration
               </h3>
 
-              <div className="mb-4 flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="useQcow2"
-                  checked={useQcow2}
-                  onChange={(e) => setUseQcow2(e.target.checked)}
-                />
-                <Label htmlFor="useQcow2">Use existing qcow2 image</Label>
+              <div className="mb-4">
+                <Label htmlFor="vmOs">Operating System</Label>
+                <Select value={vmOs} onValueChange={setVmOs} required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select OS" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="debian12">Debian 12</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              {useQcow2 ? (
+              <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <Label htmlFor="qcow2">Qcow2 Image File</Label>
-                  <Input
-                    id="qcow2"
-                    type="file"
-                    accept=".qcow2"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setQcow2File(e.target.files[0])
-                      }
-                    }}
+                  <Label htmlFor="vmRam">RAM (GB)</Label>
+                  <Select value={vmRam} onValueChange={setVmRam} required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select RAM" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[1, 2, 4, 8, 16, 32].map((value) => (
+                        <SelectItem key={value} value={value.toString()}>
+                          {value} GB
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="vmCpu">CPU Cores</Label>
+                  <Select value={vmCpu} onValueChange={setVmCpu} required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select CPU Cores" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[2, 4, 6, 8, 10, 12, 14, 16].map((value) => (
+                        <SelectItem key={value} value={value.toString()}>
+                          {value} Cores
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="vmStorage">Storage (GB)</Label>
+                  <Select
+                    value={vmStorage}
+                    onValueChange={setVmStorage}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Storage" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 50 }, (_, i) => i + 1).map(
+                        (value) => (
+                          <SelectItem key={value} value={value.toString()}>
+                            {value} GB
+                          </SelectItem>
+                        )
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <Checkbox
+                  id="customizeVm"
+                  checked={customizeVm}
+                  onChange={(e) => setCustomizeVm(e.target.checked)}
+                  label="Customize virtual machine before creating template"
+                />
+                <p className="mt-1 text-sm text-muted-foreground">
+                  If enabled, you will be able to configure the virtual machine
+                  before creating the template. This allows you to install
+                  additional software and configure the system according to your
+                  needs.
+                </p>
+              </div>
+
+              {customizeVm && (
+                <div className="mt-4">
+                  <VirtualMachineConfig
+                    username={vmUsername}
+                    setUsername={setVmUsername}
+                    password={vmPassword}
+                    setPassword={setVmPassword}
+                    error={error}
                   />
                 </div>
-              ) : (
-                <>
-                  <div className="mb-4">
-                    <Label htmlFor="vmOs">Operating System</Label>
-                    <Select value={vmOs} onValueChange={setVmOs}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select OS" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="debian12">Debian 12</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="vmRam">RAM (GB)</Label>
-                      <Input
-                        id="vmRam"
-                        type="number"
-                        min="1"
-                        max="32"
-                        value={vmRam}
-                        onChange={(e) => setVmRam(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="vmCpu">CPU Cores</Label>
-                      <Input
-                        id="vmCpu"
-                        type="number"
-                        min="1"
-                        max="16"
-                        value={vmCpu}
-                        onChange={(e) => setVmCpu(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="vmStorage">Storage (GB)</Label>
-                      <Input
-                        id="vmStorage"
-                        type="number"
-                        min="10"
-                        max="1000"
-                        value={vmStorage}
-                        onChange={(e) => setVmStorage(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </>
               )}
             </div>
 
-            <SheetClose asChild>
-              <Button onClick={handleCreateSubject}>Create Subject</Button>
-            </SheetClose>
-            {error === 'Some student emails are invalid' && (
-              <p className="text-red-500">{error}</p>
-            )}
             {validationResults.length > 0 && (
-              <div className="mt-4">
-                <h3 className="text-lg font-bold">Validation Results</h3>
-                <table className="mt-2 w-full border-collapse border border-gray-300">
-                  <thead>
-                    <tr>
-                      <th className="border border-gray-300 px-2 py-1">
-                        Email
-                      </th>
-                      <th className="border border-gray-300 px-2 py-1">
-                        Valid
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {validationResults.map((result, index) => (
-                      <tr
-                        key={index}
-                        className={result.valid ? 'bg-green-100' : 'bg-red-100'}
-                      >
-                        <td className="border border-gray-300 px-2 py-1">
-                          {result.email}
-                        </td>
-                        <td className="border border-gray-300 px-2 py-1">
-                          {result.valid ? 'Yes' : 'No'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="rounded-md bg-red-50 p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <AlertCircle className="h-5 w-5 text-red-400" />
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-red-800">
+                      Validation Results
+                    </h3>
+                    <div className="mt-2 text-sm text-red-700">
+                      <ul className="list-disc space-y-1 pl-5">
+                        {validationResults.map((result, index) => (
+                          <li key={index}>
+                            {result.email}: {result.valid ? 'Valid' : 'Invalid'}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
-          </div>
+
+            <div className="flex justify-end space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">Create Subject</Button>
+            </div>
+          </form>
         </ScrollArea>
       </SheetContent>
     </Sheet>
