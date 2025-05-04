@@ -152,7 +152,6 @@ func (server *ApiServer) handleListAllUsersBySubjectId(w http.ResponseWriter, r 
 
 func (server *ApiServer) handleValidateUserCredentials(w http.ResponseWriter, r *http.Request) error {
 	var request ValidateUserRequest
-
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		return NewHttpError(http.StatusBadRequest, err)
 	}

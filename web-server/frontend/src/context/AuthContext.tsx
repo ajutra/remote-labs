@@ -24,6 +24,7 @@ interface AuthContextType {
     password: string
   ) => Promise<{ error?: string }>
   logout: () => void
+  fetchUserDetails: (userId: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -59,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         name: userData.name,
         mail: userData.mail,
         role: userData.role,
-        publicSshKeys: userData.publicSshKeys,
+        publicSshKeys: userData.publicSshKeys || [],
       })
       setIsLoggedIn(true)
     } else {
@@ -135,6 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         login,
         register,
         logout,
+        fetchUserDetails,
       }}
     >
       {children}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { useTranslation } from 'react-i18next'
 import { getEnv } from '@/utils/Env'
@@ -13,6 +13,13 @@ export const useUserSettings = () => {
   const [success, setSuccess] = useState<string | null>(null)
   const [sshKeys, setSshKeys] = useState<string[]>([])
   const [newSshKey, setNewSshKey] = useState('')
+
+  // Inicializar las claves SSH desde el contexto
+  useEffect(() => {
+    if (user?.publicSshKeys) {
+      setSshKeys(user.publicSshKeys)
+    }
+  }, [user])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -35,7 +42,7 @@ export const useUserSettings = () => {
         body: JSON.stringify({
           userId: user?.id,
           password: password || '',
-          publicSshKeys: sshKeys.length > 0 ? sshKeys : [''],
+          publicSshKeys: sshKeys,
         }),
       })
 
@@ -46,6 +53,9 @@ export const useUserSettings = () => {
       setSuccess(t('Profile updated successfully'))
       setPassword('')
       setConfirmPassword('')
+
+      // Recargar la página para actualizar el contexto
+      window.location.reload()
     } catch {
       setError(t('Failed to update profile'))
     } finally {

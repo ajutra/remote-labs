@@ -44,11 +44,12 @@ type PostgresDatabase struct {
 }
 
 type DatabaseUser struct {
-	ID       uuid.UUID
-	Role     Role
-	Name     string
-	Mail     string
-	Password string
+	ID            uuid.UUID
+	Role          Role
+	Name          string
+	Mail          string
+	Password      string
+	PublicSshKeys []string
 }
 
 type DatabaseSubject struct {
@@ -73,6 +74,7 @@ func (postgres *PostgresDatabase) UpdateUser(userId string, password string, pub
 		query = `
 		UPDATE users SET public_ssh_keys = @public_ssh_keys WHERE id = @id`
 		args = pgx.NamedArgs{
+			"id":              userId,
 			"public_ssh_keys": publicSshKeys,
 		}
 	}
@@ -356,30 +358,23 @@ func (postgres *PostgresDatabase) ListAllUsersBySubjectId(subjectId string) ([]U
 }
 
 func (postgres *PostgresDatabase) ValidateUser(mail, password string) (User, error) {
-	// First, try to find the user in the users table
+
 	query := `
 	SELECT u.id, r.role, u.name, u.mail, u.password
 	FROM users u
 	JOIN roles r ON u.role_id = r.id
-	WHERE u.mail = @mail AND u.password = @password`
-	args := pgx.NamedArgs{"mail": mail, "password": password}
+	WHERE u.mail = @mail`
+	args := pgx.NamedArgs{"mail": mail}
 
 	var dbUser DatabaseUser
 	err := postgres.db.QueryRow(context.Background(), query, args).Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password)
-	if err == nil {
-		return dbUser.toUser(), nil
-	}
-
-	// If not found in users table, check unverified_users table
-	query = `
-	SELECT u.id, r.role, u.name, u.mail, u.password
-	FROM unverified_users u
-	JOIN roles r ON u.role_id = r.id
-	WHERE u.mail = @mail AND u.password = @password`
-
-	err = postgres.db.QueryRow(context.Background(), query, args).Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password)
 	if err != nil {
 		return User{}, fmt.Errorf("error validating user: %w", err)
+	}
+
+	// Comparar la contraseña en texto plano con el hash almacenado
+	if !CheckPasswordHash(password, dbUser.Password) {
+		return User{}, fmt.Errorf("invalid password")
 	}
 
 	return dbUser.toUser(), nil
@@ -394,7 +389,7 @@ func (postgres *PostgresDatabase) GetUser(userId string) (User, error) {
 	args := pgx.NamedArgs{"id": userId}
 
 	var dbUser DatabaseUser
-	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password); err != nil {
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password, &dbUser.PublicSshKeys); err != nil {
 		return User{}, fmt.Errorf("error getting user: %w", err)
 	}
 
@@ -555,11 +550,12 @@ func (postgres *PostgresDatabase) VerifyUser(token string) error {
 
 func (user *User) toDatabaseUser() DatabaseUser {
 	return DatabaseUser{
-		ID:       user.ID,
-		Role:     user.Role,
-		Name:     user.Name,
-		Mail:     user.Mail,
-		Password: user.Password,
+		ID:            user.ID,
+		Role:          user.Role,
+		Name:          user.Name,
+		Mail:          user.Mail,
+		Password:      user.Password,
+		PublicSshKeys: user.PublicSshKeys,
 	}
 }
 
@@ -583,11 +579,12 @@ func (dbSubject *DatabaseSubject) toSubject() Subject {
 
 func (dbUser *DatabaseUser) toUser() User {
 	return User{
-		ID:       dbUser.ID,
-		Role:     dbUser.Role,
-		Name:     dbUser.Name,
-		Mail:     dbUser.Mail,
-		Password: dbUser.Password,
+		ID:            dbUser.ID,
+		Role:          dbUser.Role,
+		Name:          dbUser.Name,
+		Mail:          dbUser.Mail,
+		Password:      dbUser.Password,
+		PublicSshKeys: dbUser.PublicSshKeys,
 	}
 }
 
@@ -660,20 +657,6 @@ func getDDLStatements() string {
 			main_professor_id UUID NOT NULL REFERENCES users(id)
 		);
 
-		CREATE TABLE IF NOT EXISTS user_subjects (
-			user_id UUID NOT NULL REFERENCES users(id),
-			subject_id UUID NOT NULL REFERENCES subjects(id),
-			PRIMARY KEY (user_id, subject_id)
-		);
-
-		CREATE TABLE IF NOT EXISTS instances (
-			id VARCHAR(100) PRIMARY KEY,
-			user_id UUID NOT NULL REFERENCES users(id),
-			subject_id UUID NOT NULL REFERENCES subjects(id),
-			template_id VARCHAR(100) NOT NULL REFERENCES templates(id),
-
-		);
-
 		CREATE TABLE IF NOT EXISTS templates (
 			id VARCHAR(100) NOT NULL,
 			subject_id UUID NOT NULL REFERENCES subjects(id),
@@ -681,6 +664,21 @@ func getDDLStatements() string {
 			vcpu_count INTEGER NOT NULL,
 			vram_mb INTEGER NOT NULL,
 			PRIMARY KEY (id, subject_id)
+		);
+
+		CREATE TABLE IF NOT EXISTS instances (
+			id VARCHAR(100) PRIMARY KEY,
+			user_id UUID NOT NULL REFERENCES users(id),
+			subject_id UUID NOT NULL REFERENCES subjects(id),
+			template_id VARCHAR(100) NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (template_id, subject_id) REFERENCES templates(id, subject_id)
+		);
+
+		CREATE TABLE IF NOT EXISTS user_subjects (
+			user_id UUID NOT NULL REFERENCES users(id),
+			subject_id UUID NOT NULL REFERENCES subjects(id),
+			PRIMARY KEY (user_id, subject_id)
 		);
 	`
 }
