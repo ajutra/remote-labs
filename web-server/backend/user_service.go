@@ -65,6 +65,7 @@ func (s *UserServiceImpl) ListAllUsersBySubjectId(subjectId string) ([]UserRespo
 }
 
 func (s *UserServiceImpl) ValidateUser(request ValidateUserRequest) (ValidateUserResponse, error) {
+
 	user, err := s.db.ValidateUser(request.Mail, request.Password)
 	if err != nil {
 		return ValidateUserResponse{}, NewHttpError(http.StatusBadRequest, err)
@@ -137,10 +138,11 @@ func (createProfReq *CreateProfessorRequest) toUser() (User, string) {
 
 func (user User) toUserResponse() UserResponse {
 	return UserResponse{
-		ID:   user.ID,
-		Name: user.Name,
-		Role: string(user.Role),
-		Mail: user.Mail,
+		ID:            user.ID.String(),
+		Name:          user.Name,
+		Role:          string(user.Role),
+		Mail:          user.Mail,
+		PublicSshKeys: user.PublicSshKeys,
 	}
 }
 

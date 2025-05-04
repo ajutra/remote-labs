@@ -3,11 +3,12 @@ package main
 import "github.com/google/uuid"
 
 type User struct {
-	ID       uuid.UUID
-	Role     Role
-	Name     string
-	Mail     string
-	Password string
+	ID            uuid.UUID
+	Role          Role
+	Name          string
+	Mail          string
+	Password      string
+	PublicSshKeys []string
 }
 
 type Role string
@@ -26,10 +27,11 @@ type Subject struct {
 }
 
 type UserResponse struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
-	Role string    `json:"role"`
-	Mail string    `json:"mail"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	Role          string   `json:"role"`
+	Mail          string   `json:"mail"`
+	PublicSshKeys []string `json:"publicSshKeys"`
 }
 
 type CreateUserRequest struct {
