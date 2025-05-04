@@ -37,7 +37,9 @@ func (s *UserServiceImpl) CreateUser(request CreateUserRequest) error {
 }
 
 func (s *UserServiceImpl) CreateUnverifiedUser(request CreateUserRequest, verificationToken uuid.UUID) error {
+	hashedPassword, _ := HashPassword(request.Password)
 	user := request.toUser()
+	user.Password = hashedPassword
 	return s.db.CreateUnverifiedUser(user, verificationToken)
 }
 
