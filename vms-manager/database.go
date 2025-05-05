@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -162,8 +163,11 @@ func (postgres *PostgresDatabase) GetDescriptionById(vmId string) (string, error
 }
 
 func (postgres *PostgresDatabase) DeleteBaseImagesNotInList(baseImages []string) error {
+	// Convert baseImages string slice to string
+	baseImagesString := strings.Join(baseImages, ", ")
+
 	query := "DELETE FROM vms WHERE is_base = true AND description NOT IN @base_images"
-	args := pgx.NamedArgs{"base_images": baseImages}
+	args := pgx.NamedArgs{"base_images": baseImagesString}
 
 	if _, err := postgres.db.Exec(context.Background(), query, args); err != nil {
 		return logAndReturnError("Error deleting base images not in list: ", err.Error())
