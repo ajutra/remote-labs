@@ -23,7 +23,7 @@ const SHUTOFF_STATUS = "shut off"
 var templateFS embed.FS
 
 type ServerAgent interface {
-	ListBaseImages() ([]ListBaseImagesResponse, error)
+	ListBaseImages() (ListBaseImagesResponse, error)
 	DefineTemplate(request DefineTemplateRequest) error
 	CreateInstance(request CreateInstanceRequest) error
 	DeleteVm(vmId string) error
@@ -70,7 +70,7 @@ type CloudInitUserData struct {
 	PublicSshKeys []string
 }
 
-func (agent *ServerAgentImpl) ListBaseImages() ([]ListBaseImagesResponse, error) {
+func (agent *ServerAgentImpl) ListBaseImages() (ListBaseImagesResponse, error) {
 	log.Printf("Getting base images...")
 
 	cmd := exec.Command(
@@ -81,7 +81,7 @@ func (agent *ServerAgentImpl) ListBaseImages() ([]ListBaseImagesResponse, error)
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		return nil, logAndReturnError("Error listing base VMs: ", string(output))
+		return ListBaseImagesResponse{}, logAndReturnError("Error listing base VMs: ", string(output))
 	}
 
 	files := strings.Split(string(output), "\n")
@@ -302,9 +302,8 @@ func (agent *ServerAgentImpl) createVm(request CreateVmRequest) error {
 	return nil
 }
 
-func toListBaseImagesResponse(fileNames []string) []ListBaseImagesResponse {
-	response := []ListBaseImagesResponse{}
-	response = append(response, ListBaseImagesResponse{FileNames: fileNames})
+func toListBaseImagesResponse(fileNames []string) ListBaseImagesResponse {
+	response := ListBaseImagesResponse{FileNames: fileNames}
 	return response
 }
 
