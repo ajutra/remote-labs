@@ -82,11 +82,6 @@ func (s *SubjService) RemoveUserFromSubject(userEmail, subjectId string) error {
 		return err
 	}
 
-	// Check if user is main professor of the subject
-	if s.db.IsMainProfessorOfSubject(userEmail, subjectId) {
-		return NewHttpError(http.StatusBadRequest, fmt.Errorf("main professor cannot be removed from subject"))
-	}
-
 	return s.db.RemoveUserFromSubject(userEmail, subjectId)
 }
 
