@@ -19,6 +19,7 @@ type Database interface {
 	DeleteVm(vmId string) error
 	GetBaseImages() ([]Vm, error)
 	GetDescriptionById(vmId string) (string, error)
+	DeleteBaseImagesNotInList(baseImages []string) error
 }
 
 type PostgresDatabase struct {
@@ -158,6 +159,17 @@ func (postgres *PostgresDatabase) GetDescriptionById(vmId string) (string, error
 	}
 
 	return description, nil
+}
+
+func (postgres *PostgresDatabase) DeleteBaseImagesNotInList(baseImages []string) error {
+	query := "DELETE FROM vms WHERE is_base = true AND description NOT IN @base_images"
+	args := pgx.NamedArgs{"base_images": baseImages}
+
+	if _, err := postgres.db.Exec(context.Background(), query, args); err != nil {
+		return logAndReturnError("Error deleting base images not in list: ", err.Error())
+	}
+
+	return nil
 }
 
 func (postgres *PostgresDatabase) toVm(dbVm DatabaseVM) Vm {

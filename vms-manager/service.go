@@ -521,6 +521,11 @@ func (s *ServiceImpl) addBaseImagesToDb() error {
 		return err
 	}
 
+	// Delete all base images that are not in the list of base images
+	if err := s.db.DeleteBaseImagesNotInList(baseImages); err != nil {
+		return err
+	}
+
 	for _, baseImage := range baseImages {
 		exists, err := s.db.VmExistsByDescription(baseImage)
 		if err != nil {
