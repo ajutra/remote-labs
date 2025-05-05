@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -163,14 +162,36 @@ func (postgres *PostgresDatabase) GetDescriptionById(vmId string) (string, error
 }
 
 func (postgres *PostgresDatabase) DeleteBaseImagesNotInList(baseImages []string) error {
-	// Convert baseImages string slice to string
-	baseImagesString := strings.Join(baseImages, ",")
+	//Get all base images from the database
+	query := "SELECT description FROM vms WHERE is_base = true"
+	rows, err := postgres.db.Query(context.Background(), query)
+	if err != nil {
+		return logAndReturnError("Error getting base images: ", err.Error())
+	}
+	defer rows.Close()
 
-	query := "DELETE FROM vms WHERE is_base = true AND description NOT IN @base_images"
-	args := pgx.NamedArgs{"base_images": baseImagesString}
+	for rows.Next() {
+		var dbVm DatabaseVM
+		if err := rows.Scan(&dbVm.Description); err != nil {
+			return logAndReturnError("Error getting base images: ", err.Error())
+		}
 
-	if _, err := postgres.db.Exec(context.Background(), query, args); err != nil {
-		return logAndReturnError("Error deleting base images not in list: ", err.Error())
+		found := false
+		for _, baseImage := range baseImages {
+			if *dbVm.Description == baseImage {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			query := "DELETE FROM vms WHERE is_base = true AND description = @description"
+			args := pgx.NamedArgs{"description": *dbVm.Description}
+
+			if _, err := postgres.db.Exec(context.Background(), query, args); err != nil {
+				return logAndReturnError("Error deleting base images not in list: ", err.Error())
+			}
+		}
 	}
 
 	return nil
