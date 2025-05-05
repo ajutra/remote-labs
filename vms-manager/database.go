@@ -164,7 +164,7 @@ func (postgres *PostgresDatabase) GetDescriptionById(vmId string) (string, error
 
 func (postgres *PostgresDatabase) DeleteBaseImagesNotInList(baseImages []string) error {
 	// Convert baseImages string slice to string
-	baseImagesString := strings.Join(baseImages, ", ")
+	baseImagesString := strings.Join(baseImages, ",")
 
 	query := "DELETE FROM vms WHERE is_base = true AND description NOT IN @base_images"
 	args := pgx.NamedArgs{"base_images": baseImagesString}
