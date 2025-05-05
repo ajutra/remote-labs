@@ -34,7 +34,7 @@ type Database interface {
 	GetTemplateConfig(templateId string, subjectId string) (TemplateConfig, error)
 	CreateInstance(instanceId string, userId string, subjectId string, templateId string) error
 	DeleteInstance(instanceId string) error
-	CreateTemplate(templateId string, subjectId string, sourceInstanceId string, sizeMB int, vcpuCount int, vramMB int) error
+	CreateTemplate(templateId string, subjectId string, sourceInstanceId string, sizeMB int, vcpuCount int, vramMB int, isValidated bool, description string) error
 	DeleteTemplate(templateId string, subjectId string) error
 	UpdateUser(userId string, password string, publicSshKeys []string) error
 }
@@ -87,10 +87,10 @@ func (postgres *PostgresDatabase) UpdateUser(userId string, password string, pub
 	return nil
 }
 
-func (postgres *PostgresDatabase) CreateTemplate(templateId string, subjectId string, sourceInstanceId string, sizeMB int, vcpuCount int, vramMB int) error {
+func (postgres *PostgresDatabase) CreateTemplate(templateId string, subjectId string, sourceInstanceId string, sizeMB int, vcpuCount int, vramMB int, isValidated bool, description string) error {
 	query := `
-	INSERT INTO templates (id, subject_id, source_instance_id, size_mb, vcpu_count, vram_mb)
-	VALUES (@id, @subject_id, @source_instance_id, @size_mb, @vcpu_count, @vram_mb)`
+	INSERT INTO templates (id, subject_id, source_instance_id, size_mb, vcpu_count, vram_mb, is_validated, description)
+	VALUES (@id, @subject_id, @source_instance_id, @size_mb, @vcpu_count, @vram_mb, @is_validated, @description)`
 	args := pgx.NamedArgs{
 		"id":                 templateId,
 		"subject_id":         subjectId,
@@ -98,6 +98,8 @@ func (postgres *PostgresDatabase) CreateTemplate(templateId string, subjectId st
 		"size_mb":            sizeMB,
 		"vcpu_count":         vcpuCount,
 		"vram_mb":            vramMB,
+		"is_validated":       isValidated,
+		"description":        description,
 	}
 
 	_, err := postgres.db.Exec(context.Background(), query, args)
@@ -660,9 +662,11 @@ func getDDLStatements() string {
 		CREATE TABLE IF NOT EXISTS templates (
 			id VARCHAR(100) NOT NULL,
 			subject_id UUID NOT NULL REFERENCES subjects(id),
+			description TEXT NOT NULL,
 			size_mb INTEGER NOT NULL,
 			vcpu_count INTEGER NOT NULL,
 			vram_mb INTEGER NOT NULL,
+			is_validated BOOLEAN NOT NULL DEFAULT FALSE,
 			PRIMARY KEY (id, subject_id)
 		);
 

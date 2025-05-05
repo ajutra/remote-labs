@@ -93,6 +93,8 @@ type DefineTemplateRequest struct {
 	VcpuCount        int    `json:"vcpuCount"`
 	VramMB           int    `json:"vramMB"`
 	SubjectId        string `json:"subjectId"`
+	Description      string `json:"description"`
+	IsValidated      bool   `json:"isValidated"`
 }
 
 type UpdateUserRequest struct {

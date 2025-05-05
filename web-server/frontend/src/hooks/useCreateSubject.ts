@@ -1,8 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface ValidationResult {
   email: string
   valid: boolean
+}
+
+interface Base {
+  base_id: string
+  description: string
 }
 
 const useCreateSubject = (onSuccess: () => void) => {
@@ -16,14 +21,41 @@ const useCreateSubject = (onSuccess: () => void) => {
   const [validationResults, setValidationResults] = useState<
     ValidationResult[]
   >([])
+  const [bases, setBases] = useState<Base[]>([])
+  const [isLoadingBases, setIsLoadingBases] = useState(true)
 
   // VM Configuration
-  const [vmOs, setVmOs] = useState('debian12')
+  const [vmOs, setVmOs] = useState('')
   const [vmRam, setVmRam] = useState('2')
   const [vmCpu, setVmCpu] = useState('1')
   const [vmStorage, setVmStorage] = useState('20')
   const [useQcow2, setUseQcow2] = useState(false)
   const [qcow2File, setQcow2File] = useState<File | null>(null)
+  const [templateDescription, setTemplateDescription] = useState('')
+
+  useEffect(() => {
+    const fetchBases = async () => {
+      try {
+        const response = await fetch('/api/bases')
+        if (!response.ok) {
+          throw new Error('Failed to fetch bases')
+        }
+        const data = await response.json()
+        setBases(data)
+        if (data.length > 0) {
+          setVmOs(data[0].base_id)
+        }
+      } catch (error) {
+        console.error('Error fetching bases:', error)
+        setBases([])
+        setVmOs('')
+      } finally {
+        setIsLoadingBases(false)
+      }
+    }
+
+    fetchBases()
+  }, [])
 
   const handleAddEmail = () => {
     if (
@@ -53,17 +85,21 @@ const useCreateSubject = (onSuccess: () => void) => {
     }
   }
 
-  const handleCreateSubject = () => {
-    setError('') // Clear previous errors
+  const handleCreateSubject = async () => {
+    if (
+      !subjectName ||
+      !subjectCode ||
+      !vmOs ||
+      !vmRam ||
+      !vmCpu ||
+      !vmStorage ||
+      !templateDescription
+    ) {
+      setError('All fields are required')
+      return
+    }
 
-    if (!subjectName) {
-      setError('Subject name is required')
-      return
-    }
-    if (!subjectCode) {
-      setError('Subject code is required')
-      return
-    }
+    setError('') // Clear previous errors
 
     const emails = studentEmails
       .split('\n')
@@ -104,12 +140,13 @@ const useCreateSubject = (onSuccess: () => void) => {
     setEmailInput('')
     setStudentEmails('')
     setValidationResults([])
-    setVmOs('debian12')
+    setVmOs('')
     setVmRam('2')
     setVmCpu('1')
     setVmStorage('20')
     setUseQcow2(false)
     setQcow2File(null)
+    setTemplateDescription('')
 
     // Call onSuccess callback
     onSuccess()
@@ -145,6 +182,10 @@ const useCreateSubject = (onSuccess: () => void) => {
     setUseQcow2,
     qcow2File,
     setQcow2File,
+    templateDescription,
+    setTemplateDescription,
+    bases,
+    isLoadingBases,
   }
 }
 

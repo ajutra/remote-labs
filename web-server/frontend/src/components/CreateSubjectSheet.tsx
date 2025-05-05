@@ -75,6 +75,10 @@ const CreateSubjectSheet: React.FC = () => {
     setVmCpu,
     vmStorage,
     setVmStorage,
+    templateDescription,
+    setTemplateDescription,
+    isLoadingBases,
+    bases,
   } = useCreateSubject(handleSuccess)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -242,13 +246,32 @@ const CreateSubjectSheet: React.FC = () => {
               <div className="mb-4">
                 <Label htmlFor="vmOs">Operating System</Label>
                 <Select value={vmOs} onValueChange={setVmOs} required>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select OS" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="debian12">Debian 12</SelectItem>
+                    {isLoadingBases ? (
+                      <SelectItem value="loading" disabled>
+                        Loading operating systems...
+                      </SelectItem>
+                    ) : bases.length === 0 ? (
+                      <SelectItem value="no-bases" disabled>
+                        No operating systems available
+                      </SelectItem>
+                    ) : (
+                      bases.map((base) => (
+                        <SelectItem key={base.base_id} value={base.base_id}>
+                          {base.description}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
+                {bases.length === 0 && !isLoadingBases && (
+                  <p className="mt-1 text-sm text-red-500">
+                    Please ensure the server is running and try again
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-3 gap-4">
@@ -303,6 +326,24 @@ const CreateSubjectSheet: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="mt-4">
+                <Label htmlFor="templateDescription">
+                  Template Description
+                </Label>
+                <Textarea
+                  id="templateDescription"
+                  value={templateDescription}
+                  onChange={(e) => setTemplateDescription(e.target.value)}
+                  placeholder="Enter a description for this template"
+                  className="mt-1"
+                  required
+                />
+                <p className="mt-1 text-sm text-muted-foreground">
+                  This description will help identify this template if there are
+                  multiple templates for this subject.
+                </p>
               </div>
 
               <div className="mt-4">

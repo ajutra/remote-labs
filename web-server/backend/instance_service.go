@@ -243,7 +243,7 @@ func (s *InstanceServiceImpl) DefineTemplate(request DefineTemplateRequest) erro
 		return fmt.Errorf("error decoding response: %w", err)
 	}
 
-	err = s.db.CreateTemplate(response.TemplateId, request.SubjectId, request.SourceInstanceId, request.SizeMB, request.VcpuCount, request.VramMB)
+	err = s.db.CreateTemplate(response.TemplateId, request.SubjectId, request.SourceInstanceId, request.SizeMB, request.VcpuCount, request.VramMB, request.IsValidated, request.Description)
 	if err != nil {
 		return fmt.Errorf("error creating template: %w", err)
 	}
