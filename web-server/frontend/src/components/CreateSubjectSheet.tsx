@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, Loader2 } from 'lucide-react'
 import VirtualMachineConfig from './VirtualMachineConfig'
 import { Checkbox } from './ui/checkbox'
 import { useAuth } from '@/context/AuthContext'
@@ -29,18 +29,9 @@ import { useAuth } from '@/context/AuthContext'
 const CreateSubjectSheet: React.FC = () => {
   const { toast } = useToast()
   const [open, setOpen] = React.useState(false)
-  const [customizeVm, setCustomizeVm] = React.useState(false)
   const [vmUsername, setVmUsername] = React.useState('')
   const [vmPassword, setVmPassword] = React.useState('')
   const { user } = useAuth()
-
-  // Set default values for VM configuration
-  React.useEffect(() => {
-    setVmOs('debian12')
-    setVmRam('4')
-    setVmCpu('2')
-    setVmStorage('10')
-  }, [])
 
   const handleSuccess = () => {
     toast({
@@ -75,10 +66,14 @@ const CreateSubjectSheet: React.FC = () => {
     setVmCpu,
     vmStorage,
     setVmStorage,
+    customizeVm,
+    setCustomizeVm,
     templateDescription,
     setTemplateDescription,
-    isLoadingBases,
     bases,
+    isLoadingBases,
+    isCreating,
+    creationError,
   } = useCreateSubject(handleSuccess)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -398,15 +393,43 @@ const CreateSubjectSheet: React.FC = () => {
               </div>
             )}
 
+            {creationError && (
+              <div className="rounded-md bg-red-50 p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <AlertCircle className="h-5 w-5 text-red-400" />
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-red-800">
+                      Error creating subject
+                    </h3>
+                    <div className="mt-2 text-sm text-red-700">
+                      {creationError}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end space-x-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
+                disabled={isCreating}
               >
                 Cancel
               </Button>
-              <Button type="submit">Create Subject</Button>
+              <Button type="submit" disabled={isCreating}>
+                {isCreating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating subject...
+                  </>
+                ) : (
+                  'Create Subject'
+                )}
+              </Button>
             </div>
           </form>
         </ScrollArea>

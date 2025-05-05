@@ -19,15 +19,16 @@ type Database interface {
 	CreateUser(user User) error
 	UserExistsByMail(mail string) error
 	CreateSubject(subject Subject) error
+	UserExistsByEmailorError(userEmail string) error
 	UserExistsById(userId string) error
 	ListAllSubjectsByUserId(userId string) ([]Subject, error)
 	ListAllUsersBySubjectId(subjectId string) ([]User, error)
 	ValidateUser(mail, password string) (User, error)
 	GetUser(userId string) (User, error)
 	SubjectExistsById(subjectId string) error
-	EnrollUserInSubject(userId, subjectId string) error
-	IsMainProfessorOfSubject(userId, subjectId string) bool
-	RemoveUserFromSubject(userId, subjectId string) error
+	EnrollUserInSubject(userEmail, subjectId string) error
+	IsMainProfessorOfSubject(userEmail, subjectId string) bool
+	RemoveUserFromSubject(userEmail, subjectId string) error
 	DeleteSubject(subjectId string) error
 	DeleteUser(userId string) error
 	UpdateVerificationToken(email string, token uuid.UUID) error
@@ -37,6 +38,10 @@ type Database interface {
 	CreateTemplate(templateId string, subjectId string, sourceInstanceId string, sizeMB int, vcpuCount int, vramMB int, isValidated bool, description string) error
 	DeleteTemplate(templateId string, subjectId string) error
 	UpdateUser(userId string, password string, publicSshKeys []string) error
+	GetUserIdByEmail(userEmail string) (string, error)
+	DeleteAllUsersFromSubject(subjectId string) error
+	ListAllTemplatesBySubjectId(subjectId string) ([]string, error)
+	ListAllInstancesBySubjectId(subjectId string) ([]string, error)
 }
 
 type PostgresDatabase struct {
@@ -57,6 +62,46 @@ type DatabaseSubject struct {
 	Name          string
 	Code          string
 	ProfessorMail string
+}
+
+func (postgres *PostgresDatabase) ListAllTemplatesBySubjectId(subjectId string) ([]string, error) {
+	query := "SELECT id FROM templates WHERE subject_id = @subject_id"
+	args := pgx.NamedArgs{"subject_id": subjectId}
+
+	var templates []string
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&templates); err != nil {
+		return nil, fmt.Errorf("error listing templates: %w", err)
+	}
+
+	return templates, nil
+}
+
+func (postgres *PostgresDatabase) ListAllInstancesBySubjectId(subjectId string) ([]string, error) {
+	query := "SELECT id FROM instances WHERE subject_id = @subject_id"
+	args := pgx.NamedArgs{"subject_id": subjectId}
+
+	var instances []string
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&instances); err != nil {
+		return nil, fmt.Errorf("error listing instances: %w", err)
+	}
+
+	return instances, nil
+}
+
+func (postgres *PostgresDatabase) UserExistsById(userId string) error {
+	query := "SELECT EXISTS(SELECT 1 FROM users WHERE id = @id)"
+	args := pgx.NamedArgs{"id": userId}
+
+	var exists bool
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
+		return fmt.Errorf("error checking if user exists: %w", err)
+	}
+
+	if !exists {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with id %s does not exist", userId))
+	}
+
+	return nil
 }
 
 func (postgres *PostgresDatabase) UpdateUser(userId string, password string, publicSshKeys []string) error {
@@ -280,9 +325,9 @@ func (postgres *PostgresDatabase) CreateSubject(subject Subject) error {
 	return nil
 }
 
-func (postgres *PostgresDatabase) UserExistsById(userId string) error {
-	query := "SELECT EXISTS(SELECT 1 FROM users WHERE id = @id)"
-	args := pgx.NamedArgs{"id": userId}
+func (postgres *PostgresDatabase) UserExistsByEmailorError(userEmail string) error {
+	query := "SELECT EXISTS(SELECT 1 FROM users WHERE mail = @mail)"
+	args := pgx.NamedArgs{"mail": userEmail}
 
 	var exists bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
@@ -290,7 +335,7 @@ func (postgres *PostgresDatabase) UserExistsById(userId string) error {
 	}
 
 	if !exists {
-		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with id %s does not exist", userId))
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with email %s does not exist", userEmail))
 	}
 
 	return nil
@@ -414,13 +459,18 @@ func (postgres *PostgresDatabase) SubjectExistsById(subjectId string) error {
 	return nil
 }
 
-func (postgres *PostgresDatabase) EnrollUserInSubject(userId, subjectId string) error {
+func (postgres *PostgresDatabase) EnrollUserInSubject(userEmail, subjectId string) error {
+	userId, err := postgres.GetUserIdByEmail(userEmail)
+	if err != nil {
+		return fmt.Errorf("error getting user id: %w", err)
+	}
+
 	query := `
 	INSERT INTO user_subjects (user_id, subject_id)
 	VALUES (@user_id, @subject_id)`
 	args := pgx.NamedArgs{"user_id": userId, "subject_id": subjectId}
 
-	_, err := postgres.db.Exec(context.Background(), query, args)
+	_, err = postgres.db.Exec(context.Background(), query, args)
 	if err != nil {
 		return fmt.Errorf("error enrolling user in subject: %w", err)
 	}
@@ -440,15 +490,32 @@ func (postgres *PostgresDatabase) IsMainProfessorOfSubject(userId, subjectId str
 	return isMainProfessor
 }
 
-func (postgres *PostgresDatabase) RemoveUserFromSubject(userId, subjectId string) error {
+func (postgres *PostgresDatabase) RemoveUserFromSubject(userEmail, subjectId string) error {
+	userId, err := postgres.GetUserIdByEmail(userEmail)
+	if err != nil {
+		return fmt.Errorf("error getting user id: %w", err)
+	}
+
 	query := `
 	DELETE FROM user_subjects
 	WHERE user_id = @user_id AND subject_id = @subject_id`
 	args := pgx.NamedArgs{"user_id": userId, "subject_id": subjectId}
 
-	_, err := postgres.db.Exec(context.Background(), query, args)
+	_, err = postgres.db.Exec(context.Background(), query, args)
 	if err != nil {
 		return fmt.Errorf("error removing user from subject: %w", err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) DeleteAllUsersFromSubject(subjectId string) error {
+	query := "DELETE FROM user_subjects WHERE subject_id = @subject_id"
+	args := pgx.NamedArgs{"subject_id": subjectId}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error deleting all users from subject: %w", err)
 	}
 
 	return nil
@@ -713,4 +780,16 @@ func (postgres *PostgresDatabase) UpdateVerificationToken(email string, token uu
 	}
 
 	return nil
+}
+
+func (postgres *PostgresDatabase) GetUserIdByEmail(userEmail string) (string, error) {
+	query := "SELECT id FROM users WHERE mail = @mail"
+	args := pgx.NamedArgs{"mail": userEmail}
+
+	var userId string
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&userId); err != nil {
+		return "", fmt.Errorf("error getting user id: %w", err)
+	}
+
+	return userId, nil
 }
