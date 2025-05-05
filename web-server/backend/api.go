@@ -180,13 +180,13 @@ func (server *ApiServer) handleGetUserInfo(w http.ResponseWriter, r *http.Reques
 
 func (server *ApiServer) handleEnrollUserInSubject(w http.ResponseWriter, r *http.Request) error {
 	subjectId := r.PathValue("subjectId")
-	userId := r.PathValue("userId")
+	userEmail := r.PathValue("userEmail")
 
-	if subjectId == "" || userId == "" {
-		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing subject or user id"))
+	if subjectId == "" || userEmail == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing subject or user email"))
 	}
 
-	if err := server.subjectService.EnrollUserInSubject(userId, subjectId); err != nil {
+	if err := server.subjectService.EnrollUserInSubject(userEmail, subjectId); err != nil {
 		return err
 	}
 
@@ -195,13 +195,13 @@ func (server *ApiServer) handleEnrollUserInSubject(w http.ResponseWriter, r *htt
 
 func (server *ApiServer) handleRemoveUserFromSubject(w http.ResponseWriter, r *http.Request) error {
 	subjectId := r.PathValue("subjectId")
-	userId := r.PathValue("userId")
+	userEmail := r.PathValue("userEmail")
 
-	if subjectId == "" || userId == "" {
-		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing subject or user id"))
+	if subjectId == "" || userEmail == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing subject or user email"))
 	}
 
-	if err := server.subjectService.RemoveUserFromSubject(userId, subjectId); err != nil {
+	if err := server.subjectService.RemoveUserFromSubject(userEmail, subjectId); err != nil {
 		return err
 	}
 
@@ -464,8 +464,8 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("GET /subjects/{id}/users", createHttpHandler(server.handleListAllUsersBySubjectId))
 	mux.HandleFunc("POST /users/validate", createHttpHandler(server.handleValidateUserCredentials))
 	mux.HandleFunc("GET /users/{id}", createHttpHandler(server.handleGetUserInfo))
-	mux.HandleFunc("PUT /subjects/{subjectId}/add/users/{userId}", createHttpHandler(server.handleEnrollUserInSubject))
-	mux.HandleFunc("DELETE /subjects/{subjectId}/remove/users/{userId}", createHttpHandler(server.handleRemoveUserFromSubject))
+	mux.HandleFunc("PUT /subjects/{subjectId}/add/users/{userEmail}", createHttpHandler(server.handleEnrollUserInSubject))
+	mux.HandleFunc("DELETE /subjects/{subjectId}/remove/users/{userEmail}", createHttpHandler(server.handleRemoveUserFromSubject))
 	mux.HandleFunc("DELETE /subjects/{id}", createHttpHandler(server.handleDeleteSubject))
 	mux.HandleFunc("DELETE /users/delete/{id}", createHttpHandler(server.handleDeleteUser))
 	mux.HandleFunc("POST /test-email", createHttpHandler(server.handleTestEmail))

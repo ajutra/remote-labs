@@ -20,9 +20,9 @@ func main() {
 	defer db.Close()
 	vmManagerBaseUrl := os.Getenv("VM_MANAGER_BASE_URL")
 	userService := NewUserService(db)
-	subjectService := NewSubjectService(db)
-	emailService := NewEmailService()
 	instanceService := NewInstanceService(db, vmManagerBaseUrl)
+	subjectService := NewSubjectService(db, instanceService)
+	emailService := NewEmailService()
 
 	listenAddr := getListenAddr()
 	server := NewApiServer(
