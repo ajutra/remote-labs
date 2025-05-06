@@ -4,7 +4,7 @@ import { useVMs } from '@/hooks/useVMs'
 import { VMsTable } from '@/components/vm/VMsTable'
 
 const MyLabs: React.FC = () => {
-  const { vms, loading } = useVMs()
+  const { vms, loading, refresh } = useVMs()
 
   if (loading) {
     return (
@@ -30,7 +30,7 @@ const MyLabs: React.FC = () => {
           </p>
         </div>
       ) : (
-        <VMsTable vms={vms} />
+        <VMsTable vms={vms} onRefresh={refresh} />
       )}
     </div>
   )

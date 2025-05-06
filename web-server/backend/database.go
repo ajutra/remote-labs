@@ -43,7 +43,7 @@ type Database interface {
 	ListAllTemplatesBySubjectId(subjectId string) ([]string, error)
 	ListAllInstancesBySubjectId(subjectId string) ([]string, error)
 	GetInstanceInfo(instanceId string) (InstanceInfo, error)
-	GetInstanceStatusByUserId(userId string) ([]InstanceStatus, error)
+	GetInstanceIdsByUserId(userId string) ([]string, error)
 }
 
 type PostgresDatabase struct {
@@ -67,12 +67,27 @@ type DatabaseSubject struct {
 }
 
 type InstanceInfo struct {
-	UserId      string
-	SubjectId   string
-	TemplateId  string
-	CreatedAt   string
-	UserMail    string
-	SubjectName string
+	UserId              string
+	SubjectId           string
+	TemplateId          string
+	CreatedAt           string
+	UserMail            string
+	SubjectName         string
+	Template_vcpu_count int
+	Template_vram_mb    int
+	Template_size_mb    int
+}
+
+func (postgres *PostgresDatabase) GetInstanceIdsByUserId(userId string) ([]string, error) {
+	query := "SELECT id FROM instances WHERE user_id = @user_id"
+	args := pgx.NamedArgs{"user_id": userId}
+
+	var instanceIds []string
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&instanceIds); err != nil {
+		return nil, fmt.Errorf("error getting instance ids: %w", err)
+	}
+
+	return instanceIds, nil
 }
 
 func (postgres *PostgresDatabase) ListAllTemplatesBySubjectId(subjectId string) ([]string, error) {
@@ -807,10 +822,11 @@ func (postgres *PostgresDatabase) GetUserIdByEmail(userEmail string) (string, er
 
 func (postgres *PostgresDatabase) GetInstanceInfo(instanceId string) (InstanceInfo, error) {
 	query := `
-	SELECT i.user_id, i.subject_id, i.template_id, i.created_at, u.mail, s.name
+	SELECT i.user_id, i.subject_id, i.template_id, i.created_at, u.mail, s.name, t.vcpu_count, t.vram_mb, t.size_mb
 	FROM instances i
 	JOIN users u ON i.user_id = u.id
 	JOIN subjects s ON i.subject_id = s.id
+	JOIN templates t ON i.template_id = t.id
 	WHERE i.id = @instance_id`
 	args := pgx.NamedArgs{"instance_id": instanceId}
 
@@ -822,6 +838,9 @@ func (postgres *PostgresDatabase) GetInstanceInfo(instanceId string) (InstanceIn
 		&info.CreatedAt,
 		&info.UserMail,
 		&info.SubjectName,
+		&info.Template_vcpu_count,
+		&info.Template_vram_mb,
+		&info.Template_size_mb,
 	); err != nil {
 		return InstanceInfo{}, fmt.Errorf("error getting instance info: %w", err)
 	}

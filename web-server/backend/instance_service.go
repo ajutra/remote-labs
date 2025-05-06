@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 )
 
 type InstanceService interface {
@@ -20,14 +21,17 @@ type InstanceService interface {
 }
 
 type InstanceStatus struct {
-	InstanceId  string `json:"instanceId"`
-	Status      string `json:"status"`
-	UserId      string `json:"userId"`
-	SubjectId   string `json:"subjectId"`
-	TemplateId  string `json:"templateId"`
-	CreatedAt   string `json:"createdAt"`
-	UserMail    string `json:"userMail"`
-	SubjectName string `json:"subjectName"`
+	InstanceId          string `json:"instanceId"`
+	Status              string `json:"status"`
+	UserId              string `json:"userId"`
+	SubjectId           string `json:"subjectId"`
+	TemplateId          string `json:"templateId"`
+	CreatedAt           string `json:"createdAt"`
+	UserMail            string `json:"userMail"`
+	SubjectName         string `json:"subjectName"`
+	Template_vcpu_count int    `json:"template_vcpu_count"`
+	Template_vram_mb    int    `json:"template_vram_mb"`
+	Template_size_mb    int    `json:"template_size_mb"`
 }
 
 type Base struct {
@@ -317,17 +321,62 @@ func (s *InstanceServiceImpl) DeleteTemplate(templateId string, subjectId string
 }
 
 func (s *InstanceServiceImpl) GetInstanceStatusByUserId(userId string) ([]InstanceStatus, error) {
-	statuses, err := s.GetInstanceStatus()
+	resp, err := http.Get(
+		fmt.Sprintf("%s/instances/status", s.vmManagerBaseUrl),
+	)
 	if err != nil {
-		return nil, fmt.Errorf("error getting instance status: %w", err)
+		return nil, fmt.Errorf("error calling VM manager API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("VM manager API returned status code %d", resp.StatusCode)
 	}
 
-	var filteredStatuses []InstanceStatus
-	for _, status := range statuses {
-		if status.UserId == userId {
-			filteredStatuses = append(filteredStatuses, status)
+	var vmStatuses []vmManagerStatus
+	if err := json.NewDecoder(resp.Body).Decode(&vmStatuses); err != nil {
+		return nil, fmt.Errorf("error decoding response: %w", err)
+	}
+	var filteredStatuses []vmManagerStatus
+	for _, vmStatus := range vmStatuses {
+		var instanceIds []string
+		instanceIds, err = s.db.GetInstanceIdsByUserId(userId)
+		if err != nil {
+			return nil, fmt.Errorf("error getting instance ids: %w", err)
+		}
+		if slices.Contains(instanceIds, vmStatus.InstanceId) {
+			filteredStatuses = append(filteredStatuses, vmStatus)
 		}
 	}
+	var enrichedStatuses []InstanceStatus
+	for _, vmStatus := range filteredStatuses {
+		status := InstanceStatus{
+			InstanceId: vmStatus.InstanceId,
+			Status:     vmStatus.Status,
+		}
 
-	return filteredStatuses, nil
+		// Get additional info from database
+		info, err := s.db.GetInstanceInfo(vmStatus.InstanceId)
+		if err != nil {
+			// If there's an error, set error values for the additional fields
+			status.UserId = "error"
+			status.SubjectId = "error"
+			status.TemplateId = "error"
+			status.CreatedAt = "error"
+			status.UserMail = "error"
+			status.SubjectName = "error"
+		} else {
+			// If successful, set the values from the database
+			status.UserId = info.UserId
+			status.SubjectId = info.SubjectId
+			status.TemplateId = info.TemplateId
+			status.CreatedAt = info.CreatedAt
+			status.UserMail = info.UserMail
+			status.SubjectName = info.SubjectName
+		}
+
+		enrichedStatuses = append(enrichedStatuses, status)
+	}
+
+	return enrichedStatuses, nil
 }

@@ -1,11 +1,13 @@
-import { Subject } from './subject'
-
 export interface VMListItem {
-  id: string
-  name: string
-  status: 'running' | 'stopped' | 'paused'
-  subject: Subject
-  ipAddress: string
-  os: string
-  lastStarted: string
+  instanceId: string
+  status: string
+  userId: string
+  subjectId: string
+  templateId: string
+  createdAt: string
+  userMail: string
+  subjectName: string
+  template_vcpu_count: number
+  template_vram_mb: number
+  template_size_mb: number
 }

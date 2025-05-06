@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import React from 'react'
 import {
   Table,
   TableBody,
@@ -8,72 +8,111 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { Loader2 } from 'lucide-react'
+import { RefreshCw, Play, Square, Trash2 } from 'lucide-react'
 import { VMListItem } from '@/types/vm'
 
 interface VMsTableProps {
   vms: VMListItem[]
+  onRefresh: () => void
 }
 
-export const VMsTable = ({ vms }: VMsTableProps) => {
-  const navigate = useNavigate()
+const getStatusColor = (status: string) => {
+  switch (status.toLowerCase()) {
+    case 'running':
+      return 'text-green-600'
+    case 'stopped':
+      return 'text-yellow-600'
+    case 'error':
+      return 'text-red-600'
+    default:
+      return 'text-gray-600'
+  }
+}
 
+export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Subject</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>IP Address</TableHead>
-            <TableHead>OS</TableHead>
-            <TableHead>Last Started</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {vms.map((vm) => (
-            <TableRow key={vm.id}>
-              <TableCell className="font-medium">{vm.name}</TableCell>
-              <TableCell>
-                <div>
-                  <div className="font-medium">{vm.subject.name}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {vm.subject.code}
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center space-x-2">
-                  <div
-                    className={`h-2 w-2 rounded-full ${
-                      vm.status === 'running'
-                        ? 'bg-green-500'
-                        : vm.status === 'stopped'
-                          ? 'bg-red-500'
-                          : 'bg-yellow-500'
-                    }`}
-                  />
-                  <span className="capitalize">{vm.status}</span>
-                </div>
-              </TableCell>
-              <TableCell>{vm.ipAddress}</TableCell>
-              <TableCell>{vm.os}</TableCell>
-              <TableCell>{vm.lastStarted}</TableCell>
-              <TableCell className="text-right">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate(`/subjects/${vm.subject.id}`)}
-                >
-                  View Details
-                </Button>
-              </TableCell>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Your Virtual Machines</h2>
+        <Button onClick={onRefresh} variant="outline" size="sm">
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Refresh
+        </Button>
+      </div>
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Status</TableHead>
+              <TableHead>Subject</TableHead>
+              <TableHead>Created At</TableHead>
+              <TableHead>Resources</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {vms.map((vm) => (
+              <TableRow key={vm.instanceId}>
+                <TableCell>
+                  <span className={`font-medium ${getStatusColor(vm.status)}`}>
+                    {vm.status.toUpperCase()}
+                  </span>
+                </TableCell>
+                <TableCell className="font-medium">{vm.subjectName}</TableCell>
+                <TableCell>{vm.createdAt}</TableCell>
+                <TableCell>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">vCPUs:</span>
+                      <span>{vm.template_vcpu_count}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">RAM:</span>
+                      <span>{vm.template_vram_mb} MB</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">Disk:</span>
+                      <span>{vm.template_size_mb} MB</span>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        // TODO: Implement start action
+                      }}
+                    >
+                      <Play className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        // TODO: Implement stop action
+                      }}
+                    >
+                      <Square className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        // TODO: Implement delete action
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   )
 }
