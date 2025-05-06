@@ -284,8 +284,8 @@ func (postgres *PostgresDatabase) UserExistsByMail(mail string) error {
 		return fmt.Errorf("error checking if user exists: %w", err)
 	}
 
-	if exists {
-		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with mail %s already exists", mail))
+	if !exists {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with mail %s does not exist", mail))
 	}
 
 	// Check if user exists in unverified_users table
@@ -295,7 +295,7 @@ func (postgres *PostgresDatabase) UserExistsByMail(mail string) error {
 	}
 
 	if exists {
-		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with mail %s already exists but is not verified", mail))
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with mail %s exists but is not verified", mail))
 	}
 
 	return nil
