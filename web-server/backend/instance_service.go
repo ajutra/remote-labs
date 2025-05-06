@@ -13,14 +13,21 @@ type InstanceService interface {
 	StopInstance(instanceId string) error
 	DeleteInstance(instanceId string) error
 	GetInstanceStatus() ([]InstanceStatus, error)
+	GetInstanceStatusByUserId(userId string) ([]InstanceStatus, error)
 	Bases() ([]Base, error)
 	DefineTemplate(request DefineTemplateRequest) error
 	DeleteTemplate(templateId string, subjectId string) error
 }
 
 type InstanceStatus struct {
-	InstanceId string `json:"instanceId"`
-	Status     string `json:"status"`
+	InstanceId  string `json:"instanceId"`
+	Status      string `json:"status"`
+	UserId      string `json:"userId"`
+	SubjectId   string `json:"subjectId"`
+	TemplateId  string `json:"templateId"`
+	CreatedAt   string `json:"createdAt"`
+	UserMail    string `json:"userMail"`
+	SubjectName string `json:"subjectName"`
 }
 
 type Base struct {
@@ -56,6 +63,11 @@ type CreateInstanceResponse struct {
 
 type DefineTemplateResponse struct {
 	TemplateId string `json:"templateId"`
+}
+
+type vmManagerStatus struct {
+	InstanceId string `json:"instanceId"`
+	Status     string `json:"status"`
 }
 
 func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendRequest) (CreateInstanceFrontendResponse, error) {
@@ -189,12 +201,42 @@ func (s *InstanceServiceImpl) GetInstanceStatus() ([]InstanceStatus, error) {
 		return nil, fmt.Errorf("VM manager API returned status code %d", resp.StatusCode)
 	}
 
-	var statuses []InstanceStatus
-	if err := json.NewDecoder(resp.Body).Decode(&statuses); err != nil {
+	var vmStatuses []vmManagerStatus
+	if err := json.NewDecoder(resp.Body).Decode(&vmStatuses); err != nil {
 		return nil, fmt.Errorf("error decoding response: %w", err)
 	}
 
-	return statuses, nil
+	var enrichedStatuses []InstanceStatus
+	for _, vmStatus := range vmStatuses {
+		status := InstanceStatus{
+			InstanceId: vmStatus.InstanceId,
+			Status:     vmStatus.Status,
+		}
+
+		// Get additional info from database
+		info, err := s.db.GetInstanceInfo(vmStatus.InstanceId)
+		if err != nil {
+			// If there's an error, set error values for the additional fields
+			status.UserId = "error"
+			status.SubjectId = "error"
+			status.TemplateId = "error"
+			status.CreatedAt = "error"
+			status.UserMail = "error"
+			status.SubjectName = "error"
+		} else {
+			// If successful, set the values from the database
+			status.UserId = info.UserId
+			status.SubjectId = info.SubjectId
+			status.TemplateId = info.TemplateId
+			status.CreatedAt = info.CreatedAt
+			status.UserMail = info.UserMail
+			status.SubjectName = info.SubjectName
+		}
+
+		enrichedStatuses = append(enrichedStatuses, status)
+	}
+
+	return enrichedStatuses, nil
 }
 
 func (s *InstanceServiceImpl) Bases() ([]Base, error) {
@@ -272,4 +314,20 @@ func (s *InstanceServiceImpl) DeleteTemplate(templateId string, subjectId string
 	}
 
 	return nil
+}
+
+func (s *InstanceServiceImpl) GetInstanceStatusByUserId(userId string) ([]InstanceStatus, error) {
+	statuses, err := s.GetInstanceStatus()
+	if err != nil {
+		return nil, fmt.Errorf("error getting instance status: %w", err)
+	}
+
+	var filteredStatuses []InstanceStatus
+	for _, status := range statuses {
+		if status.UserId == userId {
+			filteredStatuses = append(filteredStatuses, status)
+		}
+	}
+
+	return filteredStatuses, nil
 }

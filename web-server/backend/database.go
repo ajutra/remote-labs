@@ -42,6 +42,8 @@ type Database interface {
 	DeleteAllUsersFromSubject(subjectId string) error
 	ListAllTemplatesBySubjectId(subjectId string) ([]string, error)
 	ListAllInstancesBySubjectId(subjectId string) ([]string, error)
+	GetInstanceInfo(instanceId string) (InstanceInfo, error)
+	GetInstanceStatusByUserId(userId string) ([]InstanceStatus, error)
 }
 
 type PostgresDatabase struct {
@@ -62,6 +64,15 @@ type DatabaseSubject struct {
 	Name          string
 	Code          string
 	ProfessorMail string
+}
+
+type InstanceInfo struct {
+	UserId      string
+	SubjectId   string
+	TemplateId  string
+	CreatedAt   string
+	UserMail    string
+	SubjectName string
 }
 
 func (postgres *PostgresDatabase) ListAllTemplatesBySubjectId(subjectId string) ([]string, error) {
@@ -792,4 +803,28 @@ func (postgres *PostgresDatabase) GetUserIdByEmail(userEmail string) (string, er
 	}
 
 	return userId, nil
+}
+
+func (postgres *PostgresDatabase) GetInstanceInfo(instanceId string) (InstanceInfo, error) {
+	query := `
+	SELECT i.user_id, i.subject_id, i.template_id, i.created_at, u.mail, s.name
+	FROM instances i
+	JOIN users u ON i.user_id = u.id
+	JOIN subjects s ON i.subject_id = s.id
+	WHERE i.id = @instance_id`
+	args := pgx.NamedArgs{"instance_id": instanceId}
+
+	var info InstanceInfo
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(
+		&info.UserId,
+		&info.SubjectId,
+		&info.TemplateId,
+		&info.CreatedAt,
+		&info.UserMail,
+		&info.SubjectName,
+	); err != nil {
+		return InstanceInfo{}, fmt.Errorf("error getting instance info: %w", err)
+	}
+
+	return info, nil
 }
