@@ -407,6 +407,19 @@ func (server *ApiServer) handleDeleteTemplate(w http.ResponseWriter, r *http.Req
 	return writeResponse(w, http.StatusOK, "Template deleted successfully")
 }
 
+func (server *ApiServer) handleGetInstanceStatusByUserId(w http.ResponseWriter, r *http.Request) error {
+	userId := r.PathValue("userId")
+	if userId == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing user id"))
+	}
+
+	statuses, err := server.instanceService.GetInstanceStatusByUserId(userId)
+	if err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, statuses)
+}
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -479,6 +492,7 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("GET /bases", createHttpHandler(server.handleBases))
 	mux.HandleFunc("POST /templates/define", createHttpHandler(server.handleDefineTemplate))
 	mux.HandleFunc("POST /templates/delete/{templateId}/{subjectId}", createHttpHandler(server.handleDeleteTemplate))
+	mux.HandleFunc("GET /instances/status/{userId}", createHttpHandler(server.handleGetInstanceStatusByUserId))
 
 	log.Println("Starting server on port", server.listenAddr)
 
