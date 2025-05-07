@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import {
   Table,
   TableBody,
@@ -13,7 +13,7 @@ import { VMListItem } from '@/types/vm'
 
 interface VMsTableProps {
   vms: VMListItem[]
-  onRefresh: () => void
+  onRefresh: () => Promise<void>
 }
 
 const getStatusColor = (status: string) => {
@@ -30,13 +30,31 @@ const getStatusColor = (status: string) => {
 }
 
 export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      await onRefresh()
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Your Virtual Machines</h2>
-        <Button onClick={onRefresh} variant="outline" size="sm">
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Refresh
+        <Button
+          onClick={handleRefresh}
+          variant="outline"
+          size="sm"
+          disabled={isRefreshing}
+        >
+          <RefreshCw
+            className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
+          />
+          {isRefreshing ? 'Refreshing...' : 'Refresh'}
         </Button>
       </div>
 
