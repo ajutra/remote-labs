@@ -1,25 +1,23 @@
 import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Play, Square, Trash2, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { VMListItem } from '@/types/vm'
+import { VMStartButton } from './VMStartButton'
+import { VMStopButton } from './VMStopButton'
+import { VMDeleteButton } from './VMDeleteButton'
+import { DefineTemplateButton } from './DefineTemplateButton'
 
 interface VMDetailsProps {
   vm: VMListItem
   onRefresh: () => Promise<void>
-  onStart: () => Promise<void>
-  onStop: () => Promise<void>
-  onDelete: () => Promise<void>
-  isActionLoading: boolean
+  isTeacherOrAdmin: boolean
 }
 
 export const VMDetails: React.FC<VMDetailsProps> = ({
   vm,
   onRefresh,
-  onStart,
-  onStop,
-  onDelete,
-  isActionLoading,
+  isTeacherOrAdmin,
 }) => {
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -40,16 +38,11 @@ export const VMDetails: React.FC<VMDetailsProps> = ({
         <div className="space-y-1">
           <CardTitle className="text-2xl font-bold">{vm.subjectName}</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Created at: {vm.createdAt}
+            Created at: {new Date(vm.createdAt).toLocaleDateString()}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onRefresh}
-            disabled={isActionLoading}
-          >
+          <Button variant="outline" size="sm" onClick={onRefresh}>
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
@@ -79,13 +72,13 @@ export const VMDetails: React.FC<VMDetailsProps> = ({
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">RAM</span>
                     <span className="font-medium">
-                      {vm.template_vram_mb} MB
+                      {vm.template_vram_mb / 1024} GB
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Disk</span>
                     <span className="font-medium">
-                      {vm.template_size_mb} MB
+                      {vm.template_size_mb / 1024} GB
                     </span>
                   </div>
                 </div>
@@ -133,33 +126,18 @@ export const VMDetails: React.FC<VMDetailsProps> = ({
 
           {/* Actions Section */}
           <div className="flex justify-end space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onStart}
-              disabled={isActionLoading || vm.status === 'running'}
-            >
-              <Play className="mr-2 h-4 w-4" />
-              Start
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onStop}
-              disabled={isActionLoading || vm.status === 'stopped'}
-            >
-              <Square className="mr-2 h-4 w-4" />
-              Stop
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={onDelete}
-              disabled={isActionLoading}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
-            </Button>
+            {vm.status === 'stopped' && (
+              <VMStartButton instanceId={vm.instanceId} onSuccess={onRefresh} />
+            )}
+            {vm.status === 'running' && (
+              <VMStopButton instanceId={vm.instanceId} onSuccess={onRefresh} />
+            )}
+            <DefineTemplateButton
+              vm={vm}
+              onSuccess={onRefresh}
+              isTeacherOrAdmin={isTeacherOrAdmin}
+            />
+            <VMDeleteButton instanceId={vm.instanceId} onSuccess={onRefresh} />
           </div>
         </div>
       </CardContent>

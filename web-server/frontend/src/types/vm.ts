@@ -10,4 +10,5 @@ export interface VMListItem {
   template_vcpu_count: number
   template_vram_mb: number
   template_size_mb: number
+  template_os: string
 }
