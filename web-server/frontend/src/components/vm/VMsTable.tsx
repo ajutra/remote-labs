@@ -8,8 +8,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Play, Square, Trash2 } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { VMListItem } from '@/types/vm'
+import { VMStartButton } from './VMStartButton'
+import { VMStopButton } from './VMStopButton'
+import { VMDeleteButton } from './VMDeleteButton'
 
 interface VMsTableProps {
   vms: VMListItem[]
@@ -78,7 +81,9 @@ export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
                   </span>
                 </TableCell>
                 <TableCell className="font-medium">{vm.subjectName}</TableCell>
-                <TableCell>{vm.createdAt}</TableCell>
+                <TableCell>
+                  {new Date(vm.createdAt).toLocaleDateString()}
+                </TableCell>
                 <TableCell>
                   <div className="space-y-1 text-sm">
                     <div className="flex items-center gap-2">
@@ -87,43 +92,32 @@ export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">RAM:</span>
-                      <span>{vm.template_vram_mb} MB</span>
+                      <span>{vm.template_vram_mb / 1024} GB</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">Disk:</span>
-                      <span>{vm.template_size_mb} MB</span>
+                      <span>{vm.template_size_mb / 1024} GB</span>
                     </div>
                   </div>
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        // TODO: Implement start action
-                      }}
-                    >
-                      <Play className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        // TODO: Implement stop action
-                      }}
-                    >
-                      <Square className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => {
-                        // TODO: Implement delete action
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {vm.status === 'stopped' && (
+                      <VMStartButton
+                        instanceId={vm.instanceId}
+                        onSuccess={onRefresh}
+                      />
+                    )}
+                    {vm.status === 'running' && (
+                      <VMStopButton
+                        instanceId={vm.instanceId}
+                        onSuccess={onRefresh}
+                      />
+                    )}
+                    <VMDeleteButton
+                      instanceId={vm.instanceId}
+                      onSuccess={onRefresh}
+                    />
                   </div>
                 </TableCell>
               </TableRow>

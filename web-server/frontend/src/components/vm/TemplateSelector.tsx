@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
 import { Template } from '@/hooks/useTemplates'
 import {
@@ -10,30 +9,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { RequestLabButton } from './RequestLabButton'
 
 interface TemplateSelectorProps {
   templates: Template[]
   loading: boolean
-  onRequest: (templateId: string) => Promise<void>
+  subjectId: string
+  onRequestSuccess?: () => void
 }
 
 export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
   templates,
   loading,
-  onRequest,
+  subjectId,
+  onRequestSuccess,
 }) => {
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
-  const [requesting, setRequesting] = useState(false)
-
-  const handleRequest = async () => {
-    if (!selectedTemplate) return
-    setRequesting(true)
-    try {
-      await onRequest(selectedTemplate)
-    } finally {
-      setRequesting(false)
-    }
-  }
 
   if (loading) {
     return (
@@ -77,8 +68,8 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                     </p>
                     <div className="text-xs text-muted-foreground">
                       <p>vCPUs: {template.vcpu_count}</p>
-                      <p>RAM: {template.vram_mb} MB</p>
-                      <p>Disk: {template.size_mb} MB</p>
+                      <p>RAM: {template.vram_mb / 1024} GB</p>
+                      <p>Disk: {template.size_mb / 1024} GB</p>
                       <p>OS: {template.os}</p>
                     </div>
                   </div>
@@ -88,16 +79,13 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
           </Select>
         </div>
 
-        <Button
-          className="w-full"
-          onClick={handleRequest}
-          disabled={!selectedTemplate || requesting}
-        >
-          {requesting ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : null}
-          Request Lab
-        </Button>
+        {selectedTemplate && (
+          <RequestLabButton
+            subjectId={subjectId}
+            templateId={selectedTemplate}
+            onSuccess={onRequestSuccess}
+          />
+        )}
       </CardContent>
     </Card>
   )
