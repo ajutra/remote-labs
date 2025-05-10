@@ -13,10 +13,11 @@ import (
 
 const DEFAULT_OS_VARIANT = "debian11"
 const DEFAULT_NETWORK_BRIDGE = "virbr0"
-const AFTER_INSTALL_WAIT_TIME = 10 * time.Second
-const SHUTDOWN_WAIT_TIME = 3 * time.Second
-const RETRY_SHUTDOWN_WAIT_TIME = 5 * time.Second
-const FORCE_SHUTDOWN_WAIT_TIME = 10 * time.Second
+const VM_NETWORK_BRIDGE = "eno4"
+const AFTER_INSTALL_WAIT_TIME = 20 * time.Second
+const SHUTDOWN_WAIT_TIME = 5 * time.Second
+const RETRY_SHUTDOWN_WAIT_TIME = 10 * time.Second
+const FORCE_SHUTDOWN_WAIT_TIME = 20 * time.Second
 const SHUTOFF_STATUS = "shut off"
 
 //go:embed templates/*.tmpl
@@ -26,7 +27,7 @@ type ServerAgent interface {
 	ListBaseImages() (ListBaseImagesResponse, error)
 	DefineTemplate(request DefineTemplateRequest) error
 	CreateInstance(request CreateInstanceRequest) error
-	DeleteVm(vmId string) error
+	DeleteVm(vmId string, removeEtiquete bool) error
 	StartInstance(instanceId string) error
 	StopInstance(instanceId string) error
 	RestartInstance(instanceId string) error
@@ -57,6 +58,10 @@ type CreateVmRequest struct {
 	Username      string
 	Password      string
 	PublicSshKeys []string
+	IpAddress     string
+	Dns1          string
+	Dns2          string
+	Gateway       string
 }
 
 type CloudInitMetadata struct {
@@ -68,6 +73,14 @@ type CloudInitUserData struct {
 	Username      string
 	Password      string
 	PublicSshKeys []string
+}
+
+type CloudInitNetworkConfig struct {
+	IpAddress string
+	Netmask   string
+	Dns1      string
+	Dns2      string
+	Gateway   string
 }
 
 func (agent *ServerAgentImpl) ListBaseImages() (ListBaseImagesResponse, error) {
@@ -122,12 +135,16 @@ func (agent *ServerAgentImpl) CreateInstance(request CreateInstanceRequest) erro
 		Username:      request.Username,
 		Password:      request.Password,
 		PublicSshKeys: request.PublicSshKeys,
+		/*IpAddress:     request.IpAddress,
+		Dns1:          request.Dns1,
+		Dns2:          request.Dns2,
+		Gateway:       request.Gateway,*/
 	}
 
 	return agent.createVm(createVmRequest)
 }
 
-func (agent *ServerAgentImpl) DeleteVm(vmId string) error {
+func (agent *ServerAgentImpl) DeleteVm(vmId string, removeEtiquete bool) error {
 	log.Printf("Deleting VM '%s'...", vmId)
 
 	cmd := exec.Command(
@@ -150,6 +167,21 @@ func (agent *ServerAgentImpl) DeleteVm(vmId string) error {
 
 	log.Printf("Deleted VM '%s' successfully!", vmId)
 
+	if removeEtiquete {
+		// TODO: Make this dynamic
+		log.Printf("Removing vlan etiquete from network bridge...")
+
+		removeVlanEtiqueteCmd := exec.Command(
+			"bridge", "vlan", "del", "vid", "100", "dev", VM_NETWORK_BRIDGE, "self", // Remove self
+		)
+
+		if output, err := removeVlanEtiqueteCmd.CombinedOutput(); err != nil {
+			return logAndReturnError("Error removing vlan etiquete from network bridge: ", string(output))
+		}
+
+		log.Printf("Vlan etiquete removed from network bridge successfully!")
+	}
+
 	return nil
 }
 
@@ -167,6 +199,27 @@ func (agent *ServerAgentImpl) StartInstance(instanceId string) error {
 	}
 
 	log.Printf("Started instance '%s' successfully!", instanceId)
+
+	// TODO: Make this dynamic
+	log.Printf("Setting up network...")
+
+	addVlanEtiqueteCmd := exec.Command(
+		"bridge", "vlan", "add", "vid", "100", "dev", VM_NETWORK_BRIDGE, "self", // Remove self
+	)
+
+	if output, err := addVlanEtiqueteCmd.CombinedOutput(); err != nil {
+		return logAndReturnError("Error adding vlan etiquete to network bridge: ", string(output))
+	}
+
+	setupVmInterfaceAsAccessPortCmd := exec.Command(
+		"bridge", "vlan", "add", "vid", "100", "dev", "vlan100", "pvid", "100", "untagged",
+	)
+
+	if output, err := setupVmInterfaceAsAccessPortCmd.CombinedOutput(); err != nil {
+		return logAndReturnError("Error setting up vm interface as access port: ", string(output))
+	}
+
+	log.Printf("Network setup successfully!")
 
 	return nil
 }
@@ -356,10 +409,22 @@ func (agent *ServerAgentImpl) createVmConfigurationFiles(request CreateVmRequest
 		if err := createFileFromTemplate(request.DirPath, "user-data", cloudInitUserData); err != nil {
 			return err
 		}
+
+		// TODO: Make this dynamic
+		cloudInitNetworkConfig := CloudInitNetworkConfig{
+			IpAddress: "10.0.100.2/24",
+			Dns1:      "8.8.8.8",
+			Dns2:      "8.8.4.4",
+			Gateway:   "10.0.100.1",
+		}
+
+		if err := createFileFromTemplate(request.DirPath, "network-config", cloudInitNetworkConfig); err != nil {
+			return err
+		}
 	}
 
 	// Create cidata.iso
-	if err := createCidataIso(request.DirPath); err != nil {
+	if err := createCidataIso(request.DirPath, request.VmType == TemplateVm); err != nil {
 		return err
 	}
 
@@ -390,16 +455,23 @@ func createFileFromTemplate(newFilePath string, fileName string, data interface{
 	return nil
 }
 
-func createCidataIso(dirPath string) error {
+func createCidataIso(dirPath string, isTemplate bool) error {
 	log.Printf("Creating cidata.iso...")
 
-	createIsoCmd := exec.Command(
-		"genisoimage",
-		"-output", dirPath+"/cidata.iso",
+	files := []string{dirPath + "/meta-data", dirPath + "/user-data"}
+	if !isTemplate {
+		files = append(files, dirPath+"/network-config")
+	}
+
+	args := []string{
+		"-output", dirPath + "/cidata.iso",
 		"-V", "cidata",
 		"-r",
-		"-J", dirPath+"/meta-data", dirPath+"/user-data",
-	)
+		"-J",
+	}
+	args = append(args, files...)
+
+	createIsoCmd := exec.Command("genisoimage", args...)
 
 	createIsoCmdOutput, err := createIsoCmd.CombinedOutput()
 	if err != nil {
@@ -473,7 +545,7 @@ func (agent *ServerAgentImpl) installVm(request CreateVmRequest) error {
 		"--disk", "path="+request.DirPath+"/"+request.VmId+".qcow2,format=qcow2",
 		"--disk", "path="+request.DirPath+"/cidata.iso,device=cdrom",
 		"--os-variant", DEFAULT_OS_VARIANT,
-		"--network", "bridge="+DEFAULT_NETWORK_BRIDGE+",model=virtio",
+		"--network", "bridge="+DEFAULT_NETWORK_BRIDGE+",target=vlan100,model=virtio",
 		"--graphics", "vnc,listen=0.0.0.0",
 		"--noautoconsole",
 	)

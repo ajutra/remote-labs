@@ -63,7 +63,8 @@ func (server *ApiServer) handleCreateInstance(w http.ResponseWriter, r *http.Req
 func (server *ApiServer) handleDeleteVM(w http.ResponseWriter, r *http.Request) error {
 	vmId := r.PathValue("vmId")
 
-	if err := server.serverAgent.DeleteVm(vmId); err != nil {
+	// TODO: Make this dynamic
+	if err := server.serverAgent.DeleteVm(vmId, true); err != nil {
 		return err
 	}
 
