@@ -25,7 +25,7 @@ type ServerAgent interface {
 	ListBaseImages() (ListBaseImagesResponse, error)
 	DefineTemplate(request DefineTemplateRequest) error
 	CreateInstance(request CreateInstanceRequest) error
-	DeleteVm(vmId string, removeEtiquete bool) error
+	DeleteVm(request DeleteVmRequest) error
 	StartInstance(instanceId string) error
 	StopInstance(instanceId string) error
 	RestartInstance(instanceId string) error
@@ -144,32 +144,31 @@ func (agent *ServerAgentImpl) CreateInstance(request CreateInstanceRequest) erro
 	return agent.createVm(createVmRequest)
 }
 
-func (agent *ServerAgentImpl) DeleteVm(vmId string, removeEtiquete bool) error {
-	log.Printf("Deleting VM '%s'...", vmId)
+func (agent *ServerAgentImpl) DeleteVm(request DeleteVmRequest) error {
+	log.Printf("Deleting VM '%s'...", request.VmId)
 
 	cmd := exec.Command(
-		"virsh", "undefine", vmId, "--remove-all-storage",
+		"virsh", "undefine", request.VmId, "--remove-all-storage",
 	)
 
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		return logAndReturnError("Error deleting VM '"+vmId+"': ", string(output))
+		return logAndReturnError("Error deleting VM '"+request.VmId+"': ", string(output))
 	}
 
-	log.Printf("Removing VM '%s' files from storage...", vmId)
+	log.Printf("Removing VM '%s' files from storage...", request.VmId)
 
-	if err := os.RemoveAll(agent.vmsStoragePath + "/" + vmId); err != nil {
-		return logAndReturnError("Error deleting VM '"+vmId+"' files from storage: ", err.Error())
+	if err := os.RemoveAll(agent.vmsStoragePath + "/" + request.VmId); err != nil {
+		return logAndReturnError("Error deleting VM '"+request.VmId+"' files from storage: ", err.Error())
 	}
 
-	log.Printf("VM '%s' files removed from storage successfully!", vmId)
+	log.Printf("VM '%s' files removed from storage successfully!", request.VmId)
 
-	log.Printf("Deleted VM '%s' successfully!", vmId)
+	log.Printf("Deleted VM '%s' successfully!", request.VmId)
 
-	if removeEtiquete {
-		// TODO: Make this dynamic
-		if err := agent.removeVidFromNetworkBridge("100"); err != nil {
+	if request.RemoveEtiquete {
+		if err := agent.removeVidFromNetworkBridge(request.Vid); err != nil {
 			return err
 		}
 	}
