@@ -22,6 +22,10 @@ type CreateInstanceRequest struct {
 	Username      string   `json:"username"`
 	Password      string   `json:"password"`
 	PublicSshKeys []string `json:"publicSshKeys"`
+	/*IpAddress     string   `json:"ipAddress"`
+	Dns1          string   `json:"dns1"`
+	Dns2          string   `json:"dns2"`
+	Gateway       string   `json:"gateway"`*/
 }
 
 type ListInstancesStatusResponse struct {
