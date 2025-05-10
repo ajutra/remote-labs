@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getEnv } from '../utils/Env'
 import { useAuth } from '../context/AuthContext'
+import { useDefineTemplate, DefineTemplateParams } from './useDefineTemplate'
 
 interface ValidationResult {
   email: string
@@ -21,16 +22,6 @@ interface EnrollmentError {
   error: string
 }
 
-interface DefineTemplateRequest {
-  sourceInstanceId: string
-  sizeMB: number
-  vcpuCount: number
-  vramMB: number
-  subjectId: string
-  description: string
-  isValidated: boolean
-}
-
 interface CreateInstanceFrontendResponse {
   instanceId: string
 }
@@ -44,33 +35,28 @@ interface CreateInstanceFrontendRequest {
   publicSshKeys: string[]
 }
 
+export interface CreateSubjectParams {
+  subjectName: string
+  subjectCode: string
+  professorEmails: string[]
+  studentEmails: string
+  base: string
+  vmRam: string
+  vmCpu: string
+  vmStorage: string
+  templateDescription: string
+  customizeVm: boolean
+  vmUsername: string
+  vmPassword: string
+}
+
 const useCreateSubject = (onSuccess: () => void) => {
   const { user } = useAuth()
+  const { defineTemplate } = useDefineTemplate()
   const [isCreating, setIsCreating] = useState(false)
   const [creationError, setCreationError] = useState<string | null>(null)
-  const [subjectName, setSubjectName] = useState('')
-  const [subjectCode, setSubjectCode] = useState('')
-  const [professorEmails, setProfessorEmails] = useState<string[]>([])
-  const [emailInput, setEmailInput] = useState('')
-  const [studentEmails, setStudentEmails] = useState('')
-  const [error, setError] = useState('')
-  const [codeError, setCodeError] = useState('')
-  const [validationResults, setValidationResults] = useState<
-    ValidationResult[]
-  >([])
   const [bases, setBases] = useState<Base[]>([])
   const [isLoadingBases, setIsLoadingBases] = useState(true)
-
-  // VM Configuration
-  const [vmOs, setVmOs] = useState('')
-  const [vmRam, setVmRam] = useState('2')
-  const [vmCpu, setVmCpu] = useState('1')
-  const [vmStorage, setVmStorage] = useState('20')
-  const [customizeVm, setCustomizeVm] = useState(false)
-  const [templateDescription, setTemplateDescription] = useState('')
-  const [vmUsername, setVmUsername] = useState('')
-  const [vmPassword, setVmPassword] = useState('')
-
   const [enrollmentErrors, setEnrollmentErrors] = useState<EnrollmentError[]>(
     []
   )
@@ -84,48 +70,15 @@ const useCreateSubject = (onSuccess: () => void) => {
         }
         const data = await response.json()
         setBases(data)
-        if (data.length > 0) {
-          setVmOs(data[0].base_id)
-        }
       } catch (error) {
         console.error('Error fetching bases:', error)
         setBases([])
-        setVmOs('')
       } finally {
         setIsLoadingBases(false)
       }
     }
-
     fetchBases()
   }, [])
-
-  const handleAddEmail = () => {
-    if (
-      emailInput &&
-      emailInput.endsWith('@tecnocampus.cat') &&
-      !professorEmails.includes(emailInput)
-    ) {
-      setProfessorEmails([...professorEmails, emailInput])
-      setEmailInput('')
-      setError('')
-    } else {
-      setError('Email must be a valid @tecnocampus.cat address')
-    }
-  }
-
-  const handleRemoveEmail = (email: string) => {
-    setProfessorEmails(professorEmails.filter((e) => e !== email))
-  }
-
-  const handleSubjectCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    if (/^\d*$/.test(value)) {
-      setSubjectCode(value)
-      setCodeError('')
-    } else {
-      setCodeError('Subject code must be numeric')
-    }
-  }
 
   const enrollUserToSubject = async (
     subjectId: string,
@@ -140,11 +93,9 @@ const useCreateSubject = (onSuccess: () => void) => {
           method: 'POST',
         }
       )
-
       if (!response.ok) {
         throw new Error('Failed to enroll user')
       }
-
       return true
     } catch (error) {
       console.error(`Error enrolling user ${userEmail}:`, error)
@@ -160,51 +111,23 @@ const useCreateSubject = (onSuccess: () => void) => {
     }
   }
 
-  const createTemplate = async (
-    subjectId: string,
-    sourceId: string
-  ): Promise<void> => {
-    const templateRequest: DefineTemplateRequest = {
-      sourceInstanceId: sourceId,
-      sizeMB: parseInt(vmStorage) * 1024,
-      vcpuCount: parseInt(vmCpu),
-      vramMB: parseInt(vmRam) * 1024,
-      subjectId,
-      description: templateDescription,
-      isValidated: !customizeVm,
-    }
-
-    const response = await fetch(getEnv().API_CREATE_TEMPLATE, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(templateRequest),
-    })
-
-    if (!response.ok) {
-      throw new Error('Failed to create template')
-    }
-  }
-
   const createProfessorVm = async (
     subjectId: string,
+    base: string,
     username: string,
     password: string
   ): Promise<string> => {
     if (!user?.id || !user?.publicSshKeys) {
       throw new Error('User information is required')
     }
-
     const request: CreateInstanceFrontendRequest = {
       userId: user.id,
       subjectId,
-      templateId: vmOs, // Usamos el base_id como templateId para crear la VM
+      templateId: base, // Usamos el base_id como templateId para crear la VM
       username,
       password,
       publicSshKeys: user.publicSshKeys,
     }
-
     const response = await fetch(getEnv().API_CREATE_INSTANCE, {
       method: 'POST',
       headers: {
@@ -212,55 +135,42 @@ const useCreateSubject = (onSuccess: () => void) => {
       },
       body: JSON.stringify(request),
     })
-
     if (!response.ok) {
       throw new Error('Failed to create professor VM')
     }
-
     const { instanceId }: CreateInstanceFrontendResponse = await response.json()
     return instanceId
   }
 
-  const handleCreateSubject = async () => {
-    if (
-      !subjectName ||
-      !subjectCode ||
-      !vmOs ||
-      !vmRam ||
-      !vmCpu ||
-      !vmStorage ||
-      !templateDescription
-    ) {
-      setError('All fields are required')
-      return
-    }
+  const handleCreateSubject = async (params: CreateSubjectParams) => {
+    const {
+      subjectName,
+      subjectCode,
+      professorEmails,
+      studentEmails,
+      base,
+      vmRam,
+      vmCpu,
+      vmStorage,
+      templateDescription,
+      customizeVm,
+      vmUsername,
+      vmPassword,
+    } = params
 
-    setError('')
     setCreationError(null)
     setEnrollmentErrors([])
     setIsCreating(true)
-
     let subjectId: string | null = null
-
     try {
       // Step 1: Create the subject
       const professorEmail =
         user?.role === 'admin' && professorEmails.length > 0
           ? professorEmails[0]
           : user?.mail
-
       if (!professorEmail) {
         throw new Error('No professor email available')
       }
-
-      // If user is a professor, add their email to professorEmails if not already present
-      if (
-        user?.role === 'professor' &&
-        !professorEmails.includes(professorEmail)
-      ) {
-        setProfessorEmails([professorEmail, ...professorEmails])
-      }
-
       const subjectResponse = await fetch(getEnv().API_CREATE_SUBJECT, {
         method: 'POST',
         headers: {
@@ -272,37 +182,56 @@ const useCreateSubject = (onSuccess: () => void) => {
           professor_email: professorEmail,
         }),
       })
-
       if (!subjectResponse.ok) {
         throw new Error('Failed to create subject')
       }
-
       const { subject_id }: CreateSubjectResponse = await subjectResponse.json()
       subjectId = subject_id
-
       // Step 2: Enroll professors
       await Promise.all(
         professorEmails.map((email) => enrollUserToSubject(subject_id, email))
       )
-
       // Step 3: Enroll students
       const studentEmailsList = studentEmails
         .split('\n')
         .map((email) => email.trim())
         .filter((email) => email !== '')
-
       await Promise.all(
         studentEmailsList.map((email) => enrollUserToSubject(subject_id, email))
       )
-
       // Step 4: Create template or create Professor's vm
       try {
         if (customizeVm) {
           // 1. Create VM for professor
-          await createProfessorVm(subject_id, vmUsername, vmPassword)
+          const instanceId = await createProfessorVm(
+            subject_id,
+            base,
+            vmUsername,
+            vmPassword
+          )
+          // 2. Crear template a partir de la instancia creada
+          const templateParams: DefineTemplateParams = {
+            name: subjectName,
+            description: templateDescription,
+            vcpu_count: parseInt(vmCpu),
+            vram_mb: parseInt(vmRam) * 1024,
+            size_mb: parseInt(vmStorage) * 1024,
+            base,
+            instance_id: instanceId,
+          }
+          await defineTemplate(templateParams)
         } else {
-          // Create template directly from base
-          await createTemplate(subject_id, vmOs)
+          // Crear template directamente desde base
+          const templateParams: DefineTemplateParams = {
+            name: subjectName,
+            description: templateDescription,
+            vcpu_count: parseInt(vmCpu),
+            vram_mb: parseInt(vmRam) * 1024,
+            size_mb: parseInt(vmStorage) * 1024,
+            base,
+            instance_id: base, // base_id como instance_id para template base
+          }
+          await defineTemplate(templateParams)
         }
       } catch (error) {
         // If template creation fails, delete the subject
@@ -313,23 +242,6 @@ const useCreateSubject = (onSuccess: () => void) => {
         }
         throw error // Re-throw to trigger the catch block below
       }
-
-      // Clear form fields
-      setSubjectName('')
-      setSubjectCode('')
-      setProfessorEmails([])
-      setEmailInput('')
-      setStudentEmails('')
-      setValidationResults([])
-      setVmOs('')
-      setVmRam('2')
-      setVmCpu('1')
-      setVmStorage('20')
-      setCustomizeVm(false)
-      setTemplateDescription('')
-      setVmUsername('')
-      setVmPassword('')
-
       onSuccess()
     } catch (error) {
       console.error('Error creating subject:', error)
@@ -342,43 +254,12 @@ const useCreateSubject = (onSuccess: () => void) => {
   }
 
   return {
-    subjectName,
-    setSubjectName,
-    subjectCode,
-    handleSubjectCodeChange,
-    professorEmails,
-    emailInput,
-    setEmailInput,
-    studentEmails,
-    setStudentEmails,
-    error,
-    codeError,
-    validationResults,
-    handleAddEmail,
-    handleRemoveEmail,
-    handleCreateSubject,
-    // VM Configuration
-    vmOs,
-    setVmOs,
-    vmRam,
-    setVmRam,
-    vmCpu,
-    setVmCpu,
-    vmStorage,
-    setVmStorage,
-    customizeVm,
-    setCustomizeVm,
-    templateDescription,
-    setTemplateDescription,
-    vmUsername,
-    setVmUsername,
-    vmPassword,
-    setVmPassword,
     bases,
     isLoadingBases,
     isCreating,
     creationError,
     enrollmentErrors,
+    handleCreateSubject,
   }
 }
 
