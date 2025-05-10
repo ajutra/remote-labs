@@ -22,10 +22,16 @@ type CreateInstanceRequest struct {
 	Username      string   `json:"username"`
 	Password      string   `json:"password"`
 	PublicSshKeys []string `json:"publicSshKeys"`
-	/*IpAddress     string   `json:"ipAddress"`
+	IpAddress     string   `json:"ipAddress"`
 	Dns1          string   `json:"dns1"`
 	Dns2          string   `json:"dns2"`
-	Gateway       string   `json:"gateway"`*/
+	Gateway       string   `json:"gateway"`
+}
+
+type StartInstanceRequest struct {
+	InstanceId   string `json:"instanceId"`
+	Vid          string `json:"vid"`
+	VlanEtiquete string `json:"vlanEtiquete"`
 }
 
 type DeleteVmRequest struct {

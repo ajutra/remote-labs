@@ -26,7 +26,7 @@ type ServerAgent interface {
 	DefineTemplate(request DefineTemplateRequest) error
 	CreateInstance(request CreateInstanceRequest) error
 	DeleteVm(request DeleteVmRequest) error
-	StartInstance(instanceId string) error
+	StartInstance(request StartInstanceRequest) error
 	StopInstance(instanceId string) error
 	RestartInstance(instanceId string) error
 	ListInstancesStatus() ([]ListInstancesStatusResponse, error)
@@ -135,10 +135,10 @@ func (agent *ServerAgentImpl) CreateInstance(request CreateInstanceRequest) erro
 		Username:      request.Username,
 		Password:      request.Password,
 		PublicSshKeys: request.PublicSshKeys,
-		/*IpAddress:     request.IpAddress,
+		IpAddress:     request.IpAddress,
 		Dns1:          request.Dns1,
 		Dns2:          request.Dns2,
-		Gateway:       request.Gateway,*/
+		Gateway:       request.Gateway,
 	}
 
 	return agent.createVm(createVmRequest)
@@ -176,23 +176,22 @@ func (agent *ServerAgentImpl) DeleteVm(request DeleteVmRequest) error {
 	return nil
 }
 
-func (agent *ServerAgentImpl) StartInstance(instanceId string) error {
-	log.Printf("Starting instance '%s'...", instanceId)
+func (agent *ServerAgentImpl) StartInstance(request StartInstanceRequest) error {
+	log.Printf("Starting instance '%s'...", request.InstanceId)
 
 	cmd := exec.Command(
-		"virsh", "start", instanceId,
+		"virsh", "start", request.InstanceId,
 	)
 
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		return logAndReturnError("Error starting instance '"+instanceId+"': ", string(output))
+		return logAndReturnError("Error starting instance '"+request.InstanceId+"': ", string(output))
 	}
 
-	log.Printf("Started instance '%s' successfully!", instanceId)
+	log.Printf("Started instance '%s' successfully!", request.InstanceId)
 
-	// TODO: Make this dynamic
-	if err := agent.setupVMNetwork("100", "vlan100"); err != nil {
+	if err := agent.setupVMNetwork(request.Vid, request.VlanEtiquete); err != nil {
 		return err
 	}
 
@@ -425,12 +424,12 @@ func (agent *ServerAgentImpl) createVmConfigurationFiles(request CreateVmRequest
 			return err
 		}
 
-		// TODO: Make this dynamic
+		// And setup the network config
 		cloudInitNetworkConfig := CloudInitNetworkConfig{
-			IpAddress: "10.0.100.2/24",
-			Dns1:      "8.8.8.8",
-			Dns2:      "8.8.4.4",
-			Gateway:   "10.0.100.1",
+			IpAddress: request.IpAddress,
+			Dns1:      request.Dns1,
+			Dns2:      request.Dns2,
+			Gateway:   request.Gateway,
 		}
 
 		if err := createFileFromTemplate(request.DirPath, "network-config", cloudInitNetworkConfig); err != nil {
