@@ -35,7 +35,7 @@ type InstanceStatus struct {
 }
 
 type Base struct {
-	Id   string `json:"base_id"`
+	Id   string `json:"baseId"`
 	Name string `json:"description"`
 }
 
