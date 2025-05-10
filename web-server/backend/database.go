@@ -18,7 +18,7 @@ type Database interface {
 	VerifyUser(token string) error
 	CreateUser(user User) error
 	UserExistsByMail(mail string) error
-	CreateSubject(subject Subject) error
+	CreateSubject(subject Subject) (string, error)
 	UserExistsByEmailorError(userEmail string) error
 	UserExistsById(userId string) error
 	ListAllSubjectsByUserId(userId string) ([]Subject, error)
@@ -327,7 +327,7 @@ func (postgres *PostgresDatabase) UserExistsByMail(mail string) error {
 	return nil
 }
 
-func (postgres *PostgresDatabase) CreateSubject(subject Subject) error {
+func (postgres *PostgresDatabase) CreateSubject(subject Subject) (string, error) {
 	dbSubject := subject.toDatabaseSubject()
 	query := `
 	INSERT INTO subjects (id, name, code, main_professor_id)
@@ -345,10 +345,10 @@ func (postgres *PostgresDatabase) CreateSubject(subject Subject) error {
 
 	_, err := postgres.db.Exec(context.Background(), query, args)
 	if err != nil {
-		return fmt.Errorf("error creating subject: %w", err)
+		return "", fmt.Errorf("error creating subject: %w", err)
 	}
 
-	return nil
+	return dbSubject.ID.String(), nil
 }
 
 func (postgres *PostgresDatabase) UserExistsByEmailorError(userEmail string) error {

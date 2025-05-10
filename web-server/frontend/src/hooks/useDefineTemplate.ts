@@ -2,13 +2,13 @@ import { useState } from 'react'
 import { useToast } from '@/hooks/use-toast'
 
 export interface DefineTemplateParams {
-  name: string
+  sourceInstanceId: string
+  sizeMB: number
+  vcpuCount: number
+  vramMB: number
+  subjectId: string
   description: string
-  vcpu_count: number
-  vram_mb: number
-  size_mb: number
-  base: string
-  instance_id: string
+  isValidated: boolean
 }
 
 export const useDefineTemplate = () => {
@@ -18,7 +18,7 @@ export const useDefineTemplate = () => {
   const defineTemplate = async (params: DefineTemplateParams) => {
     setLoading(true)
     try {
-      const response = await fetch('/templates', {
+      const response = await fetch('/templates/define', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
