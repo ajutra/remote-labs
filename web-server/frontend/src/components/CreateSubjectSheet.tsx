@@ -13,7 +13,7 @@ import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { Textarea } from './ui/textarea'
 import { useToast } from '@/hooks/use-toast'
-import useCreateSubject from '@/hooks/useCreateSubject'
+import useCreateSubject, { CreateSubjectParams } from '@/hooks/useCreateSubject'
 import {
   Select,
   SelectContent,
@@ -31,6 +31,19 @@ const CreateSubjectSheet: React.FC = () => {
   const [open, setOpen] = React.useState(false)
   const [vmUsername, setVmUsername] = React.useState('')
   const [vmPassword, setVmPassword] = React.useState('')
+  const [subjectName, setSubjectName] = React.useState('')
+  const [subjectCode, setSubjectCode] = React.useState('')
+  const [professorEmails, setProfessorEmails] = React.useState<string[]>([])
+  const [emailInput, setEmailInput] = React.useState('')
+  const [studentEmails, setStudentEmails] = React.useState('')
+  const [error, setError] = React.useState('')
+  const [codeError, setCodeError] = React.useState('')
+  const [customizeVm, setCustomizeVm] = React.useState(false)
+  const [templateDescription, setTemplateDescription] = React.useState('')
+  const [base, setBase] = React.useState('')
+  const [vmRam, setVmRam] = React.useState('2')
+  const [vmCpu, setVmCpu] = React.useState('1')
+  const [vmStorage, setVmStorage] = React.useState('20')
   const { user } = useAuth()
 
   const handleSuccess = () => {
@@ -39,42 +52,60 @@ const CreateSubjectSheet: React.FC = () => {
       description: 'The subject has been created successfully.',
     })
     setOpen(false)
+    // Limpiar todos los campos
+    setSubjectName('')
+    setSubjectCode('')
+    setProfessorEmails([])
+    setEmailInput('')
+    setStudentEmails('')
+    setError('')
+    setCodeError('')
+    setCustomizeVm(false)
+    setTemplateDescription('')
+    setBase('')
+    setVmRam('2')
+    setVmCpu('1')
+    setVmStorage('20')
+    setVmUsername('')
+    setVmPassword('')
   }
 
   const {
-    subjectName,
-    setSubjectName,
-    subjectCode,
-    handleSubjectCodeChange,
-    professorEmails,
-    emailInput,
-    setEmailInput,
-    studentEmails,
-    setStudentEmails,
-    error,
-    codeError,
-    validationResults,
-    handleAddEmail,
-    handleRemoveEmail,
-    handleCreateSubject,
-    // VM Configuration
-    vmOs,
-    setVmOs,
-    vmRam,
-    setVmRam,
-    vmCpu,
-    setVmCpu,
-    vmStorage,
-    setVmStorage,
-    customizeVm,
-    setCustomizeVm,
-    templateDescription,
-    setTemplateDescription,
     bases,
     isLoadingBases,
     isCreating,
     creationError,
+    enrollmentErrors,
+    handleCreateSubject,
   } = useCreateSubject(handleSuccess)
+
+  const handleAddEmail = () => {
+    if (
+      emailInput &&
+      emailInput.endsWith('@tecnocampus.cat') &&
+      !professorEmails.includes(emailInput)
+    ) {
+      setProfessorEmails([...professorEmails, emailInput])
+      setEmailInput('')
+      setError('')
+    } else {
+      setError('Email must be a valid @tecnocampus.cat address')
+    }
+  }
+
+  const handleRemoveEmail = (email: string) => {
+    setProfessorEmails(professorEmails.filter((e) => e !== email))
+  }
+
+  const handleSubjectCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    if (/^\d*$/.test(value)) {
+      setSubjectCode(value)
+      setCodeError('')
+    } else {
+      setCodeError('Subject code must be numeric')
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -98,7 +129,7 @@ const CreateSubjectSheet: React.FC = () => {
         return
       }
     }
-    if (!vmOs || !vmRam || !vmCpu || !vmStorage) {
+    if (!base || !vmRam || !vmCpu || !vmStorage) {
       toast({
         title: 'Error',
         description: 'Please select all virtual machine configuration options.',
@@ -106,7 +137,21 @@ const CreateSubjectSheet: React.FC = () => {
       })
       return
     }
-    await handleCreateSubject()
+    const params: CreateSubjectParams = {
+      subjectName,
+      subjectCode,
+      professorEmails,
+      studentEmails,
+      base,
+      vmRam,
+      vmCpu,
+      vmStorage,
+      templateDescription,
+      customizeVm,
+      vmUsername,
+      vmPassword,
+    }
+    await handleCreateSubject(params)
   }
 
   return (
@@ -239,10 +284,10 @@ const CreateSubjectSheet: React.FC = () => {
               </h3>
 
               <div className="mb-4">
-                <Label htmlFor="vmOs">Operating System</Label>
-                <Select value={vmOs} onValueChange={setVmOs} required>
+                <Label htmlFor="base">Operating System (Base)</Label>
+                <Select value={base} onValueChange={setBase} required>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select OS" />
+                    <SelectValue placeholder="Select Base" />
                   </SelectTrigger>
                   <SelectContent>
                     {isLoadingBases ? (
@@ -254,9 +299,9 @@ const CreateSubjectSheet: React.FC = () => {
                         No operating systems available
                       </SelectItem>
                     ) : (
-                      bases.map((base) => (
-                        <SelectItem key={base.base_id} value={base.base_id}>
-                          {base.description}
+                      bases.map((b) => (
+                        <SelectItem key={b.base_id} value={b.base_id}>
+                          {b.description}
                         </SelectItem>
                       ))
                     )}
@@ -368,30 +413,6 @@ const CreateSubjectSheet: React.FC = () => {
                 </div>
               )}
             </div>
-
-            {validationResults.length > 0 && (
-              <div className="rounded-md bg-red-50 p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <AlertCircle className="h-5 w-5 text-red-400" />
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800">
-                      Validation Results
-                    </h3>
-                    <div className="mt-2 text-sm text-red-700">
-                      <ul className="list-disc space-y-1 pl-5">
-                        {validationResults.map((result, index) => (
-                          <li key={index}>
-                            {result.email}: {result.valid ? 'Valid' : 'Invalid'}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {creationError && (
               <div className="rounded-md bg-red-50 p-4">
