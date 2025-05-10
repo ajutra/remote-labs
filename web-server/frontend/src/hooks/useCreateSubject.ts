@@ -9,7 +9,7 @@ interface ValidationResult {
 }
 
 interface Base {
-  base_id: string
+  baseId: string
   description: string
 }
 
@@ -64,11 +64,20 @@ const useCreateSubject = (onSuccess: () => void) => {
   useEffect(() => {
     const fetchBases = async () => {
       try {
+        console.log('[fetchBases] Fetching bases from', getEnv().API_BASES)
         const response = await fetch(getEnv().API_BASES)
-        if (!response.ok) {
-          throw new Error('Failed to fetch bases')
+        console.log('[fetchBases] Response status:', response.status)
+        const text = await response.text()
+        console.log('[fetchBases] Raw response text:', text)
+        let data
+        try {
+          data = JSON.parse(text)
+        } catch (jsonErr) {
+          console.error('[fetchBases] Error parsing JSON:', jsonErr)
+          setBases([])
+          return
         }
-        const data = await response.json()
+        console.log('[fetchBases] Parsed data:', data)
         setBases(data)
       } catch (error) {
         console.error('Error fetching bases:', error)

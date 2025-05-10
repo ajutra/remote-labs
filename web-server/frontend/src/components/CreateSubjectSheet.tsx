@@ -41,10 +41,16 @@ const CreateSubjectSheet: React.FC = () => {
   const [customizeVm, setCustomizeVm] = React.useState(false)
   const [templateDescription, setTemplateDescription] = React.useState('')
   const [base, setBase] = React.useState('')
-  const [vmRam, setVmRam] = React.useState('2')
-  const [vmCpu, setVmCpu] = React.useState('1')
-  const [vmStorage, setVmStorage] = React.useState('20')
+  const [vmRam, setVmRam] = React.useState('1')
+  const [vmCpu, setVmCpu] = React.useState('2')
+  const [vmStorage, setVmStorage] = React.useState('1')
+  const [invalidStudentEmails, setInvalidStudentEmails] = React.useState<
+    string[]
+  >([])
   const { user } = useAuth()
+  const [subjectNameError, setSubjectNameError] = React.useState('')
+  const [subjectCodeError, setSubjectCodeError] = React.useState('')
+  const [baseError, setBaseError] = React.useState('')
 
   const handleSuccess = () => {
     toast({
@@ -63,9 +69,9 @@ const CreateSubjectSheet: React.FC = () => {
     setCustomizeVm(false)
     setTemplateDescription('')
     setBase('')
-    setVmRam('2')
-    setVmCpu('1')
-    setVmStorage('20')
+    setVmRam('1')
+    setVmCpu('2')
+    setVmStorage('1')
     setVmUsername('')
     setVmPassword('')
   }
@@ -109,6 +115,27 @@ const CreateSubjectSheet: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setInvalidStudentEmails([])
+    let hasError = false
+    if (!subjectName.trim()) {
+      setSubjectNameError('Subject name is required')
+      hasError = true
+    } else {
+      setSubjectNameError('')
+    }
+    if (!subjectCode.trim()) {
+      setSubjectCodeError('Subject code is required')
+      hasError = true
+    } else {
+      setSubjectCodeError('')
+    }
+    if (!base) {
+      setBaseError('Base is required')
+      hasError = true
+    } else {
+      setBaseError('')
+    }
+    if (hasError) return
     if (customizeVm) {
       if (!vmUsername || !vmPassword) {
         toast({
@@ -129,7 +156,7 @@ const CreateSubjectSheet: React.FC = () => {
         return
       }
     }
-    if (!base || !vmRam || !vmCpu || !vmStorage) {
+    if (!vmRam || !vmCpu || !vmStorage) {
       toast({
         title: 'Error',
         description: 'Please select all virtual machine configuration options.',
@@ -137,6 +164,21 @@ const CreateSubjectSheet: React.FC = () => {
       })
       return
     }
+    // Validación de emails de estudiantes
+    const studentEmailsList = studentEmails
+      .split('\n')
+      .map((email) => email.trim())
+      .filter((email) => email !== '')
+    const invalidEmails = studentEmailsList.filter(
+      (email) => !email.endsWith('@edu.tecnocampus.cat')
+    )
+    if (invalidEmails.length > 0) {
+      setError('Some student emails are invalid')
+      setInvalidStudentEmails(invalidEmails)
+      return
+    }
+    setError('')
+    setInvalidStudentEmails([])
     const params: CreateSubjectParams = {
       subjectName,
       subjectCode,
@@ -159,15 +201,15 @@ const CreateSubjectSheet: React.FC = () => {
       <SheetTrigger asChild>
         <Button className="w-full">Create a new subject</Button>
       </SheetTrigger>
-      <SheetContent className="sm:max-w-2/3 h-full w-full sm:w-2/3">
-        <SheetHeader>
-          <SheetTitle>Create a new subject</SheetTitle>
-          <SheetDescription>
-            Fill in the details to create a new subject. All fields are
-            required.
-          </SheetDescription>
-        </SheetHeader>
-        <ScrollArea className="h-full">
+      <SheetContent className="sm:max-w-2/3 h-[100vh] w-full sm:w-2/3">
+        <ScrollArea className="h-full pr-2">
+          <SheetHeader>
+            <SheetTitle>Create a new subject</SheetTitle>
+            <SheetDescription>
+              Fill in the details to create a new subject. All fields are
+              required.
+            </SheetDescription>
+          </SheetHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <Label htmlFor="subjectName">Subject Name</Label>
@@ -176,14 +218,10 @@ const CreateSubjectSheet: React.FC = () => {
                 value={subjectName}
                 onChange={(e) => setSubjectName(e.target.value)}
                 placeholder="Enter subject name"
-                className={
-                  error === 'Subject name is required' ? 'border-red-500' : ''
-                }
+                className={subjectNameError ? 'border-red-500' : ''}
               />
-              {error === 'Subject name is required' && (
-                <p className="mt-1 text-sm text-red-500">
-                  Subject name is required
-                </p>
+              {subjectNameError && (
+                <p className="mt-1 text-sm text-red-500">{subjectNameError}</p>
               )}
             </div>
             <div>
@@ -194,9 +232,7 @@ const CreateSubjectSheet: React.FC = () => {
                 onChange={handleSubjectCodeChange}
                 placeholder="Enter subject code"
                 className={
-                  codeError || error === 'Subject code is required'
-                    ? 'border-red-500'
-                    : ''
+                  codeError || subjectCodeError ? 'border-red-500' : ''
                 }
               />
               <p className="mt-1 text-sm text-muted-foreground">
@@ -205,10 +241,8 @@ const CreateSubjectSheet: React.FC = () => {
               {codeError && (
                 <p className="mt-1 text-sm text-red-500">{codeError}</p>
               )}
-              {error === 'Subject code is required' && (
-                <p className="mt-1 text-sm text-red-500">
-                  Subject code is required
-                </p>
+              {subjectCodeError && (
+                <p className="mt-1 text-sm text-red-500">{subjectCodeError}</p>
               )}
             </div>
             <div>
@@ -271,9 +305,14 @@ const CreateSubjectSheet: React.FC = () => {
                 Enter each student email on a new line
               </p>
               {error === 'Some student emails are invalid' && (
-                <p className="mt-1 text-sm text-red-500">
-                  Some student emails are invalid
-                </p>
+                <div className="mt-1 text-sm text-red-500">
+                  Some student emails are invalid:
+                  <ul className="list-disc pl-5">
+                    {invalidStudentEmails.map((email) => (
+                      <li key={email}>{email}</li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
 
@@ -284,7 +323,7 @@ const CreateSubjectSheet: React.FC = () => {
               </h3>
 
               <div className="mb-4">
-                <Label htmlFor="base">Operating System (Base)</Label>
+                <Label htmlFor="base">Base</Label>
                 <Select value={base} onValueChange={setBase} required>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select Base" />
@@ -300,13 +339,16 @@ const CreateSubjectSheet: React.FC = () => {
                       </SelectItem>
                     ) : (
                       bases.map((b) => (
-                        <SelectItem key={b.base_id} value={b.base_id}>
+                        <SelectItem key={b.baseId} value={b.baseId}>
                           {b.description}
                         </SelectItem>
                       ))
                     )}
                   </SelectContent>
                 </Select>
+                {baseError && (
+                  <p className="mt-1 text-sm text-red-500">{baseError}</p>
+                )}
                 {bases.length === 0 && !isLoadingBases && (
                   <p className="mt-1 text-sm text-red-500">
                     Please ensure the server is running and try again
