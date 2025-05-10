@@ -33,9 +33,9 @@ type Database interface {
 	DeleteUser(userId string) error
 	UpdateVerificationToken(email string, token uuid.UUID) error
 	GetTemplateConfig(templateId string, subjectId string) (TemplateConfig, error)
-	CreateInstance(instanceId string, userId string, subjectId string, templateId string) error
+	CreateInstance(instanceId string, userId string, subjectId string, templateId *string) error
 	DeleteInstance(instanceId string) error
-	CreateTemplate(templateId string, subjectId string, sourceInstanceId string, sizeMB int, vcpuCount int, vramMB int, isValidated bool, description string) error
+	CreateTemplate(templateId string, subjectId string, sizeMB int, vcpuCount int, vramMB int, isValidated bool, description string) error
 	DeleteTemplate(templateId string, subjectId string) error
 	UpdateUser(userId string, password string, publicSshKeys []string) error
 	GetUserIdByEmail(userEmail string) (string, error)
@@ -69,13 +69,13 @@ type DatabaseSubject struct {
 type InstanceInfo struct {
 	UserId              string
 	SubjectId           string
-	TemplateId          string
+	TemplateId          *string
 	CreatedAt           string
 	UserMail            string
 	SubjectName         string
-	Template_vcpu_count int
-	Template_vram_mb    int
-	Template_size_mb    int
+	Template_vcpu_count *int
+	Template_vram_mb    *int
+	Template_size_mb    *int
 }
 
 func (postgres *PostgresDatabase) GetInstanceIdsByUserId(userId string) ([]string, error) {
@@ -158,19 +158,18 @@ func (postgres *PostgresDatabase) UpdateUser(userId string, password string, pub
 	return nil
 }
 
-func (postgres *PostgresDatabase) CreateTemplate(templateId string, subjectId string, sourceInstanceId string, sizeMB int, vcpuCount int, vramMB int, isValidated bool, description string) error {
+func (postgres *PostgresDatabase) CreateTemplate(templateId string, subjectId string, sizeMB int, vcpuCount int, vramMB int, isValidated bool, description string) error {
 	query := `
-	INSERT INTO templates (id, subject_id, source_instance_id, size_mb, vcpu_count, vram_mb, is_validated, description)
-	VALUES (@id, @subject_id, @source_instance_id, @size_mb, @vcpu_count, @vram_mb, @is_validated, @description)`
+	INSERT INTO templates (id, subject_id, size_mb, vcpu_count, vram_mb, is_validated, description)
+	VALUES (@id, @subject_id, @size_mb, @vcpu_count, @vram_mb, @is_validated, @description)`
 	args := pgx.NamedArgs{
-		"id":                 templateId,
-		"subject_id":         subjectId,
-		"source_instance_id": sourceInstanceId,
-		"size_mb":            sizeMB,
-		"vcpu_count":         vcpuCount,
-		"vram_mb":            vramMB,
-		"is_validated":       isValidated,
-		"description":        description,
+		"id":           templateId,
+		"subject_id":   subjectId,
+		"size_mb":      sizeMB,
+		"vcpu_count":   vcpuCount,
+		"vram_mb":      vramMB,
+		"is_validated": isValidated,
+		"description":  description,
 	}
 
 	_, err := postgres.db.Exec(context.Background(), query, args)
@@ -215,7 +214,7 @@ func (postgres *PostgresDatabase) GetTemplateConfig(templateId string, subjectId
 	return templateConfig, nil
 }
 
-func (postgres *PostgresDatabase) CreateInstance(instanceId string, userId string, subjectId string, templateId string) error {
+func (postgres *PostgresDatabase) CreateInstance(instanceId string, userId string, subjectId string, templateId *string) error {
 	query := `
 	INSERT INTO instances (id, user_id, subject_id, template_id)
 	VALUES (@id, @user_id, @subject_id, @template_id)`
@@ -767,9 +766,9 @@ func getDDLStatements() string {
 			id VARCHAR(100) PRIMARY KEY,
 			user_id UUID NOT NULL REFERENCES users(id),
 			subject_id UUID NOT NULL REFERENCES subjects(id),
-			template_id VARCHAR(100) NOT NULL,
+			template_id VARCHAR(100),
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (template_id, subject_id) REFERENCES templates(id, subject_id)
+			FOREIGN KEY (template_id, subject_id) REFERENCES templates(id, subject_id) ON DELETE SET NULL
 		);
 
 		CREATE TABLE IF NOT EXISTS user_subjects (
@@ -826,7 +825,7 @@ func (postgres *PostgresDatabase) GetInstanceInfo(instanceId string) (InstanceIn
 	FROM instances i
 	JOIN users u ON i.user_id = u.id
 	JOIN subjects s ON i.subject_id = s.id
-	JOIN templates t ON i.template_id = t.id
+	LEFT JOIN templates t ON i.template_id = t.id AND i.subject_id = t.subject_id
 	WHERE i.id = @instance_id`
 	args := pgx.NamedArgs{"instance_id": instanceId}
 

@@ -29,10 +29,13 @@ interface CreateInstanceFrontendResponse {
 interface CreateInstanceFrontendRequest {
   userId: string
   subjectId: string
-  templateId: string
+  sourceVmId: string
   username: string
   password: string
   publicSshKeys: string[]
+  sizeMB: number
+  vcpuCount: number
+  vramMB: number
 }
 
 interface DefineTemplateRequest {
@@ -121,7 +124,7 @@ const useCreateSubject = (onSuccess: () => void) => {
           .API_ENROLL_USER_IN_SUBJECT.replace('{subjectId}', subjectId)
           .replace('{userEmail}', userEmail),
         {
-          method: 'POST',
+          method: 'PUT',
         }
       )
       if (!response.ok) {
@@ -154,7 +157,10 @@ const useCreateSubject = (onSuccess: () => void) => {
     subjectId: string,
     templateId: string,
     username: string,
-    password: string
+    password: string,
+    vmRam: string,
+    vmCpu: string,
+    vmStorage: string
   ): Promise<string> => {
     console.log('[useCreateSubject] Starting professor VM creation', {
       subjectId,
@@ -171,16 +177,19 @@ const useCreateSubject = (onSuccess: () => void) => {
     const request: CreateInstanceFrontendRequest = {
       userId: user.id,
       subjectId,
-      templateId,
+      sourceVmId: templateId,
       username,
       password,
       publicSshKeys: user.publicSshKeys,
+      sizeMB: parseInt(vmStorage) * 1024, // Convert GB to MB
+      vcpuCount: parseInt(vmCpu),
+      vramMB: parseInt(vmRam) * 1024, // Convert GB to MB
     }
     console.log('[useCreateSubject] Sending VM creation request:', {
       ...request,
       password: '[REDACTED]',
     })
-    const response = await fetch(getEnv().API_CREATE_INSTANCE, {
+    const response = await fetch(getEnv().API_CREATE_INSTANCE + '/create', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -257,7 +266,9 @@ const useCreateSubject = (onSuccess: () => void) => {
       if (!subjectResponse.ok) {
         console.error(
           '[useCreateSubject] Failed to create subject. Status:',
-          subjectResponse.status
+          subjectResponse.status,
+          'Response:',
+          await subjectResponse.json()
         )
         throw new Error('Failed to create subject')
       }
@@ -299,16 +310,19 @@ const useCreateSubject = (onSuccess: () => void) => {
             subjectId,
             base, // Use base as templateId
             vmUsername,
-            vmPassword
+            vmPassword,
+            vmRam,
+            vmCpu,
+            vmStorage
           )
         } else {
-          // Create template directly from base
           console.log('[useCreateSubject] Creating template directly from base')
+          // Create template directly from base
           const templateParams: DefineTemplateRequest = {
             sourceInstanceId: base,
-            sizeMB: parseInt(vmStorage) * 1024,
+            sizeMB: parseInt(vmStorage) * 1024, // Convert GB to MB
             vcpuCount: parseInt(vmCpu),
-            vramMB: parseInt(vmRam) * 1024,
+            vramMB: parseInt(vmRam) * 1024, // Convert GB to MB
             subjectId,
             description: templateDescription,
             isValidated: true,

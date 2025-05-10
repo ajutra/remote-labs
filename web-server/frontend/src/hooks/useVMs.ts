@@ -11,6 +11,7 @@ export const useVMs = () => {
 
   const fetchVMs = useCallback(async () => {
     if (!user?.id) {
+      setVms([])
       setLoading(false)
       return
     }
@@ -24,13 +25,15 @@ export const useVMs = () => {
         throw new Error('Failed to fetch VMs')
       }
       const data = await response.json()
-      setVms(data)
-    } catch {
+      setVms(data || [])
+    } catch (error) {
+      console.error('Error fetching VMs:', error)
       toast({
         title: 'Error',
         description: 'Failed to load VMs',
         variant: 'destructive',
       })
+      setVms([])
     } finally {
       setLoading(false)
     }
