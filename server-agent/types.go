@@ -28,6 +28,12 @@ type CreateInstanceRequest struct {
 	Gateway       string   `json:"gateway"`*/
 }
 
+type DeleteVmRequest struct {
+	VmId           string `json:"vmId"`
+	RemoveEtiquete bool   `json:"removeEtiquete"`
+	Vid            string `json:"vid"`
+}
+
 type ListInstancesStatusResponse struct {
 	InstanceId string `json:"instanceId"`
 	Status     string `json:"status"`
