@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getEnv } from '../utils/Env'
 import { useAuth } from '../context/AuthContext'
-import { useDefineTemplate, DefineTemplateParams } from './useDefineTemplate'
+import { useDefineTemplate } from './useDefineTemplate'
 
 interface ValidationResult {
   email: string
@@ -14,7 +14,7 @@ interface Base {
 }
 
 interface CreateSubjectResponse {
-  subject_id: string
+  subjectId: string
 }
 
 interface EnrollmentError {
@@ -35,6 +35,16 @@ interface CreateInstanceFrontendRequest {
   publicSshKeys: string[]
 }
 
+interface DefineTemplateRequest {
+  sourceInstanceId: string
+  sizeMB: number
+  vcpuCount: number
+  vramMB: number
+  subjectId: string
+  description: string
+  isValidated: boolean
+}
+
 export interface CreateSubjectParams {
   subjectName: string
   subjectCode: string
@@ -51,6 +61,7 @@ export interface CreateSubjectParams {
 }
 
 const useCreateSubject = (onSuccess: () => void) => {
+  console.log('[useCreateSubject] Hook initialized')
   const { user } = useAuth()
   const { defineTemplate } = useDefineTemplate()
   const [isCreating, setIsCreating] = useState(false)
@@ -63,27 +74,35 @@ const useCreateSubject = (onSuccess: () => void) => {
 
   useEffect(() => {
     const fetchBases = async () => {
+      console.log('[useCreateSubject] Starting to fetch bases')
       try {
-        console.log('[fetchBases] Fetching bases from', getEnv().API_BASES)
+        console.log(
+          '[useCreateSubject] Fetching bases from',
+          getEnv().API_BASES
+        )
         const response = await fetch(getEnv().API_BASES)
-        console.log('[fetchBases] Response status:', response.status)
+        console.log('[useCreateSubject] Response status:', response.status)
         const text = await response.text()
-        console.log('[fetchBases] Raw response text:', text)
+        console.log('[useCreateSubject] Raw response text:', text)
         let data
         try {
           data = JSON.parse(text)
+          console.log(
+            '[useCreateSubject] Successfully parsed bases data:',
+            data
+          )
         } catch (jsonErr) {
-          console.error('[fetchBases] Error parsing JSON:', jsonErr)
+          console.error('[useCreateSubject] Error parsing JSON:', jsonErr)
           setBases([])
           return
         }
-        console.log('[fetchBases] Parsed data:', data)
         setBases(data)
       } catch (error) {
-        console.error('Error fetching bases:', error)
+        console.error('[useCreateSubject] Error fetching bases:', error)
         setBases([])
       } finally {
         setIsLoadingBases(false)
+        console.log('[useCreateSubject] Finished loading bases')
       }
     }
     fetchBases()
@@ -93,6 +112,9 @@ const useCreateSubject = (onSuccess: () => void) => {
     subjectId: string,
     userEmail: string
   ): Promise<boolean> => {
+    console.log(
+      `[useCreateSubject] Attempting to enroll user ${userEmail} to subject ${subjectId}`
+    )
     try {
       const response = await fetch(
         getEnv()
@@ -103,11 +125,19 @@ const useCreateSubject = (onSuccess: () => void) => {
         }
       )
       if (!response.ok) {
+        console.error(
+          `[useCreateSubject] Failed to enroll user ${userEmail}. Status:`,
+          response.status
+        )
         throw new Error('Failed to enroll user')
       }
+      console.log(`[useCreateSubject] Successfully enrolled user ${userEmail}`)
       return true
     } catch (error) {
-      console.error(`Error enrolling user ${userEmail}:`, error)
+      console.error(
+        `[useCreateSubject] Error enrolling user ${userEmail}:`,
+        error
+      )
       setEnrollmentErrors((prev) => [
         ...prev,
         {
@@ -122,21 +152,34 @@ const useCreateSubject = (onSuccess: () => void) => {
 
   const createProfessorVm = async (
     subjectId: string,
-    base: string,
+    templateId: string,
     username: string,
     password: string
   ): Promise<string> => {
+    console.log('[useCreateSubject] Starting professor VM creation', {
+      subjectId,
+      templateId,
+      username,
+    })
     if (!user?.id || !user?.publicSshKeys) {
+      console.error('[useCreateSubject] Missing user information', {
+        userId: user?.id,
+        hasSshKeys: !!user?.publicSshKeys,
+      })
       throw new Error('User information is required')
     }
     const request: CreateInstanceFrontendRequest = {
       userId: user.id,
       subjectId,
-      templateId: base, // Usamos el base_id como templateId para crear la VM
+      templateId,
       username,
       password,
       publicSshKeys: user.publicSshKeys,
     }
+    console.log('[useCreateSubject] Sending VM creation request:', {
+      ...request,
+      password: '[REDACTED]',
+    })
     const response = await fetch(getEnv().API_CREATE_INSTANCE, {
       method: 'POST',
       headers: {
@@ -145,13 +188,24 @@ const useCreateSubject = (onSuccess: () => void) => {
       body: JSON.stringify(request),
     })
     if (!response.ok) {
+      console.error(
+        '[useCreateSubject] Failed to create professor VM. Status:',
+        response.status
+      )
       throw new Error('Failed to create professor VM')
     }
     const { instanceId }: CreateInstanceFrontendResponse = await response.json()
+    console.log('[useCreateSubject] Successfully created professor VM:', {
+      instanceId,
+    })
     return instanceId
   }
 
   const handleCreateSubject = async (params: CreateSubjectParams) => {
+    console.log('[useCreateSubject] Starting subject creation with params:', {
+      ...params,
+      vmPassword: '[REDACTED]',
+    })
     const {
       subjectName,
       subjectCode,
@@ -167,19 +221,28 @@ const useCreateSubject = (onSuccess: () => void) => {
       vmPassword,
     } = params
 
+    if (!user?.mail) {
+      console.error('[useCreateSubject] No user email available')
+      throw new Error('No user email available')
+    }
+
     setCreationError(null)
     setEnrollmentErrors([])
     setIsCreating(true)
-    let subjectId: string | null = null
+
     try {
+      // Add current user's email to the beginning of professor emails list
+      const allProfessorEmails = [
+        user.mail,
+        ...professorEmails.filter((email) => email !== user.mail),
+      ]
+      console.log(
+        '[useCreateSubject] All professor emails:',
+        allProfessorEmails
+      )
+
       // Step 1: Create the subject
-      const professorEmail =
-        user?.role === 'admin' && professorEmails.length > 0
-          ? professorEmails[0]
-          : user?.mail
-      if (!professorEmail) {
-        throw new Error('No professor email available')
-      }
+      console.log('[useCreateSubject] Step 1: Creating subject')
       const subjectResponse = await fetch(getEnv().API_CREATE_SUBJECT, {
         method: 'POST',
         headers: {
@@ -188,77 +251,101 @@ const useCreateSubject = (onSuccess: () => void) => {
         body: JSON.stringify({
           name: subjectName,
           code: subjectCode,
-          professor_email: professorEmail,
+          professorMail: user.mail,
         }),
       })
       if (!subjectResponse.ok) {
+        console.error(
+          '[useCreateSubject] Failed to create subject. Status:',
+          subjectResponse.status
+        )
         throw new Error('Failed to create subject')
       }
-      const { subject_id }: CreateSubjectResponse = await subjectResponse.json()
-      subjectId = subject_id
+      const { subjectId }: CreateSubjectResponse = await subjectResponse.json()
+      console.log('[useCreateSubject] Subject created successfully:', {
+        subjectId,
+      })
+
       // Step 2: Enroll professors
-      await Promise.all(
-        professorEmails.map((email) => enrollUserToSubject(subject_id, email))
+      console.log(
+        '[useCreateSubject] Step 2: Enrolling professors:',
+        allProfessorEmails
       )
+      await Promise.all(
+        allProfessorEmails.map((email) => enrollUserToSubject(subjectId, email))
+      )
+
       // Step 3: Enroll students
+      console.log('[useCreateSubject] Step 3: Enrolling students')
       const studentEmailsList = studentEmails
         .split('\n')
         .map((email) => email.trim())
         .filter((email) => email !== '')
-      await Promise.all(
-        studentEmailsList.map((email) => enrollUserToSubject(subject_id, email))
+      console.log(
+        '[useCreateSubject] Student emails to enroll:',
+        studentEmailsList
       )
+      await Promise.all(
+        studentEmailsList.map((email) => enrollUserToSubject(subjectId, email))
+      )
+
       // Step 4: Create template or create Professor's vm
+      console.log('[useCreateSubject] Step 4: Creating template/VM')
       try {
         if (customizeVm) {
-          // 1. Create VM for professor
-          const instanceId = await createProfessorVm(
-            subject_id,
-            base,
+          // Create VM for professor using base as template
+          console.log('[useCreateSubject] Creating customized VM')
+          await createProfessorVm(
+            subjectId,
+            base, // Use base as templateId
             vmUsername,
             vmPassword
           )
-          // 2. Crear template a partir de la instancia creada
-          const templateParams: DefineTemplateParams = {
-            name: subjectName,
-            description: templateDescription,
-            vcpu_count: parseInt(vmCpu),
-            vram_mb: parseInt(vmRam) * 1024,
-            size_mb: parseInt(vmStorage) * 1024,
-            base,
-            instance_id: instanceId,
-          }
-          await defineTemplate(templateParams)
         } else {
-          // Crear template directamente desde base
-          const templateParams: DefineTemplateParams = {
-            name: subjectName,
+          // Create template directly from base
+          console.log('[useCreateSubject] Creating template directly from base')
+          const templateParams: DefineTemplateRequest = {
+            sourceInstanceId: base,
+            sizeMB: parseInt(vmStorage) * 1024,
+            vcpuCount: parseInt(vmCpu),
+            vramMB: parseInt(vmRam) * 1024,
+            subjectId,
             description: templateDescription,
-            vcpu_count: parseInt(vmCpu),
-            vram_mb: parseInt(vmRam) * 1024,
-            size_mb: parseInt(vmStorage) * 1024,
-            base,
-            instance_id: base, // base_id como instance_id para template base
+            isValidated: true,
           }
           await defineTemplate(templateParams)
         }
+        console.log(
+          '[useCreateSubject] Template/VM creation completed successfully'
+        )
       } catch (error) {
-        // If template creation fails, delete the subject
+        console.error(
+          '[useCreateSubject] Error in template/VM creation:',
+          error
+        )
         if (subjectId) {
+          console.log(
+            '[useCreateSubject] Cleaning up - deleting subject due to template creation failure'
+          )
           await fetch(getEnv().API_DELETE_SUBJECT.replace('{id}', subjectId), {
             method: 'DELETE',
           })
         }
-        throw error // Re-throw to trigger the catch block below
+        throw error
       }
+      console.log('[useCreateSubject] Subject creation completed successfully')
       onSuccess()
     } catch (error) {
-      console.error('Error creating subject:', error)
+      console.error(
+        '[useCreateSubject] Error in subject creation process:',
+        error
+      )
       setCreationError(
         error instanceof Error ? error.message : 'Failed to create subject'
       )
     } finally {
       setIsCreating(false)
+      console.log('[useCreateSubject] Creation process finished')
     }
   }
 

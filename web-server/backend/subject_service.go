@@ -8,7 +8,7 @@ import (
 )
 
 type SubjectService interface {
-	CreateSubject(request CreateSubjectRequest) error
+	CreateSubject(request CreateSubjectRequest) (string, error)
 	ListAllSubjectsByUserId(userId string) ([]SubjectResponse, error)
 	EnrollUserInSubject(userEmail, subjectId string) error
 	RemoveUserFromSubject(userEmail, subjectId string) error
@@ -27,15 +27,20 @@ func NewSubjectService(db Database, instanceService InstanceService) SubjectServ
 	}
 }
 
-func (s *SubjService) CreateSubject(request CreateSubjectRequest) error {
+func (s *SubjService) CreateSubject(request CreateSubjectRequest) (string, error) {
 	subject := request.toSubject()
 
 	// Check if professor exists
 	if err := s.db.UserExistsByMail(subject.ProfessorMail); err != nil {
-		return err
+		return "", err
 	}
 
-	return s.db.CreateSubject(subject)
+	subjectId, err := s.db.CreateSubject(subject)
+	if err != nil {
+		return "", err
+	}
+
+	return subjectId, nil
 }
 
 func (s *SubjService) ListAllSubjectsByUserId(userId string) ([]SubjectResponse, error) {

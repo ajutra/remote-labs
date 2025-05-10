@@ -26,3 +26,7 @@ dist-ssr
 # Build files
 tsconfig.app.tsbuildinfo
 tsconfig.node.tsbuildinfo
+
+# Docker database data
+web-server/backend/docker-postgres/
+vms-manager/backend/docker-postgres/

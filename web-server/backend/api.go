@@ -115,11 +115,14 @@ func (server *ApiServer) handleCreateSubject(w http.ResponseWriter, r *http.Requ
 		return NewHttpError(http.StatusBadRequest, err)
 	}
 
-	if err := server.subjectService.CreateSubject(request); err != nil {
+	subjectId, err := server.subjectService.CreateSubject(request)
+	if err != nil {
 		return err
 	}
 
-	return writeResponse(w, http.StatusOK, "Subject created successfully")
+	return writeResponse(w, http.StatusOK, map[string]string{
+		"subjectId": subjectId,
+	})
 }
 
 func (server *ApiServer) handleListAllSubjectsByUserId(w http.ResponseWriter, r *http.Request) error {
