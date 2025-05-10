@@ -71,10 +71,13 @@ type ValidateUserResponse struct {
 type CreateInstanceFrontendRequest struct {
 	UserId        string   `json:"user_id"`
 	SubjectId     string   `json:"subject_id"`
-	TemplateId    string   `json:"template_id"`
+	SourceVmId    string   `json:"sourceVmId"`
 	Username      string   `json:"username"`
 	Password      string   `json:"password"`
 	PublicSshKeys []string `json:"publicSshKeys"`
+	SizeMB        int      `json:"sizeMB"`
+	VcpuCount     int      `json:"vcpuCount"`
+	VramMB        int      `json:"vramMB"`
 }
 
 type CreateInstanceFrontendResponse struct {

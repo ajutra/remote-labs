@@ -23,12 +23,41 @@ const getStatusColor = (status: string) => {
   switch (status.toLowerCase()) {
     case 'running':
       return 'text-green-600'
-    case 'stopped':
+    case 'idle':
+      return 'text-blue-600'
+    case 'paused':
       return 'text-yellow-600'
-    case 'error':
+    case 'in shutdown':
+      return 'text-orange-600'
+    case 'crashed':
       return 'text-red-600'
+    case 'shut off':
+      return 'text-gray-600'
+    case 'pmsuspended':
+      return 'text-purple-600'
     default:
       return 'text-gray-600'
+  }
+}
+
+const getStatusDisplay = (status: string) => {
+  switch (status.toLowerCase()) {
+    case 'running':
+      return 'RUNNING'
+    case 'idle':
+      return 'IDLE'
+    case 'paused':
+      return 'PAUSED'
+    case 'in shutdown':
+      return 'SHUTTING DOWN'
+    case 'crashed':
+      return 'CRASHED'
+    case 'shut off':
+      return 'SHUT OFF'
+    case 'pmsuspended':
+      return 'SUSPENDED'
+    default:
+      return status.toUpperCase()
   }
 }
 
@@ -77,7 +106,7 @@ export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
               <TableRow key={vm.instanceId}>
                 <TableCell>
                   <span className={`font-medium ${getStatusColor(vm.status)}`}>
-                    {vm.status.toUpperCase()}
+                    {getStatusDisplay(vm.status)}
                   </span>
                 </TableCell>
                 <TableCell className="font-medium">{vm.subjectName}</TableCell>
@@ -102,13 +131,15 @@ export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-2">
-                    {vm.status === 'stopped' && (
+                    {['shut off', 'crashed'].includes(
+                      vm.status.toLowerCase()
+                    ) && (
                       <VMStartButton
                         instanceId={vm.instanceId}
                         onSuccess={onRefresh}
                       />
                     )}
-                    {vm.status === 'running' && (
+                    {['running', 'idle'].includes(vm.status.toLowerCase()) && (
                       <VMStopButton
                         instanceId={vm.instanceId}
                         onSuccess={onRefresh}

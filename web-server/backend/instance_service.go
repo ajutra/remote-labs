@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"slices"
 )
@@ -53,6 +55,7 @@ func NewInstanceService(db Database, vmManagerBaseUrl string) InstanceService {
 
 type CreateInstanceRequest struct {
 	SourceVmId    string   `json:"sourceVmId"`
+	BaseId        string   `json:"baseId,omitempty"`
 	SizeMB        int      `json:"sizeMB"`
 	VcpuCount     int      `json:"vcpuCount"`
 	VramMB        int      `json:"vramMB"`
@@ -75,13 +78,38 @@ type vmManagerStatus struct {
 }
 
 func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendRequest) (CreateInstanceFrontendResponse, error) {
-	templateConfig, err := s.db.GetTemplateConfig(request.TemplateId, request.SubjectId)
+	// Check if the sourceVmId is a base
+	isBase := false
+	bases, err := s.Bases()
 	if err != nil {
-		return CreateInstanceFrontendResponse{}, fmt.Errorf("error getting template config: %w", err)
+		return CreateInstanceFrontendResponse{}, fmt.Errorf("error checking if source is a base: %w", err)
+	}
+
+	for _, base := range bases {
+		if base.Id == request.SourceVmId {
+			isBase = true
+			break
+		}
+	}
+
+	var templateConfig TemplateConfig
+	if isBase {
+		// If it's a base, use the config from the request
+		templateConfig = TemplateConfig{
+			SizeMB:    request.SizeMB,
+			VcpuCount: request.VcpuCount,
+			VramMB:    request.VramMB,
+		}
+	} else {
+		// If it's not a base, get the template config from the database
+		templateConfig, err = s.db.GetTemplateConfig(request.SourceVmId, request.SubjectId)
+		if err != nil {
+			return CreateInstanceFrontendResponse{}, fmt.Errorf("error getting template config: %w", err)
+		}
 	}
 
 	createInstanceRequest := CreateInstanceRequest{
-		SourceVmId:    request.TemplateId,
+		SourceVmId:    request.SourceVmId,
 		SizeMB:        templateConfig.SizeMB,
 		VcpuCount:     templateConfig.VcpuCount,
 		VramMB:        templateConfig.VramMB,
@@ -108,7 +136,8 @@ func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendReque
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return CreateInstanceFrontendResponse{}, fmt.Errorf("VM manager API returned status code %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return CreateInstanceFrontendResponse{}, fmt.Errorf("VM manager API returned status code %d with body: %s", resp.StatusCode, string(body))
 	}
 
 	// Decodificar la respuesta
@@ -117,7 +146,13 @@ func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendReque
 		return CreateInstanceFrontendResponse{}, fmt.Errorf("error decoding response: %w", err)
 	}
 
-	err = s.db.CreateInstance(response.InstanceId, request.UserId, request.SubjectId, request.TemplateId)
+	// Si es una base, pasamos template_id como NULL
+	var templateId *string
+	if !isBase {
+		templateId = &request.SourceVmId
+	}
+
+	err = s.db.CreateInstance(response.InstanceId, request.UserId, request.SubjectId, templateId)
 	if err != nil {
 		return CreateInstanceFrontendResponse{}, fmt.Errorf("error creating instance: %w", err)
 	}
@@ -265,8 +300,51 @@ func (s *InstanceServiceImpl) Bases() ([]Base, error) {
 }
 
 func (s *InstanceServiceImpl) DefineTemplate(request DefineTemplateRequest) error {
+	log.Printf("DefineTemplate called with request: %+v", request)
+
+	// Check if the sourceInstanceId is a base
+	isBase := false
+	bases, err := s.Bases()
+	if err != nil {
+		log.Printf("Error getting bases: %v", err)
+		return fmt.Errorf("error checking if source is a base: %w", err)
+	}
+	log.Printf("Available bases: %+v", bases)
+
+	for _, base := range bases {
+		if base.Id == request.SourceInstanceId {
+			isBase = true
+			log.Printf("Found matching base: %+v", base)
+			break
+		}
+	}
+
+	if isBase {
+		log.Printf("Creating template from base %s", request.SourceInstanceId)
+		// If it's a base, just create the template record in the database
+		// Use the base ID as the template ID
+		err = s.db.CreateTemplate(
+			request.SourceInstanceId,
+			request.SubjectId,
+			request.SizeMB,
+			request.VcpuCount,
+			request.VramMB,
+			request.IsValidated,
+			request.Description,
+		)
+		if err != nil {
+			log.Printf("Error creating template from base: %v", err)
+			return fmt.Errorf("error creating template from base: %w", err)
+		}
+		log.Printf("Successfully created template from base")
+		return nil
+	}
+
+	log.Printf("Creating template from instance %s", request.SourceInstanceId)
+	// If it's not a base, proceed with the normal template definition process
 	jsonData, err := json.Marshal(request)
 	if err != nil {
+		log.Printf("Error marshaling request: %v", err)
 		return fmt.Errorf("error marshaling define template request: %w", err)
 	}
 
@@ -276,24 +354,39 @@ func (s *InstanceServiceImpl) DefineTemplate(request DefineTemplateRequest) erro
 		bytes.NewBuffer(jsonData),
 	)
 	if err != nil {
+		log.Printf("Error calling VM manager API: %v", err)
 		return fmt.Errorf("error calling VM manager API: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("VM manager API returned status code %d with body: %s", resp.StatusCode, string(body))
 		return fmt.Errorf("VM manager API returned status code %d", resp.StatusCode)
 	}
 
 	var response DefineTemplateResponse
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		log.Printf("Error decoding response: %v", err)
 		return fmt.Errorf("error decoding response: %w", err)
 	}
 
-	err = s.db.CreateTemplate(response.TemplateId, request.SubjectId, request.SourceInstanceId, request.SizeMB, request.VcpuCount, request.VramMB, request.IsValidated, request.Description)
+	log.Printf("Creating template in database with ID %s", response.TemplateId)
+	err = s.db.CreateTemplate(
+		response.TemplateId,
+		request.SubjectId,
+		request.SizeMB,
+		request.VcpuCount,
+		request.VramMB,
+		request.IsValidated,
+		request.Description,
+	)
 	if err != nil {
+		log.Printf("Error creating template in database: %v", err)
 		return fmt.Errorf("error creating template: %w", err)
 	}
 
+	log.Printf("Successfully created template")
 	return nil
 }
 

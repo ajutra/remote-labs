@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useToast } from '@/hooks/use-toast'
+import { getEnv } from '@/utils/Env'
 
 export interface DefineTemplateParams {
   sourceInstanceId: string
@@ -18,13 +19,16 @@ export const useDefineTemplate = () => {
   const defineTemplate = async (params: DefineTemplateParams) => {
     setLoading(true)
     try {
-      const response = await fetch('/templates/define', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(params),
-      })
+      const response = await fetch(
+        getEnv().API_BASE_URL + '/templates/define',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(params),
+        }
+      )
       if (!response.ok) {
         throw new Error('Failed to create template')
       }
