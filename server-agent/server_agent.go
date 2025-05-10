@@ -169,17 +169,9 @@ func (agent *ServerAgentImpl) DeleteVm(vmId string, removeEtiquete bool) error {
 
 	if removeEtiquete {
 		// TODO: Make this dynamic
-		log.Printf("Removing vlan etiquete from network bridge...")
-
-		removeVlanEtiqueteCmd := exec.Command(
-			"bridge", "vlan", "del", "vid", "100", "dev", agent.vmNetworkBridge, "self", // Remove self
-		)
-
-		if output, err := removeVlanEtiqueteCmd.CombinedOutput(); err != nil {
-			return logAndReturnError("Error removing vlan etiquete from network bridge: ", string(output))
+		if err := agent.removeVidFromNetworkBridge("100"); err != nil {
+			return err
 		}
-
-		log.Printf("Vlan etiquete removed from network bridge successfully!")
 	}
 
 	return nil
@@ -201,25 +193,9 @@ func (agent *ServerAgentImpl) StartInstance(instanceId string) error {
 	log.Printf("Started instance '%s' successfully!", instanceId)
 
 	// TODO: Make this dynamic
-	log.Printf("Setting up network...")
-
-	addVlanEtiqueteCmd := exec.Command(
-		"bridge", "vlan", "add", "vid", "100", "dev", agent.vmNetworkBridge, "self", // Remove self
-	)
-
-	if output, err := addVlanEtiqueteCmd.CombinedOutput(); err != nil {
-		return logAndReturnError("Error adding vlan etiquete to network bridge: ", string(output))
+	if err := agent.setupVMNetwork("100", "vlan100"); err != nil {
+		return err
 	}
-
-	setupVmInterfaceAsAccessPortCmd := exec.Command(
-		"bridge", "vlan", "add", "vid", "100", "dev", "vlan100", "pvid", "100", "untagged",
-	)
-
-	if output, err := setupVmInterfaceAsAccessPortCmd.CombinedOutput(); err != nil {
-		return logAndReturnError("Error setting up vm interface as access port: ", string(output))
-	}
-
-	log.Printf("Network setup successfully!")
 
 	return nil
 }
@@ -352,6 +328,46 @@ func (agent *ServerAgentImpl) createVm(request CreateVmRequest) error {
 	}
 
 	log.Printf("%s '%s' created successfully!", request.VmType, request.VmId)
+	return nil
+}
+
+func (agent *ServerAgentImpl) removeVidFromNetworkBridge(vid string) error {
+	log.Printf("Removing vlan etiquete from network bridge...")
+
+	removeVlanEtiqueteCmd := exec.Command(
+		"bridge", "vlan", "del", "vid", vid, "dev", agent.vmNetworkBridge, "self", // TODO: Remove self
+	)
+
+	if output, err := removeVlanEtiqueteCmd.CombinedOutput(); err != nil {
+		return logAndReturnError("Error removing vlan etiquete from network bridge: ", string(output))
+	}
+
+	log.Printf("Vlan etiquete removed from network bridge successfully!")
+
+	return nil
+}
+
+func (agent *ServerAgentImpl) setupVMNetwork(vid string, vlanEtiquete string) error {
+	log.Printf("Setting up network...")
+
+	addVlanEtiqueteCmd := exec.Command(
+		"bridge", "vlan", "add", "vid", vid, "dev", agent.vmNetworkBridge, "self", // TODO: Remove self
+	)
+
+	if output, err := addVlanEtiqueteCmd.CombinedOutput(); err != nil {
+		return logAndReturnError("Error adding vlan etiquete to network bridge: ", string(output))
+	}
+
+	setupVmInterfaceAsAccessPortCmd := exec.Command(
+		"bridge", "vlan", "add", "vid", vid, "dev", vlanEtiquete, "pvid", vid, "untagged",
+	)
+
+	if output, err := setupVmInterfaceAsAccessPortCmd.CombinedOutput(); err != nil {
+		return logAndReturnError("Error setting up vm interface as access port: ", string(output))
+	}
+
+	log.Printf("Network setup successfully!")
+
 	return nil
 }
 
