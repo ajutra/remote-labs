@@ -12,8 +12,6 @@ import (
 )
 
 const DEFAULT_OS_VARIANT = "debian11"
-const DEFAULT_NETWORK_BRIDGE = "virbr0"
-const VM_NETWORK_BRIDGE = "eno4"
 const AFTER_INSTALL_WAIT_TIME = 20 * time.Second
 const SHUTDOWN_WAIT_TIME = 5 * time.Second
 const RETRY_SHUTDOWN_WAIT_TIME = 10 * time.Second
@@ -35,8 +33,10 @@ type ServerAgent interface {
 }
 
 type ServerAgentImpl struct {
-	vmsStoragePath      string
-	cloudInitImagesPath string
+	vmsStoragePath       string
+	cloudInitImagesPath  string
+	defaultNetworkBridge string
+	vmNetworkBridge      string
 }
 
 type VmType string
@@ -172,7 +172,7 @@ func (agent *ServerAgentImpl) DeleteVm(vmId string, removeEtiquete bool) error {
 		log.Printf("Removing vlan etiquete from network bridge...")
 
 		removeVlanEtiqueteCmd := exec.Command(
-			"bridge", "vlan", "del", "vid", "100", "dev", VM_NETWORK_BRIDGE, "self", // Remove self
+			"bridge", "vlan", "del", "vid", "100", "dev", agent.vmNetworkBridge, "self", // Remove self
 		)
 
 		if output, err := removeVlanEtiqueteCmd.CombinedOutput(); err != nil {
@@ -204,7 +204,7 @@ func (agent *ServerAgentImpl) StartInstance(instanceId string) error {
 	log.Printf("Setting up network...")
 
 	addVlanEtiqueteCmd := exec.Command(
-		"bridge", "vlan", "add", "vid", "100", "dev", VM_NETWORK_BRIDGE, "self", // Remove self
+		"bridge", "vlan", "add", "vid", "100", "dev", agent.vmNetworkBridge, "self", // Remove self
 	)
 
 	if output, err := addVlanEtiqueteCmd.CombinedOutput(); err != nil {
@@ -545,7 +545,7 @@ func (agent *ServerAgentImpl) installVm(request CreateVmRequest) error {
 		"--disk", "path="+request.DirPath+"/"+request.VmId+".qcow2,format=qcow2",
 		"--disk", "path="+request.DirPath+"/cidata.iso,device=cdrom",
 		"--os-variant", DEFAULT_OS_VARIANT,
-		"--network", "bridge="+DEFAULT_NETWORK_BRIDGE+",target=vlan100,model=virtio",
+		"--network", "bridge="+agent.defaultNetworkBridge+",target=vlan100,model=virtio",
 		"--graphics", "vnc,listen=0.0.0.0",
 		"--noautoconsole",
 	)
@@ -589,9 +589,16 @@ func toListInstancesStatusResponse(vmStatusMap map[string]string) []ListInstance
 	return response
 }
 
-func NewServerAgent(vmsStoragePath string, cloudInitImagesPath string) ServerAgent {
+func NewServerAgent(
+	vmsStoragePath string,
+	cloudInitImagesPath string,
+	defaultNetworkBridge string,
+	vmNetworkBridge string,
+) ServerAgent {
 	return &ServerAgentImpl{
-		vmsStoragePath:      vmsStoragePath,
-		cloudInitImagesPath: cloudInitImagesPath,
+		vmsStoragePath:       vmsStoragePath,
+		cloudInitImagesPath:  cloudInitImagesPath,
+		defaultNetworkBridge: defaultNetworkBridge,
+		vmNetworkBridge:      vmNetworkBridge,
 	}
 }
