@@ -29,6 +29,10 @@ type CreateInstanceRequest struct {
 
 type CreateInstanceResponse struct {
 	InstanceId string `json:"instanceId"`
+	/*InterfaceAddress string   `json:"interfaceAddress"`
+	PeerPublicKey    string   `json:"peerPublicKey"`
+	PeerAllowedIps   []string `json:"peerAllowedIps"`
+	PeerEndpointPort int      `json:"peerEndpointPort"`*/
 }
 
 type ListInstancesStatusResponse struct {
