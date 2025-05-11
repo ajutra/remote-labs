@@ -78,10 +78,13 @@ type vmManagerStatus struct {
 }
 
 func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendRequest) (CreateInstanceFrontendResponse, error) {
+	log.Printf("Starting instance creation process for user %s and subject %s", request.UserId, request.SubjectId)
+
 	// Check if the sourceVmId is a base
 	isBase := false
 	bases, err := s.Bases()
 	if err != nil {
+		log.Printf("Error checking bases: %v", err)
 		return CreateInstanceFrontendResponse{}, fmt.Errorf("error checking if source is a base: %w", err)
 	}
 
@@ -91,6 +94,7 @@ func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendReque
 			break
 		}
 	}
+	log.Printf("Source VM is base: %v", isBase)
 
 	var templateConfig TemplateConfig
 	if isBase {
@@ -104,6 +108,7 @@ func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendReque
 		// If it's not a base, get the template config from the database
 		templateConfig, err = s.db.GetTemplateConfig(request.SourceVmId, request.SubjectId)
 		if err != nil {
+			log.Printf("Error getting template config: %v", err)
 			return CreateInstanceFrontendResponse{}, fmt.Errorf("error getting template config: %w", err)
 		}
 	}
@@ -118,35 +123,37 @@ func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendReque
 		PublicSshKeys: request.PublicSshKeys,
 	}
 
-	// Convertir la solicitud a JSON
 	jsonData, err := json.Marshal(createInstanceRequest)
 	if err != nil {
-		return CreateInstanceFrontendResponse{}, fmt.Errorf("error marshaling create instance request: %w", err)
+		log.Printf("Error marshaling request: %v", err)
+		return CreateInstanceFrontendResponse{}, fmt.Errorf("error marshaling request: %w", err)
 	}
 
-	// Hacer la petición al gestor de máquinas
+	log.Printf("Sending request to VM manager at %s/instances/create", s.vmManagerBaseUrl)
 	resp, err := http.Post(
 		fmt.Sprintf("%s/instances/create", s.vmManagerBaseUrl),
 		"application/json",
 		bytes.NewBuffer(jsonData),
 	)
 	if err != nil {
-		return CreateInstanceFrontendResponse{}, fmt.Errorf("error calling VM manager API: %w", err)
+		log.Printf("Error calling VM manager: %v", err)
+		return CreateInstanceFrontendResponse{}, fmt.Errorf("error calling VM manager: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return CreateInstanceFrontendResponse{}, fmt.Errorf("VM manager API returned status code %d with body: %s", resp.StatusCode, string(body))
+		log.Printf("VM manager returned error status %d: %s", resp.StatusCode, string(body))
+		return CreateInstanceFrontendResponse{}, fmt.Errorf("VM manager returned error status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Decodificar la respuesta
 	var response CreateInstanceResponse
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return CreateInstanceFrontendResponse{}, fmt.Errorf("error decoding response: %w", err)
+		log.Printf("Error decoding VM manager response: %v", err)
+		return CreateInstanceFrontendResponse{}, fmt.Errorf("error decoding VM manager response: %w", err)
 	}
 
-	// Si es una base, pasamos template_id como NULL
+	// Create the instance record in the database
 	var templateId *string
 	if !isBase {
 		templateId = &request.SourceVmId
@@ -154,7 +161,8 @@ func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendReque
 
 	err = s.db.CreateInstance(response.InstanceId, request.UserId, request.SubjectId, templateId)
 	if err != nil {
-		return CreateInstanceFrontendResponse{}, fmt.Errorf("error creating instance: %w", err)
+		log.Printf("Error creating instance record: %v", err)
+		return CreateInstanceFrontendResponse{}, fmt.Errorf("error creating instance record: %w", err)
 	}
 
 	return CreateInstanceFrontendResponse{
@@ -266,7 +274,11 @@ func (s *InstanceServiceImpl) GetInstanceStatus() ([]InstanceStatus, error) {
 			// If successful, set the values from the database
 			status.UserId = info.UserId
 			status.SubjectId = info.SubjectId
-			status.TemplateId = info.TemplateId
+			if info.TemplateId != nil {
+				status.TemplateId = *info.TemplateId
+			} else {
+				status.TemplateId = ""
+			}
 			status.CreatedAt = info.CreatedAt
 			status.UserMail = info.UserMail
 			status.SubjectName = info.SubjectName
@@ -462,7 +474,11 @@ func (s *InstanceServiceImpl) GetInstanceStatusByUserId(userId string) ([]Instan
 			// If successful, set the values from the database
 			status.UserId = info.UserId
 			status.SubjectId = info.SubjectId
-			status.TemplateId = info.TemplateId
+			if info.TemplateId != nil {
+				status.TemplateId = *info.TemplateId
+			} else {
+				status.TemplateId = ""
+			}
 			status.CreatedAt = info.CreatedAt
 			status.UserMail = info.UserMail
 			status.SubjectName = info.SubjectName

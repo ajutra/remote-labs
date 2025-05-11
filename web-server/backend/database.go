@@ -215,17 +215,42 @@ func (postgres *PostgresDatabase) GetTemplateConfig(templateId string, subjectId
 }
 
 func (postgres *PostgresDatabase) CreateInstance(instanceId string, userId string, subjectId string, templateId *string) error {
+	// Convertir los strings a UUID
+	instanceUUID, err := uuid.Parse(instanceId)
+	if err != nil {
+		return fmt.Errorf("error parsing instance ID: %w", err)
+	}
+
+	userUUID, err := uuid.Parse(userId)
+	if err != nil {
+		return fmt.Errorf("error parsing user ID: %w", err)
+	}
+
+	subjectUUID, err := uuid.Parse(subjectId)
+	if err != nil {
+		return fmt.Errorf("error parsing subject ID: %w", err)
+	}
+
+	var templateUUID *uuid.UUID
+	if templateId != nil {
+		parsedUUID, err := uuid.Parse(*templateId)
+		if err != nil {
+			return fmt.Errorf("error parsing template ID: %w", err)
+		}
+		templateUUID = &parsedUUID
+	}
+
 	query := `
 	INSERT INTO instances (id, user_id, subject_id, template_id)
 	VALUES (@id, @user_id, @subject_id, @template_id)`
 	args := pgx.NamedArgs{
-		"id":          instanceId,
-		"user_id":     userId,
-		"subject_id":  subjectId,
-		"template_id": templateId,
+		"id":          instanceUUID,
+		"user_id":     userUUID,
+		"subject_id":  subjectUUID,
+		"template_id": templateUUID,
 	}
 
-	_, err := postgres.db.Exec(context.Background(), query, args)
+	_, err = postgres.db.Exec(context.Background(), query, args)
 	if err != nil {
 		return fmt.Errorf("error creating instance: %w", err)
 	}

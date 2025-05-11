@@ -69,8 +69,8 @@ type ValidateUserResponse struct {
 }
 
 type CreateInstanceFrontendRequest struct {
-	UserId        string   `json:"user_id"`
-	SubjectId     string   `json:"subject_id"`
+	UserId        string   `json:"userId"`
+	SubjectId     string   `json:"subjectId"`
 	SourceVmId    string   `json:"sourceVmId"`
 	Username      string   `json:"username"`
 	Password      string   `json:"password"`
