@@ -12,30 +12,31 @@ import (
 )
 
 const DEFAULT_OS_VARIANT = "debian11"
-const DEFAULT_NETWORK_BRIDGE = "virbr0"
-const AFTER_INSTALL_WAIT_TIME = 10 * time.Second
-const SHUTDOWN_WAIT_TIME = 3 * time.Second
-const RETRY_SHUTDOWN_WAIT_TIME = 5 * time.Second
-const FORCE_SHUTDOWN_WAIT_TIME = 10 * time.Second
+const AFTER_INSTALL_WAIT_TIME = 20 * time.Second
+const SHUTDOWN_WAIT_TIME = 5 * time.Second
+const RETRY_SHUTDOWN_WAIT_TIME = 10 * time.Second
+const FORCE_SHUTDOWN_WAIT_TIME = 20 * time.Second
 const SHUTOFF_STATUS = "shut off"
 
 //go:embed templates/*.tmpl
 var templateFS embed.FS
 
 type ServerAgent interface {
-	ListBaseImages() ([]ListBaseImagesResponse, error)
+	ListBaseImages() (ListBaseImagesResponse, error)
 	DefineTemplate(request DefineTemplateRequest) error
 	CreateInstance(request CreateInstanceRequest) error
-	DeleteVm(vmId string) error
-	StartInstance(instanceId string) error
+	DeleteVm(request DeleteVmRequest) error
+	StartInstance(request StartInstanceRequest) error
 	StopInstance(instanceId string) error
 	RestartInstance(instanceId string) error
 	ListInstancesStatus() ([]ListInstancesStatusResponse, error)
 }
 
 type ServerAgentImpl struct {
-	vmsStoragePath      string
-	cloudInitImagesPath string
+	vmsStoragePath       string
+	cloudInitImagesPath  string
+	defaultNetworkBridge string
+	vmNetworkBridge      string
 }
 
 type VmType string
@@ -46,17 +47,22 @@ const (
 )
 
 type CreateVmRequest struct {
-	VmType        VmType
-	VmId          string
-	SourceVmId    string
-	SourceIsBase  bool
-	DirPath       string
-	SizeMB        int
-	VramMB        int
-	VcpuCount     int
-	Username      string
-	Password      string
-	PublicSshKeys []string
+	VmType          VmType
+	VmId            string
+	SourceVmId      string
+	SourceIsBase    bool
+	DirPath         string
+	SizeMB          int
+	VramMB          int
+	VcpuCount       int
+	Username        string
+	Password        string
+	PublicSshKeys   []string
+	IpAddWithSubnet string
+	Dns1            string
+	Dns2            string
+	Gateway         string
+	VlanEtiquete    string
 }
 
 type CloudInitMetadata struct {
@@ -70,7 +76,14 @@ type CloudInitUserData struct {
 	PublicSshKeys []string
 }
 
-func (agent *ServerAgentImpl) ListBaseImages() ([]ListBaseImagesResponse, error) {
+type CloudInitNetworkConfig struct {
+	IpAddWithSubnet string
+	Dns1            string
+	Dns2            string
+	Gateway         string
+}
+
+func (agent *ServerAgentImpl) ListBaseImages() (ListBaseImagesResponse, error) {
 	log.Printf("Getting base images...")
 
 	cmd := exec.Command(
@@ -81,7 +94,7 @@ func (agent *ServerAgentImpl) ListBaseImages() ([]ListBaseImagesResponse, error)
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		return nil, logAndReturnError("Error listing base VMs: ", string(output))
+		return ListBaseImagesResponse{}, logAndReturnError("Error listing base VMs: ", string(output))
 	}
 
 	files := strings.Split(string(output), "\n")
@@ -111,62 +124,77 @@ func (agent *ServerAgentImpl) DefineTemplate(request DefineTemplateRequest) erro
 
 func (agent *ServerAgentImpl) CreateInstance(request CreateInstanceRequest) error {
 	createVmRequest := CreateVmRequest{
-		VmType:        InstanceVm,
-		VmId:          request.InstanceId,
-		SourceVmId:    request.SourceVmId,
-		SourceIsBase:  request.SourceIsBase,
-		DirPath:       agent.vmsStoragePath + "/" + request.InstanceId,
-		SizeMB:        request.SizeMB,
-		VramMB:        request.VramMB,
-		VcpuCount:     request.VcpuCount,
-		Username:      request.Username,
-		Password:      request.Password,
-		PublicSshKeys: request.PublicSshKeys,
+		VmType:          InstanceVm,
+		VmId:            request.InstanceId,
+		SourceVmId:      request.SourceVmId,
+		SourceIsBase:    request.SourceIsBase,
+		DirPath:         agent.vmsStoragePath + "/" + request.InstanceId,
+		SizeMB:          request.SizeMB,
+		VramMB:          request.VramMB,
+		VcpuCount:       request.VcpuCount,
+		Username:        request.Username,
+		Password:        request.Password,
+		PublicSshKeys:   request.PublicSshKeys,
+		IpAddWithSubnet: request.IpAddWithSubnet,
+		Dns1:            request.Dns1,
+		Dns2:            request.Dns2,
+		Gateway:         request.Gateway,
+		VlanEtiquete:    request.VlanEtiquete,
 	}
 
 	return agent.createVm(createVmRequest)
 }
 
-func (agent *ServerAgentImpl) DeleteVm(vmId string) error {
-	log.Printf("Deleting VM '%s'...", vmId)
+func (agent *ServerAgentImpl) DeleteVm(request DeleteVmRequest) error {
+	log.Printf("Deleting VM '%s'...", request.VmId)
 
 	cmd := exec.Command(
-		"virsh", "undefine", vmId, "--remove-all-storage",
+		"virsh", "undefine", request.VmId, "--remove-all-storage",
 	)
 
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		return logAndReturnError("Error deleting VM '"+vmId+"': ", string(output))
+		return logAndReturnError("Error deleting VM '"+request.VmId+"': ", string(output))
 	}
 
-	log.Printf("Removing VM '%s' files from storage...", vmId)
+	log.Printf("Removing VM '%s' files from storage...", request.VmId)
 
-	if err := os.RemoveAll(agent.vmsStoragePath + "/" + vmId); err != nil {
-		return logAndReturnError("Error deleting VM '"+vmId+"' files from storage: ", err.Error())
+	if err := os.RemoveAll(agent.vmsStoragePath + "/" + request.VmId); err != nil {
+		return logAndReturnError("Error deleting VM '"+request.VmId+"' files from storage: ", err.Error())
 	}
 
-	log.Printf("VM '%s' files removed from storage successfully!", vmId)
+	log.Printf("VM '%s' files removed from storage successfully!", request.VmId)
 
-	log.Printf("Deleted VM '%s' successfully!", vmId)
+	log.Printf("Deleted VM '%s' successfully!", request.VmId)
+
+	if request.RemoveEtiquete {
+		if err := agent.removeVidFromNetworkBridge(request.Vid); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
 
-func (agent *ServerAgentImpl) StartInstance(instanceId string) error {
-	log.Printf("Starting instance '%s'...", instanceId)
+func (agent *ServerAgentImpl) StartInstance(request StartInstanceRequest) error {
+	log.Printf("Starting instance '%s'...", request.InstanceId)
 
 	cmd := exec.Command(
-		"virsh", "start", instanceId,
+		"virsh", "start", request.InstanceId,
 	)
 
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		return logAndReturnError("Error starting instance '"+instanceId+"': ", string(output))
+		return logAndReturnError("Error starting instance '"+request.InstanceId+"': ", string(output))
 	}
 
-	log.Printf("Started instance '%s' successfully!", instanceId)
+	log.Printf("Started instance '%s' successfully!", request.InstanceId)
+
+	if err := agent.setupVMNetwork(request.Vid, request.VlanEtiquete); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -302,9 +330,48 @@ func (agent *ServerAgentImpl) createVm(request CreateVmRequest) error {
 	return nil
 }
 
-func toListBaseImagesResponse(fileNames []string) []ListBaseImagesResponse {
-	response := []ListBaseImagesResponse{}
-	response = append(response, ListBaseImagesResponse{FileNames: fileNames})
+func (agent *ServerAgentImpl) removeVidFromNetworkBridge(vid string) error {
+	log.Printf("Removing vlan etiquete from network bridge...")
+
+	removeVlanEtiqueteCmd := exec.Command(
+		"bridge", "vlan", "del", "vid", vid, "dev", agent.vmNetworkBridge, "self", // TODO: Remove self on production
+	)
+
+	if output, err := removeVlanEtiqueteCmd.CombinedOutput(); err != nil {
+		return logAndReturnError("Error removing vlan etiquete from network bridge: ", string(output))
+	}
+
+	log.Printf("Vlan etiquete removed from network bridge successfully!")
+
+	return nil
+}
+
+func (agent *ServerAgentImpl) setupVMNetwork(vid string, vlanEtiquete string) error {
+	log.Printf("Setting up network...")
+
+	addVlanEtiqueteCmd := exec.Command(
+		"bridge", "vlan", "add", "vid", vid, "dev", agent.vmNetworkBridge, "self", // TODO: Remove self on production
+	)
+
+	if output, err := addVlanEtiqueteCmd.CombinedOutput(); err != nil {
+		return logAndReturnError("Error adding vlan etiquete to network bridge: ", string(output))
+	}
+
+	setupVmInterfaceAsAccessPortCmd := exec.Command(
+		"bridge", "vlan", "add", "vid", vid, "dev", vlanEtiquete, "pvid", vid, "untagged",
+	)
+
+	if output, err := setupVmInterfaceAsAccessPortCmd.CombinedOutput(); err != nil {
+		return logAndReturnError("Error setting up vm interface as access port: ", string(output))
+	}
+
+	log.Printf("Network setup successfully!")
+
+	return nil
+}
+
+func toListBaseImagesResponse(fileNames []string) ListBaseImagesResponse {
+	response := ListBaseImagesResponse{FileNames: fileNames}
 	return response
 }
 
@@ -357,10 +424,22 @@ func (agent *ServerAgentImpl) createVmConfigurationFiles(request CreateVmRequest
 		if err := createFileFromTemplate(request.DirPath, "user-data", cloudInitUserData); err != nil {
 			return err
 		}
+
+		// And setup the network config
+		cloudInitNetworkConfig := CloudInitNetworkConfig{
+			IpAddWithSubnet: request.IpAddWithSubnet,
+			Dns1:            request.Dns1,
+			Dns2:            request.Dns2,
+			Gateway:         request.Gateway,
+		}
+
+		if err := createFileFromTemplate(request.DirPath, "network-config", cloudInitNetworkConfig); err != nil {
+			return err
+		}
 	}
 
 	// Create cidata.iso
-	if err := createCidataIso(request.DirPath); err != nil {
+	if err := createCidataIso(request.DirPath, request.VmType == TemplateVm); err != nil {
 		return err
 	}
 
@@ -391,16 +470,23 @@ func createFileFromTemplate(newFilePath string, fileName string, data interface{
 	return nil
 }
 
-func createCidataIso(dirPath string) error {
+func createCidataIso(dirPath string, isTemplate bool) error {
 	log.Printf("Creating cidata.iso...")
 
-	createIsoCmd := exec.Command(
-		"genisoimage",
-		"-output", dirPath+"/cidata.iso",
+	files := []string{dirPath + "/meta-data", dirPath + "/user-data"}
+	if !isTemplate {
+		files = append(files, dirPath+"/network-config")
+	}
+
+	args := []string{
+		"-output", dirPath + "/cidata.iso",
 		"-V", "cidata",
 		"-r",
-		"-J", dirPath+"/meta-data", dirPath+"/user-data",
-	)
+		"-J",
+	}
+	args = append(args, files...)
+
+	createIsoCmd := exec.Command("genisoimage", args...)
 
 	createIsoCmdOutput, err := createIsoCmd.CombinedOutput()
 	if err != nil {
@@ -474,7 +560,7 @@ func (agent *ServerAgentImpl) installVm(request CreateVmRequest) error {
 		"--disk", "path="+request.DirPath+"/"+request.VmId+".qcow2,format=qcow2",
 		"--disk", "path="+request.DirPath+"/cidata.iso,device=cdrom",
 		"--os-variant", DEFAULT_OS_VARIANT,
-		"--network", "bridge="+DEFAULT_NETWORK_BRIDGE+",model=virtio",
+		"--network", "bridge="+agent.defaultNetworkBridge+",target="+request.VlanEtiquete+",model=virtio",
 		"--graphics", "vnc,listen=0.0.0.0",
 		"--noautoconsole",
 	)
@@ -486,7 +572,7 @@ func (agent *ServerAgentImpl) installVm(request CreateVmRequest) error {
 
 	log.Printf("VM installed successfully!")
 
-	// We need to wait for the VM to be started
+	// We need to wait for the VM to be started and configured
 	time.Sleep(AFTER_INSTALL_WAIT_TIME)
 
 	return nil
@@ -518,9 +604,16 @@ func toListInstancesStatusResponse(vmStatusMap map[string]string) []ListInstance
 	return response
 }
 
-func NewServerAgent(vmsStoragePath string, cloudInitImagesPath string) ServerAgent {
+func NewServerAgent(
+	vmsStoragePath string,
+	cloudInitImagesPath string,
+	defaultNetworkBridge string,
+	vmNetworkBridge string,
+) ServerAgent {
 	return &ServerAgentImpl{
-		vmsStoragePath:      vmsStoragePath,
-		cloudInitImagesPath: cloudInitImagesPath,
+		vmsStoragePath:       vmsStoragePath,
+		cloudInitImagesPath:  cloudInitImagesPath,
+		defaultNetworkBridge: defaultNetworkBridge,
+		vmNetworkBridge:      vmNetworkBridge,
 	}
 }

@@ -23,8 +23,15 @@ func main() {
 	stopInstanceEndpoint := os.Getenv("STOP_INSTANCE_ENDPOINT")
 	restartInstanceEndpoint := os.Getenv("RESTART_INSTANCE_ENDPOINT")
 	listInstancesStatusEndpoint := os.Getenv("LIST_INSTANCES_STATUS_ENDPOINT")
+	defaultNetworkBridge := os.Getenv("DEFAULT_NETWORK_BRIDGE")
+	vmNetworkBridge := os.Getenv("VM_NETWORK_BRIDGE")
 
-	serverAgent := NewServerAgent(vmsStoragePath, cloudInitImagesPath)
+	serverAgent := NewServerAgent(
+		vmsStoragePath,
+		cloudInitImagesPath,
+		defaultNetworkBridge,
+		vmNetworkBridge,
+	)
 
 	listenAddr := getListenAddr()
 

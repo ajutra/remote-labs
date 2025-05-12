@@ -1,0 +1,11 @@
+network:
+  version: 2
+  ethernets:
+    enp1s0:
+      dhcp4: no
+      addresses: [{{.IpAddWithSubnet}}]
+      nameservers:
+        addresses: [{{.Dns1}}{{if .Dns2}}, {{.Dns2}}{{end}}]
+      routes:
+        - to: 0.0.0.0/0
+          via: {{.Gateway}}
