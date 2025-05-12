@@ -40,6 +40,8 @@ type ServiceImpl struct {
 	stopInstanceEndpoint        string
 	restartInstanceEndpoint     string
 	listInstancesStatusEndpoint string
+	vmsDns1                     string
+	vmsDns2                     string
 	mutexMap                    map[string]*sync.Mutex
 	mutex                       sync.Mutex
 }
@@ -268,15 +270,19 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 	}
 
 	agentRequest := CreateInstanceAgentRequest{
-		SourceVmId:    sourceVmId,
-		SourceIsBase:  isBase,
-		InstanceId:    instanceId,
-		SizeMB:        request.SizeMB,
-		VcpuCount:     request.VcpuCount,
-		VramMB:        request.VramMB,
-		Username:      request.Username,
-		Password:      request.Password,
-		PublicSshKeys: request.PublicSshKeys,
+		SourceVmId:      sourceVmId,
+		SourceIsBase:    isBase,
+		InstanceId:      instanceId,
+		SizeMB:          request.SizeMB,
+		VcpuCount:       request.VcpuCount,
+		VramMB:          request.VramMB,
+		Username:        request.Username,
+		Password:        request.Password,
+		PublicSshKeys:   request.PublicSshKeys,
+		IpAddWithSubnet: "10.0.100.2/24", // TODO: Make this dynamic
+		Dns1:            s.vmsDns1,
+		Dns2:            s.vmsDns2,
+		Gateway:         "10.0.100.1", // TODO: Make this dynamic
 	}
 
 	jsonData, err := json.Marshal(agentRequest)
@@ -722,6 +728,8 @@ func NewService(
 	stopInstanceEndpoint string,
 	restartInstanceEndpoint string,
 	listInstancesStatusEndpoint string,
+	vmsDns1 string,
+	vmsDns2 string,
 ) (Service, error) {
 	service := &ServiceImpl{
 		db:                          db,
@@ -735,6 +743,8 @@ func NewService(
 		stopInstanceEndpoint:        stopInstanceEndpoint,
 		restartInstanceEndpoint:     restartInstanceEndpoint,
 		listInstancesStatusEndpoint: listInstancesStatusEndpoint,
+		vmsDns1:                     vmsDns1,
+		vmsDns2:                     vmsDns2,
 		mutexMap:                    make(map[string]*sync.Mutex),
 	}
 
