@@ -122,15 +122,25 @@ export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">RAM:</span>
-                      <span>{vm.template_vram_mb ? `${vm.template_vram_mb / 1024} GB` : 'XX'}</span>
+                      <span>
+                        {vm.template_vram_mb
+                          ? `${vm.template_vram_mb / 1024} GB`
+                          : 'XX'}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">Disk:</span>
-                      <span>{vm.template_size_mb ? `${vm.template_size_mb / 1024} GB` : 'XX'}</span>
+                      <span>
+                        {vm.template_size_mb
+                          ? `${vm.template_size_mb / 1024} GB`
+                          : 'XX'}
+                      </span>
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="font-medium">{vm.templateId || 'to be defined'}</TableCell>
+                <TableCell className="font-medium">
+                  {vm.templateId || 'to be defined'}
+                </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-2">
                     {['shut off', 'crashed'].includes(

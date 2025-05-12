@@ -13,6 +13,8 @@ export const getEnv = () => {
     API_CREATE_TEMPLATE: `${VITE_API_URL}/templates/define`,
     API_DELETE_SUBJECT: `${VITE_API_URL}/subjects/{id}`,
     API_DELETE_INSTANCE: `${VITE_API_URL}/instances/delete/{instanceId}`,
+    API_GET_INSTANCE_STATUS: `${VITE_API_URL}/instances/status/{userId}`,
+    API_GET_INSTANCE: `${VITE_API_URL}/instances/{instanceId}`,
     __vite__: otherViteConfig,
   }
 }
