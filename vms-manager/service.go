@@ -872,13 +872,20 @@ func (s *ServiceImpl) getFirstAvailableVmVlanIdentifier(vlan int) (int, error) {
 }
 
 func getGatewayIp(vlan int) string {
-	return fmt.Sprintf("10.0.%d.%d", vlan, FIRST_IP_IN_SUBNET)
+	return fmt.Sprintf("10.0.%d.%d", mapVlanToThirdIpOctet(vlan), FIRST_IP_IN_SUBNET)
 }
 
 func getIpAddWithSubnet(vlan int, vmVlanIdentifier int) string {
 	return fmt.Sprintf(
-		"10.0.%d.%d/%d", vlan, vmVlanIdentifier+FIRST_IP_IN_SUBNET, SUBNET_MASK,
+		"10.0.%d.%d/%d",
+		mapVlanToThirdIpOctet(vlan),
+		vmVlanIdentifier+FIRST_IP_IN_SUBNET,
+		SUBNET_MASK,
 	)
+}
+
+func mapVlanToThirdIpOctet(vlan int) int {
+	return vlan - FIRST_VLAN
 }
 
 func getVlanEtiquete(vlan int, vmVlanIdentifier int) string {
