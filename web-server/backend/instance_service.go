@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"slices"
+	"time"
 )
 
 type InstanceService interface {
@@ -243,22 +244,28 @@ func (s *InstanceServiceImpl) DeleteInstance(instanceId string) error {
 }
 
 func (s *InstanceServiceImpl) GetInstanceStatus() ([]InstanceStatus, error) {
+	log.Println("Calling VM manager API for instance statuses")
 	resp, err := http.Get(
 		fmt.Sprintf("%s/instances/status", s.vmManagerBaseUrl),
 	)
 	if err != nil {
+		log.Printf("Error connecting to VM manager API: %v", err)
 		return nil, fmt.Errorf("error calling VM manager API: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		log.Printf("VM manager API returned status code %d", resp.StatusCode)
 		return nil, fmt.Errorf("VM manager API returned status code %d", resp.StatusCode)
 	}
 
 	var vmStatuses []vmManagerStatus
 	if err := json.NewDecoder(resp.Body).Decode(&vmStatuses); err != nil {
+		log.Printf("Error decoding VM manager response: %v", err)
 		return nil, fmt.Errorf("error decoding response: %w", err)
 	}
+
+	log.Printf("Successfully retrieved VM statuses: %+v", vmStatuses)
 
 	var enrichedStatuses []InstanceStatus
 	for _, vmStatus := range vmStatuses {
@@ -286,7 +293,7 @@ func (s *InstanceServiceImpl) GetInstanceStatus() ([]InstanceStatus, error) {
 			} else {
 				status.TemplateId = ""
 			}
-			status.CreatedAt = info.CreatedAt
+			status.CreatedAt = info.CreatedAt.Format(time.RFC3339)
 			status.UserMail = info.UserMail
 			status.SubjectName = info.SubjectName
 		}
@@ -433,33 +440,43 @@ func (s *InstanceServiceImpl) DeleteTemplate(templateId string, subjectId string
 }
 
 func (s *InstanceServiceImpl) GetInstanceStatusByUserId(userId string) ([]InstanceStatus, error) {
+	log.Printf("Fetching instance statuses for user ID: %s", userId)
 	resp, err := http.Get(
 		fmt.Sprintf("%s/instances/status", s.vmManagerBaseUrl),
 	)
 	if err != nil {
+		log.Printf("Error calling VM manager API: %v", err)
 		return nil, fmt.Errorf("error calling VM manager API: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		log.Printf("VM manager API returned status code %d", resp.StatusCode)
 		return nil, fmt.Errorf("VM manager API returned status code %d", resp.StatusCode)
 	}
 
 	var vmStatuses []vmManagerStatus
 	if err := json.NewDecoder(resp.Body).Decode(&vmStatuses); err != nil {
+		log.Printf("Error decoding VM manager response: %v", err)
 		return nil, fmt.Errorf("error decoding response: %w", err)
 	}
+	log.Printf("Successfully retrieved VM statuses: %+v", vmStatuses)
+
 	var filteredStatuses []vmManagerStatus
 	for _, vmStatus := range vmStatuses {
+		log.Printf("Processing VM status: %+v", vmStatus)
 		var instanceIds []string
 		instanceIds, err = s.db.GetInstanceIdsByUserId(userId)
 		if err != nil {
+			log.Printf("Error getting instance IDs for user ID %s: %v", userId, err)
 			return nil, fmt.Errorf("error getting instance ids: %w", err)
 		}
 		if slices.Contains(instanceIds, vmStatus.InstanceId) {
 			filteredStatuses = append(filteredStatuses, vmStatus)
 		}
 	}
+	log.Printf("Filtered VM statuses: %+v", filteredStatuses)
+
 	var enrichedStatuses []InstanceStatus
 	for _, vmStatus := range filteredStatuses {
 		status := InstanceStatus{
@@ -467,10 +484,9 @@ func (s *InstanceServiceImpl) GetInstanceStatusByUserId(userId string) ([]Instan
 			Status:     vmStatus.Status,
 		}
 
-		// Get additional info from database
 		info, err := s.db.GetInstanceInfo(vmStatus.InstanceId)
 		if err != nil {
-			// If there's an error, set error values for the additional fields
+			log.Printf("Error getting instance info for instance ID %s: %v", vmStatus.InstanceId, err)
 			status.UserId = "error"
 			status.SubjectId = "error"
 			status.TemplateId = "error"
@@ -478,7 +494,6 @@ func (s *InstanceServiceImpl) GetInstanceStatusByUserId(userId string) ([]Instan
 			status.UserMail = "error"
 			status.SubjectName = "error"
 		} else {
-			// If successful, set the values from the database
 			status.UserId = info.UserId
 			status.SubjectId = info.SubjectId
 			if info.TemplateId != nil {
@@ -486,13 +501,14 @@ func (s *InstanceServiceImpl) GetInstanceStatusByUserId(userId string) ([]Instan
 			} else {
 				status.TemplateId = ""
 			}
-			status.CreatedAt = info.CreatedAt
+			status.CreatedAt = info.CreatedAt.Format(time.RFC3339)
 			status.UserMail = info.UserMail
 			status.SubjectName = info.SubjectName
 		}
 
 		enrichedStatuses = append(enrichedStatuses, status)
 	}
+	log.Printf("Enriched VM statuses: %+v", enrichedStatuses)
 
 	return enrichedStatuses, nil
 }

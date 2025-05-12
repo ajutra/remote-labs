@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useToast } from '@/hooks/use-toast'
 import { VMListItem } from '@/types/vm'
 import { useAuth } from '@/context/AuthContext'
+import { getEnv } from '@/utils/Env'
 
 export const useVMs = () => {
   const [vms, setVms] = useState<VMListItem[]>([])
@@ -19,7 +20,13 @@ export const useVMs = () => {
     setLoading(true)
     try {
       const response = await fetch(
-        `http://localhost:8080/instances/status/${user.id}`
+        `${getEnv().API_GET_INSTANCE_STATUS.replace('{userId}', user.id)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
       )
       if (!response.ok) {
         throw new Error('Failed to fetch VMs')
