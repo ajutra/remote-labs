@@ -170,6 +170,18 @@ func (s *ServiceImpl) DeleteTemplate(templateId string) error {
 		)
 	}
 
+	// We don't want to remove the etiq because templates don't have network configuration
+	request := DeleteVmAgentRequest{
+		VmId:           templateId,
+		RemoveEtiquete: false,
+		Vid:            "",
+	}
+
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return logAndReturnError("Error marshalling delete template agent request: ", err.Error())
+	}
+
 	vmMutex := s.getMutex(templateId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
@@ -178,8 +190,8 @@ func (s *ServiceImpl) DeleteTemplate(templateId string) error {
 	// makes no difference between a template and an instance
 	req, err := http.NewRequest(
 		http.MethodDelete,
-		s.serverAgentsURLs+s.deleteInstanceEndpoint+"/"+templateId,
-		nil,
+		s.serverAgentsURLs+s.deleteInstanceEndpoint,
+		bytes.NewBuffer(jsonData),
 	)
 	if err != nil {
 		return logAndReturnError("Error creating delete template request: ", err.Error())
@@ -315,14 +327,29 @@ func (s *ServiceImpl) DeleteInstance(instanceId string) error {
 		return err
 	}
 
+	// TODO: Check if the instance is the last one in that vlan
+	// If it is, we need to remove the vlan etiq from the network
+
+	// TODO: Make this dynamic
+	request := DeleteVmAgentRequest{
+		VmId:           instanceId,
+		RemoveEtiquete: true,
+		Vid:            "100",
+	}
+
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return logAndReturnError("Error marshalling delete instance agent request: ", err.Error())
+	}
+
 	vmMutex := s.getMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
 	req, err := http.NewRequest(
 		http.MethodDelete,
-		s.serverAgentsURLs+s.deleteInstanceEndpoint+"/"+instanceId,
-		nil,
+		s.serverAgentsURLs+s.deleteInstanceEndpoint,
+		bytes.NewBuffer(jsonData),
 	)
 	if err != nil {
 		return logAndReturnError("Error creating delete instance request: ", err.Error())
