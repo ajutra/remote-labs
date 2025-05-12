@@ -372,13 +372,16 @@ func (s *ServiceImpl) DeleteInstance(instanceId string) error {
 		return err
 	}
 
-	// TODO: Check if the instance is the last one in that vlan
+	// Check if the instance is the last one in that subject
 	// If it is, we need to unassign the vlan from the bridge
+	isLastInstanceInSubject, err := s.db.VmIsLastInstanceInSubject(instanceId)
+	if err != nil {
+		return err
+	}
 
-	// TODO: Make this dynamic
 	request := DeleteVmAgentRequest{
 		VmId:           instanceId,
-		RemoveEtiquete: true,
+		RemoveEtiquete: isLastInstanceInSubject,
 		Vid:            fmt.Sprintf("%d", vlan),
 	}
 
@@ -411,8 +414,17 @@ func (s *ServiceImpl) DeleteInstance(instanceId string) error {
 		return err
 	}
 
+	subjectId, err := s.db.GetSubjectIdByVmId(instanceId)
+	if err != nil {
+		return err
+	}
+
 	s.deleteVmFromDb(instanceId)
 	s.deleteMutex(instanceId)
+
+	if isLastInstanceInSubject {
+		s.deleteSubjectFromDb(subjectId)
+	}
 
 	return nil
 }
@@ -776,9 +788,7 @@ func (s *ServiceImpl) getVmNetworkConfigFromSubjectId(subjectId string) (VmNetwo
 			Vlan:      vlan,
 		}
 
-		if err := s.db.AddSubject(subject); err != nil {
-			return VmNetworkConfig{}, err
-		}
+		s.addSubjectToDb(subject)
 	} else {
 		vlan, err = s.db.GetSubjectVlan(subjectId)
 		if err != nil {
@@ -822,6 +832,20 @@ func (s *ServiceImpl) getFirstAvailableVlan() (int, error) {
 			return auxVlan, nil
 		}
 		auxVlan++
+	}
+}
+
+func (s *ServiceImpl) addSubjectToDb(subject Subject) {
+	// Try to add the subject to the database until it succeeds
+	// The only reason it might fail is if the DB has gone down
+	// All the other scenarios are checked before calling this function
+	// In that case, the subject will be added to the database when the DB is back up
+	for {
+		if err := s.db.AddSubject(subject); err != nil {
+			log.Println(err.Error())
+		} else {
+			break
+		}
 	}
 }
 
@@ -870,6 +894,20 @@ func getInterfaceAddress(vmIpAddWithSubnet string) string {
 		ipParts[2],
 		ipParts[3],
 	)
+}
+
+func (s *ServiceImpl) deleteSubjectFromDb(subjectId string) {
+	// Try to delete the subject from the database until it succeeds
+	// The only reason it might fail is if the DB has gone down
+	// All the other scenarios are checked before calling this function
+	// In that case, the subject will be deleted from the database when the DB is back up
+	for {
+		if err := s.db.DeleteSubject(subjectId); err != nil {
+			log.Println(err.Error())
+		} else {
+			break
+		}
+	}
 }
 
 func (s *ServiceImpl) getMutex(vmId string) *sync.Mutex {
