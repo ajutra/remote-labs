@@ -26,6 +26,7 @@ type CreateInstanceRequest struct {
 	Dns1            string   `json:"dns1"`
 	Dns2            string   `json:"dns2"`
 	Gateway         string   `json:"gateway"`
+	VlanEtiquete    string   `json:"vlanEtiquete"`
 }
 
 type StartInstanceRequest struct {

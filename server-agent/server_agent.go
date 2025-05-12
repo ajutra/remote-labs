@@ -62,6 +62,7 @@ type CreateVmRequest struct {
 	Dns1            string
 	Dns2            string
 	Gateway         string
+	VlanEtiquete    string
 }
 
 type CloudInitMetadata struct {
@@ -138,6 +139,7 @@ func (agent *ServerAgentImpl) CreateInstance(request CreateInstanceRequest) erro
 		Dns1:            request.Dns1,
 		Dns2:            request.Dns2,
 		Gateway:         request.Gateway,
+		VlanEtiquete:    request.VlanEtiquete,
 	}
 
 	return agent.createVm(createVmRequest)
@@ -558,7 +560,7 @@ func (agent *ServerAgentImpl) installVm(request CreateVmRequest) error {
 		"--disk", "path="+request.DirPath+"/"+request.VmId+".qcow2,format=qcow2",
 		"--disk", "path="+request.DirPath+"/cidata.iso,device=cdrom",
 		"--os-variant", DEFAULT_OS_VARIANT,
-		"--network", "bridge="+agent.defaultNetworkBridge+",target=vlan100,model=virtio",
+		"--network", "bridge="+agent.defaultNetworkBridge+",target="+request.VlanEtiquete+",model=virtio",
 		"--graphics", "vnc,listen=0.0.0.0",
 		"--noautoconsole",
 	)
