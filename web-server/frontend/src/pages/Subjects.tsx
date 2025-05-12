@@ -2,14 +2,29 @@ import useSubjects from '@/hooks/useSubjects'
 import SubjectCard from '@/components/SubjectCard'
 import CreateSubjectSheet from '@/components/CreateSubjectSheet'
 import useUserRole from '@/hooks/useUserRole'
+import { Button } from '@/components/ui/button'
+import { RefreshCw } from 'lucide-react'
 
 const Subjects: React.FC = () => {
   const { subjects, loading, error } = useSubjects()
   const isProfessorOrAdmin = useUserRole()
 
+  const handleRefresh = () => {
+    window.location.reload() // Simple refresh for now
+  }
+
   return (
     <div className="flex min-h-screen w-full flex-col p-4">
       <h1 className="mb-4 text-2xl font-bold">Subjects</h1>
+      <div className="mb-4 flex justify-end">
+        <Button
+          onClick={handleRefresh}
+          variant="outline"
+          className="flex items-center"
+        >
+          <RefreshCw className="mr-2 h-4 w-4" /> Refresh
+        </Button>
+      </div>
       {isProfessorOrAdmin && (
         <div className="mb-4 flex justify-end">
           <CreateSubjectSheet />
