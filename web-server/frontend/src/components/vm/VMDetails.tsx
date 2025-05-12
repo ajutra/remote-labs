@@ -87,37 +87,23 @@ export const VMDetails: React.FC<VMDetailsProps> = ({
 
             <div className="space-y-2">
               <h3 className="text-sm font-medium">Instance Details</h3>
-              <div className="rounded-lg border p-3">
+              <div className="col-span-full rounded-lg border p-3">
                 <div className="space-y-1">
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">
-                      Instance ID
+                      Template Description
                     </span>
-                    <span className="font-medium">{vm.instanceId}</span>
+                    <span className="break-words font-medium">
+                      {vm.templateDescription}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">
-                      Template ID
+                      User Email
                     </span>
-                    <span className="font-medium">{vm.templateId}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium">User Info</h3>
-              <div className="rounded-lg border p-3">
-                <div className="space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">
-                      User ID
+                    <span className="break-words font-medium">
+                      {vm.userMail}
                     </span>
-                    <span className="font-medium">{vm.userId}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Email</span>
-                    <span className="font-medium">{vm.userMail}</span>
                   </div>
                 </div>
               </div>
@@ -126,17 +112,19 @@ export const VMDetails: React.FC<VMDetailsProps> = ({
 
           {/* Actions Section */}
           <div className="flex justify-end space-x-2">
-            {vm.status === 'stopped' && (
+            {vm.status.toLowerCase() === 'shut off' && (
               <VMStartButton instanceId={vm.instanceId} onSuccess={onRefresh} />
             )}
-            {vm.status === 'running' && (
+            {vm.status.toLowerCase() === 'running' && (
               <VMStopButton instanceId={vm.instanceId} onSuccess={onRefresh} />
             )}
-            <DefineTemplateButton
-              vm={vm}
-              onSuccess={onRefresh}
-              isTeacherOrAdmin={isTeacherOrAdmin}
-            />
+            {isTeacherOrAdmin && !vm.templateId && (
+              <DefineTemplateButton
+                vm={vm}
+                onSuccess={onRefresh}
+                isTeacherOrAdmin={isTeacherOrAdmin}
+              />
+            )}
             <VMDeleteButton instanceId={vm.instanceId} onSuccess={onRefresh} />
           </div>
         </div>

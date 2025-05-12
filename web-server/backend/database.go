@@ -74,6 +74,7 @@ type InstanceInfo struct {
 	CreatedAt           time.Time // Changed from string to time.Time
 	UserMail            string
 	SubjectName         string
+	TemplateDescription *string
 	Template_vcpu_count *int
 	Template_vram_mb    *int
 	Template_size_mb    *int
@@ -880,7 +881,7 @@ func (postgres *PostgresDatabase) GetUserIdByEmail(userEmail string) (string, er
 
 func (postgres *PostgresDatabase) GetInstanceInfo(instanceId string) (InstanceInfo, error) {
 	query := `
-	SELECT i.user_id, i.subject_id, i.template_id, i.created_at, u.mail, s.name,
+	SELECT i.user_id, i.subject_id, i.template_id, i.created_at, u.mail, s.name, t.description,
 	       COALESCE(t.vcpu_count, 0), COALESCE(t.vram_mb, 0), COALESCE(t.size_mb, 0)
 	FROM instances i
 	LEFT JOIN users u ON i.user_id = u.id
@@ -896,6 +897,7 @@ func (postgres *PostgresDatabase) GetInstanceInfo(instanceId string) (InstanceIn
 		&info.CreatedAt,
 		&info.UserMail,
 		&info.SubjectName,
+		&info.TemplateDescription,
 		&info.Template_vcpu_count,
 		&info.Template_vram_mb,
 		&info.Template_size_mb,

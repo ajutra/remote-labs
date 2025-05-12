@@ -27,17 +27,18 @@ type InstanceService interface {
 }
 
 type InstanceStatus struct {
-	InstanceId          string `json:"instanceId"`
-	Status              string `json:"status"`
-	UserId              string `json:"userId"`
-	SubjectId           string `json:"subjectId"`
-	TemplateId          string `json:"templateId"`
-	CreatedAt           string `json:"createdAt"`
-	UserMail            string `json:"userMail"`
-	SubjectName         string `json:"subjectName"`
-	Template_vcpu_count int    `json:"template_vcpu_count"`
-	Template_vram_mb    int    `json:"template_vram_mb"`
-	Template_size_mb    int    `json:"template_size_mb"`
+	InstanceId           string `json:"instanceId"`
+	Status               string `json:"status"`
+	UserId               string `json:"userId"`
+	SubjectId            string `json:"subjectId"`
+	TemplateId           string `json:"templateId"`
+	CreatedAt            string `json:"createdAt"`
+	UserMail             string `json:"userMail"`
+	SubjectName          string `json:"subjectName"`
+	Template_vcpu_count  int    `json:"template_vcpu_count"`
+	Template_vram_mb     int    `json:"template_vram_mb"`
+	Template_size_mb     int    `json:"template_size_mb"`
+	Template_Description string `json:"template_description"`
 }
 
 type Base struct {
@@ -303,18 +304,31 @@ func (s *InstanceServiceImpl) GetInstanceStatus() ([]InstanceStatus, error) {
 			status.CreatedAt = "error"
 			status.UserMail = "error"
 			status.SubjectName = "error"
+			status.Template_Description = "error"
+			status.Template_vcpu_count = 0
+			status.Template_vram_mb = 0
+			status.Template_size_mb = 0
 		} else {
 			// If successful, set the values from the database
 			status.UserId = info.UserId
 			status.SubjectId = info.SubjectId
 			if info.TemplateId != nil {
 				status.TemplateId = *info.TemplateId
+				status.Template_Description = *info.TemplateDescription
+				status.Template_vcpu_count = *info.Template_vcpu_count
+				status.Template_vram_mb = *info.Template_vram_mb
+				status.Template_size_mb = *info.Template_size_mb
 			} else {
 				status.TemplateId = ""
+				status.Template_Description = ""
+				status.Template_vcpu_count = 0
+				status.Template_vram_mb = 0
+				status.Template_size_mb = 0
 			}
 			status.CreatedAt = info.CreatedAt.Format(time.RFC3339)
 			status.UserMail = info.UserMail
 			status.SubjectName = info.SubjectName
+
 		}
 
 		enrichedStatuses = append(enrichedStatuses, status)
@@ -512,13 +526,26 @@ func (s *InstanceServiceImpl) GetInstanceStatusByUserId(userId string) ([]Instan
 			status.CreatedAt = "error"
 			status.UserMail = "error"
 			status.SubjectName = "error"
+			status.Template_Description = "error"
+			status.Template_vcpu_count = 0
+			status.Template_vram_mb = 0
+			status.Template_size_mb = 0
+
 		} else {
 			status.UserId = info.UserId
 			status.SubjectId = info.SubjectId
 			if info.TemplateId != nil {
 				status.TemplateId = *info.TemplateId
+				status.Template_Description = *info.TemplateDescription
+				status.Template_vcpu_count = *info.Template_vcpu_count
+				status.Template_vram_mb = *info.Template_vram_mb
+				status.Template_size_mb = *info.Template_size_mb
 			} else {
 				status.TemplateId = ""
+				status.Template_Description = ""
+				status.Template_vcpu_count = 0
+				status.Template_vram_mb = 0
+				status.Template_size_mb = 0
 			}
 			status.CreatedAt = info.CreatedAt.Format(time.RFC3339)
 			status.UserMail = info.UserMail
