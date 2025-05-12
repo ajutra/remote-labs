@@ -13,19 +13,19 @@ type DefineTemplateRequest struct {
 }
 
 type CreateInstanceRequest struct {
-	SourceVmId    string   `json:"sourceVmId"`
-	SourceIsBase  bool     `json:"sourceIsBase"`
-	InstanceId    string   `json:"instanceId"`
-	SizeMB        int      `json:"sizeMB"`
-	VcpuCount     int      `json:"vcpuCount"`
-	VramMB        int      `json:"vramMB"`
-	Username      string   `json:"username"`
-	Password      string   `json:"password"`
-	PublicSshKeys []string `json:"publicSshKeys"`
-	IpAddress     string   `json:"ipAddress"`
-	Dns1          string   `json:"dns1"`
-	Dns2          string   `json:"dns2"`
-	Gateway       string   `json:"gateway"`
+	SourceVmId      string   `json:"sourceVmId"`
+	SourceIsBase    bool     `json:"sourceIsBase"`
+	InstanceId      string   `json:"instanceId"`
+	SizeMB          int      `json:"sizeMB"`
+	VcpuCount       int      `json:"vcpuCount"`
+	VramMB          int      `json:"vramMB"`
+	Username        string   `json:"username"`
+	Password        string   `json:"password"`
+	PublicSshKeys   []string `json:"publicSshKeys"`
+	IpAddWithSubnet string   `json:"ipAddWithSubnet"`
+	Dns1            string   `json:"dns1"`
+	Dns2            string   `json:"dns2"`
+	Gateway         string   `json:"gateway"`
 }
 
 type StartInstanceRequest struct {

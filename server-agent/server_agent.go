@@ -47,21 +47,21 @@ const (
 )
 
 type CreateVmRequest struct {
-	VmType        VmType
-	VmId          string
-	SourceVmId    string
-	SourceIsBase  bool
-	DirPath       string
-	SizeMB        int
-	VramMB        int
-	VcpuCount     int
-	Username      string
-	Password      string
-	PublicSshKeys []string
-	IpAddress     string
-	Dns1          string
-	Dns2          string
-	Gateway       string
+	VmType          VmType
+	VmId            string
+	SourceVmId      string
+	SourceIsBase    bool
+	DirPath         string
+	SizeMB          int
+	VramMB          int
+	VcpuCount       int
+	Username        string
+	Password        string
+	PublicSshKeys   []string
+	IpAddWithSubnet string
+	Dns1            string
+	Dns2            string
+	Gateway         string
 }
 
 type CloudInitMetadata struct {
@@ -76,11 +76,10 @@ type CloudInitUserData struct {
 }
 
 type CloudInitNetworkConfig struct {
-	IpAddress string
-	Netmask   string
-	Dns1      string
-	Dns2      string
-	Gateway   string
+	IpAddWithSubnet string
+	Dns1            string
+	Dns2            string
+	Gateway         string
 }
 
 func (agent *ServerAgentImpl) ListBaseImages() (ListBaseImagesResponse, error) {
@@ -124,21 +123,21 @@ func (agent *ServerAgentImpl) DefineTemplate(request DefineTemplateRequest) erro
 
 func (agent *ServerAgentImpl) CreateInstance(request CreateInstanceRequest) error {
 	createVmRequest := CreateVmRequest{
-		VmType:        InstanceVm,
-		VmId:          request.InstanceId,
-		SourceVmId:    request.SourceVmId,
-		SourceIsBase:  request.SourceIsBase,
-		DirPath:       agent.vmsStoragePath + "/" + request.InstanceId,
-		SizeMB:        request.SizeMB,
-		VramMB:        request.VramMB,
-		VcpuCount:     request.VcpuCount,
-		Username:      request.Username,
-		Password:      request.Password,
-		PublicSshKeys: request.PublicSshKeys,
-		IpAddress:     request.IpAddress,
-		Dns1:          request.Dns1,
-		Dns2:          request.Dns2,
-		Gateway:       request.Gateway,
+		VmType:          InstanceVm,
+		VmId:            request.InstanceId,
+		SourceVmId:      request.SourceVmId,
+		SourceIsBase:    request.SourceIsBase,
+		DirPath:         agent.vmsStoragePath + "/" + request.InstanceId,
+		SizeMB:          request.SizeMB,
+		VramMB:          request.VramMB,
+		VcpuCount:       request.VcpuCount,
+		Username:        request.Username,
+		Password:        request.Password,
+		PublicSshKeys:   request.PublicSshKeys,
+		IpAddWithSubnet: request.IpAddWithSubnet,
+		Dns1:            request.Dns1,
+		Dns2:            request.Dns2,
+		Gateway:         request.Gateway,
 	}
 
 	return agent.createVm(createVmRequest)
@@ -426,10 +425,10 @@ func (agent *ServerAgentImpl) createVmConfigurationFiles(request CreateVmRequest
 
 		// And setup the network config
 		cloudInitNetworkConfig := CloudInitNetworkConfig{
-			IpAddress: request.IpAddress,
-			Dns1:      request.Dns1,
-			Dns2:      request.Dns2,
-			Gateway:   request.Gateway,
+			IpAddWithSubnet: request.IpAddWithSubnet,
+			Dns1:            request.Dns1,
+			Dns2:            request.Dns2,
+			Gateway:         request.Gateway,
 		}
 
 		if err := createFileFromTemplate(request.DirPath, "network-config", cloudInitNetworkConfig); err != nil {
