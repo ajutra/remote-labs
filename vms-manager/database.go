@@ -27,8 +27,9 @@ type Database interface {
 	GetVmsVlanIdentifiers(vlan int) ([]int, error)
 	GetVlanByVmId(vmId string) (int, error)
 	GetVmVlanIdentifierByVmId(vmId string) (int, error)
-	/*DeleteSubject(subjectId string) error
-	GetSubject(subjectId string) (Subject, error)*/
+	VmIsLastInstanceInSubject(vmId string) (bool, error)
+	GetSubjectIdByVmId(vmId string) (string, error)
+	DeleteSubject(subjectId string) error
 }
 
 type PostgresDatabase struct {
@@ -342,6 +343,52 @@ func (postgres *PostgresDatabase) GetVmVlanIdentifierByVmId(vmId string) (int, e
 	return vmVlanIdentifier, nil
 }
 
+func (postgres *PostgresDatabase) VmIsLastInstanceInSubject(vmId string) (bool, error) {
+	var query string
+	var args pgx.NamedArgs
+
+	query = "SELECT subject_id FROM vms WHERE id = @id"
+	args = pgx.NamedArgs{"id": vmId}
+
+	var subjectId string
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&subjectId); err != nil {
+		return false, logAndReturnError("Error getting subject id: ", err.Error())
+	}
+
+	query = "SELECT COUNT(*) FROM vms WHERE subject_id = @subject_id"
+	args = pgx.NamedArgs{"subject_id": subjectId}
+
+	var count int
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&count); err != nil {
+		return false, logAndReturnError("Error getting count of vms in subject: ", err.Error())
+	}
+
+	return count == 1, nil
+}
+
+func (postgres *PostgresDatabase) GetSubjectIdByVmId(vmId string) (string, error) {
+	query := "SELECT subject_id FROM vms WHERE id = @id"
+	args := pgx.NamedArgs{"id": vmId}
+
+	var subjectId string
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&subjectId); err != nil {
+		return "", logAndReturnError("Error getting subject id by vm id: ", err.Error())
+	}
+
+	return subjectId, nil
+}
+
+func (postgres *PostgresDatabase) DeleteSubject(subjectId string) error {
+	query := "DELETE FROM subjects WHERE subject_id = @subject_id"
+	args := pgx.NamedArgs{"subject_id": subjectId}
+
+	if _, err := postgres.db.Exec(context.Background(), query, args); err != nil {
+		return logAndReturnError("Error deleting subject: ", err.Error())
+	}
+
+	return nil
+}
+
 func (dbVm *DatabaseVM) toVm() Vm {
 	return Vm{
 		ID:               dbVm.ID,
@@ -453,29 +500,3 @@ func (postgres *PostgresDatabase) createTablesIfNotExist() error {
 
 	return nil
 }
-
-/*
-
-func (postgres *PostgresDatabase) DeleteSubject(subjectId string) error {
-	query := "DELETE FROM subjects WHERE subject_id = @subject_id"
-	args := pgx.NamedArgs{"subject_id": subjectId}
-
-	if _, err := postgres.db.Exec(context.Background(), query, args); err != nil {
-		return logAndReturnError("Error deleting subject: ", err.Error())
-	}
-
-	return nil
-}
-
-func (postgres *PostgresDatabase) GetSubject(subjectId string) (Subject, error) {
-	query := "SELECT subject_id, vlan FROM subjects WHERE subject_id = @subject_id"
-	args := pgx.NamedArgs{"subject_id": subjectId}
-
-	var dbSubject DatabaseSubject
-	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&dbSubject.SubjectId, &dbSubject.Vlan); err != nil {
-		return Subject{}, logAndReturnError("Error getting subject: ", err.Error())
-	}
-
-	return dbSubject.toSubject(), nil
-}
-*/
