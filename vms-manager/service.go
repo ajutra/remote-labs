@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -15,6 +16,12 @@ import (
 )
 
 const RUNNING_STATUS = "running"
+const FIRST_VLAN = 100
+const MAX_VLANS = 255
+const MAX_VMS_PER_VLAN = 253 // 255 total IPs in the subnet, minus the first IP (gateway) and the last IP (broadcast)
+const FIRST_IP_IN_SUBNET = 1
+const SUBNET_MASK = 24
+const INTERFACE_ADDRESS_SECOND_OCTET = 1
 
 type Service interface {
 	ListBaseImages() ([]ListBaseImagesResponse, error)
@@ -44,6 +51,13 @@ type ServiceImpl struct {
 	vmsDns2                     string
 	mutexMap                    map[string]*sync.Mutex
 	mutex                       sync.Mutex
+}
+
+type VmNetworkConfig struct {
+	IpAddWithSubnet  string
+	Gateway          string
+	VlanEtiquete     string
+	VmVlanIdentifier int
 }
 
 func (s *ServiceImpl) ListBaseImages() ([]ListBaseImagesResponse, error) {
@@ -221,11 +235,13 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 		request.VcpuCount <= 0 ||
 		request.VramMB <= 0 ||
 		request.Username == "" ||
-		request.Password == "" {
+		request.Password == "" ||
+		request.SubjectId == "" ||
+		request.UserWgPubKey == "" {
 		return CreateInstanceResponse{}, NewHttpError(
 			http.StatusBadRequest,
 			fmt.Errorf(
-				"invalid request: sizeMB must be greater than 0, username and password must be non-empty",
+				"invalid request: sizeMB must be greater than 0, username, password, subjectId and userWgPubKey must be non-empty",
 			),
 		)
 	}
@@ -256,6 +272,11 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 		return CreateInstanceResponse{}, err
 	}
 
+	vmNetworkConfig, err := s.getVmNetworkConfigFromSubjectId(request.SubjectId)
+	if err != nil {
+		return CreateInstanceResponse{}, err
+	}
+
 	// If the source VM is a base image, we need to get the description
 	// this is because base images are stored in servers with their description as the file name.
 	// Non-base VMs are stored with their ID as the file name.
@@ -279,11 +300,11 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 		Username:        request.Username,
 		Password:        request.Password,
 		PublicSshKeys:   request.PublicSshKeys,
-		IpAddWithSubnet: "10.0.100.2/24", // TODO: Make this dynamic
+		IpAddWithSubnet: vmNetworkConfig.IpAddWithSubnet,
 		Dns1:            s.vmsDns1,
 		Dns2:            s.vmsDns2,
-		Gateway:         "10.0.100.1", // TODO: Make this dynamic
-		VlanEtiquete:    "vlan100-1",  // TODO: Make this dynamic
+		Gateway:         vmNetworkConfig.Gateway,
+		VlanEtiquete:    vmNetworkConfig.VlanEtiquete,
 	}
 
 	jsonData, err := json.Marshal(agentRequest)
@@ -309,15 +330,27 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 	}
 
 	vm := Vm{
-		ID:          instanceId,
-		Description: nil,
-		DependsOn:   &request.SourceVmId,
+		ID:               instanceId,
+		Description:      nil,
+		DependsOn:        &request.SourceVmId,
+		SubjectId:        &request.SubjectId,
+		VmVlanIdentifier: &vmNetworkConfig.VmVlanIdentifier,
 	}
 
 	s.addVmToDb(vm, false)
 
+	interfaceAddress := getInterfaceAddress(vmNetworkConfig.IpAddWithSubnet)
+	peerAllowedIps := []string{
+		vmNetworkConfig.IpAddWithSubnet,
+		interfaceAddress,
+	}
+
 	return CreateInstanceResponse{
-		InstanceId: instanceId,
+		InstanceId:       instanceId,
+		InterfaceAddress: interfaceAddress,
+		PeerPublicKey:    "Not implemented yet", // TODO: Implement this
+		PeerAllowedIps:   peerAllowedIps,
+		PeerEndpointPort: 0, // TODO: Implement this
 	}, nil
 }
 
@@ -334,14 +367,19 @@ func (s *ServiceImpl) DeleteInstance(instanceId string) error {
 		return err
 	}
 
+	vlan, err := s.db.GetVlanByVmId(instanceId)
+	if err != nil {
+		return err
+	}
+
 	// TODO: Check if the instance is the last one in that vlan
-	// If it is, we need to remove the vlan etiq from the network
+	// If it is, we need to unassign the vlan from the bridge
 
 	// TODO: Make this dynamic
 	request := DeleteVmAgentRequest{
 		VmId:           instanceId,
 		RemoveEtiquete: true,
-		Vid:            "100",
+		Vid:            fmt.Sprintf("%d", vlan),
 	}
 
 	jsonData, err := json.Marshal(request)
@@ -392,10 +430,20 @@ func (s *ServiceImpl) StartInstance(instanceId string) error {
 		return err
 	}
 
+	vlan, err := s.db.GetVlanByVmId(instanceId)
+	if err != nil {
+		return err
+	}
+
+	vmVlanIdentifier, err := s.db.GetVmVlanIdentifierByVmId(instanceId)
+	if err != nil {
+		return err
+	}
+
 	request := StartInstanceAgentRequest{
 		InstanceId:   instanceId,
-		Vid:          "100",       // TODO: Make this dynamic
-		VlanEtiquete: "vlan100-1", // TODO: Make this dynamic
+		Vid:          fmt.Sprintf("%d", vlan),
+		VlanEtiquete: getVlanEtiquete(vlan, vmVlanIdentifier),
 	}
 
 	jsonData, err := json.Marshal(request)
@@ -708,6 +756,120 @@ func (s *ServiceImpl) checkIfVmIsTemplateOrBase(vmId string) error {
 	}
 
 	return nil
+}
+
+func (s *ServiceImpl) getVmNetworkConfigFromSubjectId(subjectId string) (VmNetworkConfig, error) {
+	exists, err := s.db.SubjectExistsById(subjectId)
+	if err != nil {
+		return VmNetworkConfig{}, err
+	}
+
+	var vlan int
+	if !exists {
+		vlan, err = s.getFirstAvailableVlan()
+		if err != nil {
+			return VmNetworkConfig{}, err
+		}
+
+		subject := Subject{
+			SubjectId: subjectId,
+			Vlan:      vlan,
+		}
+
+		if err := s.db.AddSubject(subject); err != nil {
+			return VmNetworkConfig{}, err
+		}
+	} else {
+		vlan, err = s.db.GetSubjectVlan(subjectId)
+		if err != nil {
+			return VmNetworkConfig{}, err
+		}
+	}
+
+	vmVlanIdentifier, err := s.getFirstAvailableVmVlanIdentifier(vlan)
+	if err != nil {
+		return VmNetworkConfig{}, err
+	}
+
+	gateway := getGatewayIp(vlan)
+	ipAddWithSubnet := getIpAddWithSubnet(vlan, vmVlanIdentifier)
+	vlanEtiquete := getVlanEtiquete(vlan, vmVlanIdentifier)
+
+	return VmNetworkConfig{
+		IpAddWithSubnet:  ipAddWithSubnet,
+		Gateway:          gateway,
+		VlanEtiquete:     vlanEtiquete,
+		VmVlanIdentifier: vmVlanIdentifier,
+	}, nil
+}
+
+func (s *ServiceImpl) getFirstAvailableVlan() (int, error) {
+	vlans, err := s.db.GetAllVlans()
+	if err != nil {
+		return 0, err
+	}
+
+	if len(vlans) == MAX_VLANS {
+		return 0, NewHttpError(
+			http.StatusInternalServerError,
+			fmt.Errorf("no more vlans available"),
+		)
+	}
+
+	auxVlan := FIRST_VLAN
+	for {
+		if !slices.Contains(vlans, auxVlan) {
+			return auxVlan, nil
+		}
+		auxVlan++
+	}
+}
+
+func (s *ServiceImpl) getFirstAvailableVmVlanIdentifier(vlan int) (int, error) {
+	vmsVlanIdentifiers, err := s.db.GetVmsVlanIdentifiers(vlan)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(vmsVlanIdentifiers) == MAX_VMS_PER_VLAN {
+		return 0, NewHttpError(
+			http.StatusInternalServerError,
+			fmt.Errorf("maximum number of VMs per VLAN reached"),
+		)
+	}
+
+	auxVlanIdentifier := 1
+	for {
+		if !slices.Contains(vmsVlanIdentifiers, auxVlanIdentifier) {
+			return auxVlanIdentifier, nil
+		}
+		auxVlanIdentifier++
+	}
+}
+
+func getGatewayIp(vlan int) string {
+	return fmt.Sprintf("10.0.%d.%d", vlan, FIRST_IP_IN_SUBNET)
+}
+
+func getIpAddWithSubnet(vlan int, vmVlanIdentifier int) string {
+	return fmt.Sprintf(
+		"10.0.%d.%d/%d", vlan, vmVlanIdentifier+FIRST_IP_IN_SUBNET, SUBNET_MASK,
+	)
+}
+
+func getVlanEtiquete(vlan int, vmVlanIdentifier int) string {
+	return fmt.Sprintf("vlan%d-%d", vlan, vmVlanIdentifier)
+}
+
+func getInterfaceAddress(vmIpAddWithSubnet string) string {
+	ipParts := strings.Split(vmIpAddWithSubnet, ".")
+	return fmt.Sprintf(
+		"%s.%d.%s.%s",
+		ipParts[0],
+		INTERFACE_ADDRESS_SECOND_OCTET,
+		ipParts[2],
+		ipParts[3],
+	)
 }
 
 func (s *ServiceImpl) getMutex(vmId string) *sync.Mutex {

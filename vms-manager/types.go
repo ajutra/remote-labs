@@ -25,14 +25,16 @@ type CreateInstanceRequest struct {
 	Username      string   `json:"username"`
 	Password      string   `json:"password"`
 	PublicSshKeys []string `json:"publicSshKeys"`
+	SubjectId     string   `json:"subjectId"`
+	UserWgPubKey  string   `json:"userWgPubKey"` // User's WireGuard public key
 }
 
 type CreateInstanceResponse struct {
-	InstanceId string `json:"instanceId"`
-	/*InterfaceAddress string   `json:"interfaceAddress"`
+	InstanceId       string   `json:"instanceId"`
+	InterfaceAddress string   `json:"interfaceAddress"`
 	PeerPublicKey    string   `json:"peerPublicKey"`
 	PeerAllowedIps   []string `json:"peerAllowedIps"`
-	PeerEndpointPort int      `json:"peerEndpointPort"`*/
+	PeerEndpointPort int      `json:"peerEndpointPort"`
 }
 
 type ListInstancesStatusResponse struct {
@@ -88,7 +90,14 @@ type DeleteVmAgentRequest struct {
 
 // Model
 type Vm struct {
-	ID          string
-	Description *string
-	DependsOn   *string
+	ID               string
+	Description      *string
+	DependsOn        *string
+	SubjectId        *string
+	VmVlanIdentifier *int
+}
+
+type Subject struct {
+	SubjectId string
+	Vlan      int
 }
