@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -45,6 +46,7 @@ type Database interface {
 	ListAllInstancesBySubjectId(subjectId string) ([]string, error)
 	GetInstanceInfo(instanceId string) (InstanceInfo, error)
 	GetInstanceIdsByUserId(userId string) ([]string, error)
+	GetTemplatesBySubjectId(subjectId string) ([]TemplateDb, error)
 }
 
 type PostgresDatabase struct {
@@ -78,6 +80,46 @@ type InstanceInfo struct {
 	Template_vcpu_count *int
 	Template_vram_mb    *int
 	Template_size_mb    *int
+}
+
+type TemplateDb struct {
+	ID          string
+	SubjectId   string
+	Description string
+	SizeMB      int
+	VcpuCount   int
+	VramMB      int
+}
+
+func (postgres *PostgresDatabase) GetTemplatesBySubjectId(subjectId string) ([]TemplateDb, error) {
+	log.Printf("Executing query to fetch templates for subject ID: %s", subjectId)
+	query := "SELECT id, subject_id, description, size_mb, vcpu_count, vram_mb FROM templates WHERE subject_id = @subject_id"
+	args := pgx.NamedArgs{"subject_id": subjectId}
+
+	rows, err := postgres.db.Query(context.Background(), query, args)
+	if err != nil {
+		log.Printf("Error executing query: %v", err)
+		return nil, fmt.Errorf("error executing query: %w", err)
+	}
+	defer rows.Close()
+
+	var templates []TemplateDb
+	for rows.Next() {
+		var template TemplateDb
+		if err := rows.Scan(&template.ID, &template.SubjectId, &template.Description, &template.SizeMB, &template.VcpuCount, &template.VramMB); err != nil {
+			log.Printf("Error scanning row: %v", err)
+			return nil, fmt.Errorf("error scanning row: %w", err)
+		}
+		templates = append(templates, template)
+	}
+
+	if rows.Err() != nil {
+		log.Printf("Error iterating rows: %v", rows.Err())
+		return nil, fmt.Errorf("error iterating rows: %w", rows.Err())
+	}
+
+	log.Printf("Fetched templates: %+v", templates)
+	return templates, nil
 }
 
 func (postgres *PostgresDatabase) GetInstanceIdsByUserId(userId string) ([]string, error) {

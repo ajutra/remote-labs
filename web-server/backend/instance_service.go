@@ -24,6 +24,7 @@ type InstanceService interface {
 	Bases() ([]Base, error)
 	DefineTemplate(request DefineTemplateRequest) error
 	DeleteTemplate(templateId string, subjectId string) error
+	GetTemplatesBySubjectId(subjectId string) ([]Template, error)
 }
 
 type InstanceStatus struct {
@@ -86,6 +87,14 @@ type DefineTemplateResponse struct {
 type vmManagerStatus struct {
 	InstanceId string `json:"instanceId"`
 	Status     string `json:"status"`
+}
+
+type Template struct {
+	Id          string `json:"id"`
+	Description string `json:"description"`
+	VcpuCount   int    `json:"vcpuCount"`
+	VramMB      int    `json:"vramMB"`
+	SizeMB      int    `json:"sizeMB"`
 }
 
 func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendRequest) (CreateInstanceFrontendResponse, error) {
@@ -470,6 +479,27 @@ func (s *InstanceServiceImpl) DeleteTemplate(templateId string, subjectId string
 	}
 
 	return nil
+}
+
+func (s *InstanceServiceImpl) GetTemplatesBySubjectId(subjectId string) ([]Template, error) {
+	templates, err := s.db.GetTemplatesBySubjectId(subjectId)
+	if err != nil {
+		return nil, fmt.Errorf("error getting templates by subject ID: %w", err)
+	}
+	log.Printf("Retrieved templates for subject ID %s: %+v", subjectId, templates)
+	//convert form templatedb to template struct
+	var result []Template
+	for _, template := range templates {
+		result = append(result, Template{
+			Id:          template.ID,
+			Description: template.Description,
+			VcpuCount:   template.VcpuCount,
+			VramMB:      template.VramMB,
+			SizeMB:      template.SizeMB,
+		})
+	}
+	log.Printf("Converted templates: %+v", result)
+	return result, nil
 }
 
 func (s *InstanceServiceImpl) GetInstanceStatusByUserId(userId string) ([]InstanceStatus, error) {

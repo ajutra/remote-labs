@@ -62,15 +62,11 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
               {templates.map((template) => (
                 <SelectItem key={template.id} value={template.id}>
                   <div className="space-y-1">
-                    <p className="font-medium">{template.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {template.description}
-                    </p>
+                    <p className="font-medium">{template.description}</p>
                     <div className="text-xs text-muted-foreground">
-                      <p>vCPUs: {template.vcpu_count}</p>
-                      <p>RAM: {template.vram_mb / 1024} GB</p>
-                      <p>Disk: {template.size_mb / 1024} GB</p>
-                      <p>OS: {template.os}</p>
+                      <p>vCPUs: {template.vcpuCount}</p>
+                      <p>RAM: {template.vramMB / 1024} GB</p>
+                      <p>Disk: {template.sizeMB / 1024} GB</p>
                     </div>
                   </div>
                 </SelectItem>
