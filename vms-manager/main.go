@@ -24,6 +24,8 @@ func main() {
 	stopInstanceEndpoint := os.Getenv("STOP_INSTANCE_ENDPOINT")
 	restartInstanceEndpoint := os.Getenv("RESTART_INSTANCE_ENDPOINT")
 	listInstancesStatusEndpoint := os.Getenv("LIST_INSTANCES_STATUS_ENDPOINT")
+	vmsDns1 := os.Getenv("VMS_DNS_1")
+	vmsDns2 := os.Getenv("VMS_DNS_2")
 
 	database, err := NewDatabase(databaseURL)
 	if err != nil {
@@ -43,6 +45,8 @@ func main() {
 		stopInstanceEndpoint,
 		restartInstanceEndpoint,
 		listInstancesStatusEndpoint,
+		vmsDns1,
+		vmsDns2,
 	)
 	if err != nil {
 		log.Fatal(err)

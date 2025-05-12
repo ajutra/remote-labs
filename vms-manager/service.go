@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -15,6 +16,12 @@ import (
 )
 
 const RUNNING_STATUS = "running"
+const FIRST_VLAN = 100
+const MAX_VLANS = 255
+const MAX_VMS_PER_VLAN = 253 // 255 total IPs in the subnet, minus the first IP (gateway) and the last IP (broadcast)
+const FIRST_IP_IN_SUBNET = 1
+const SUBNET_MASK = 24
+const INTERFACE_ADDRESS_SECOND_OCTET = 1
 
 type Service interface {
 	ListBaseImages() ([]ListBaseImagesResponse, error)
@@ -40,8 +47,17 @@ type ServiceImpl struct {
 	stopInstanceEndpoint        string
 	restartInstanceEndpoint     string
 	listInstancesStatusEndpoint string
+	vmsDns1                     string
+	vmsDns2                     string
 	mutexMap                    map[string]*sync.Mutex
 	mutex                       sync.Mutex
+}
+
+type VmNetworkConfig struct {
+	IpAddWithSubnet  string
+	Gateway          string
+	VlanEtiquete     string
+	VmVlanIdentifier int
 }
 
 func (s *ServiceImpl) ListBaseImages() ([]ListBaseImagesResponse, error) {
@@ -170,6 +186,18 @@ func (s *ServiceImpl) DeleteTemplate(templateId string) error {
 		)
 	}
 
+	// We don't want to remove the etiq because templates don't have network configuration
+	request := DeleteVmAgentRequest{
+		VmId:           templateId,
+		RemoveEtiquete: false,
+		Vid:            "",
+	}
+
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return logAndReturnError("Error marshalling delete template agent request: ", err.Error())
+	}
+
 	vmMutex := s.getMutex(templateId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
@@ -178,8 +206,8 @@ func (s *ServiceImpl) DeleteTemplate(templateId string) error {
 	// makes no difference between a template and an instance
 	req, err := http.NewRequest(
 		http.MethodDelete,
-		s.serverAgentsURLs+s.deleteInstanceEndpoint+"/"+templateId,
-		nil,
+		s.serverAgentsURLs+s.deleteInstanceEndpoint,
+		bytes.NewBuffer(jsonData),
 	)
 	if err != nil {
 		return logAndReturnError("Error creating delete template request: ", err.Error())
@@ -207,11 +235,13 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 		request.VcpuCount <= 0 ||
 		request.VramMB <= 0 ||
 		request.Username == "" ||
-		request.Password == "" {
+		request.Password == "" ||
+		request.SubjectId == "" ||
+		request.UserWgPubKey == "" {
 		return CreateInstanceResponse{}, NewHttpError(
 			http.StatusBadRequest,
 			fmt.Errorf(
-				"invalid request: sizeMB must be greater than 0, username and password must be non-empty",
+				"invalid request: sizeMB must be greater than 0, username, password, subjectId and userWgPubKey must be non-empty",
 			),
 		)
 	}
@@ -242,6 +272,11 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 		return CreateInstanceResponse{}, err
 	}
 
+	vmNetworkConfig, err := s.getVmNetworkConfigFromSubjectId(request.SubjectId)
+	if err != nil {
+		return CreateInstanceResponse{}, err
+	}
+
 	// If the source VM is a base image, we need to get the description
 	// this is because base images are stored in servers with their description as the file name.
 	// Non-base VMs are stored with their ID as the file name.
@@ -256,15 +291,20 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 	}
 
 	agentRequest := CreateInstanceAgentRequest{
-		SourceVmId:    sourceVmId,
-		SourceIsBase:  isBase,
-		InstanceId:    instanceId,
-		SizeMB:        request.SizeMB,
-		VcpuCount:     request.VcpuCount,
-		VramMB:        request.VramMB,
-		Username:      request.Username,
-		Password:      request.Password,
-		PublicSshKeys: request.PublicSshKeys,
+		SourceVmId:      sourceVmId,
+		SourceIsBase:    isBase,
+		InstanceId:      instanceId,
+		SizeMB:          request.SizeMB,
+		VcpuCount:       request.VcpuCount,
+		VramMB:          request.VramMB,
+		Username:        request.Username,
+		Password:        request.Password,
+		PublicSshKeys:   request.PublicSshKeys,
+		IpAddWithSubnet: vmNetworkConfig.IpAddWithSubnet,
+		Dns1:            s.vmsDns1,
+		Dns2:            s.vmsDns2,
+		Gateway:         vmNetworkConfig.Gateway,
+		VlanEtiquete:    vmNetworkConfig.VlanEtiquete,
 	}
 
 	jsonData, err := json.Marshal(agentRequest)
@@ -290,15 +330,27 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 	}
 
 	vm := Vm{
-		ID:          instanceId,
-		Description: nil,
-		DependsOn:   &request.SourceVmId,
+		ID:               instanceId,
+		Description:      nil,
+		DependsOn:        &request.SourceVmId,
+		SubjectId:        &request.SubjectId,
+		VmVlanIdentifier: &vmNetworkConfig.VmVlanIdentifier,
 	}
 
 	s.addVmToDb(vm, false)
 
+	interfaceAddress := getInterfaceAddress(vmNetworkConfig.IpAddWithSubnet)
+	peerAllowedIps := []string{
+		vmNetworkConfig.IpAddWithSubnet,
+		interfaceAddress,
+	}
+
 	return CreateInstanceResponse{
-		InstanceId: instanceId,
+		InstanceId:       instanceId,
+		InterfaceAddress: interfaceAddress,
+		PeerPublicKey:    "Not implemented yet", // TODO: Implement this
+		PeerAllowedIps:   peerAllowedIps,
+		PeerEndpointPort: 0, // TODO: Implement this
 	}, nil
 }
 
@@ -315,14 +367,37 @@ func (s *ServiceImpl) DeleteInstance(instanceId string) error {
 		return err
 	}
 
+	vlan, err := s.db.GetVlanByVmId(instanceId)
+	if err != nil {
+		return err
+	}
+
+	// Check if the instance is the last one in that subject
+	// If it is, we need to unassign the vlan from the bridge
+	isLastInstanceInSubject, err := s.db.VmIsLastInstanceInSubject(instanceId)
+	if err != nil {
+		return err
+	}
+
+	request := DeleteVmAgentRequest{
+		VmId:           instanceId,
+		RemoveEtiquete: isLastInstanceInSubject,
+		Vid:            fmt.Sprintf("%d", vlan),
+	}
+
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return logAndReturnError("Error marshalling delete instance agent request: ", err.Error())
+	}
+
 	vmMutex := s.getMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
 	req, err := http.NewRequest(
 		http.MethodDelete,
-		s.serverAgentsURLs+s.deleteInstanceEndpoint+"/"+instanceId,
-		nil,
+		s.serverAgentsURLs+s.deleteInstanceEndpoint,
+		bytes.NewBuffer(jsonData),
 	)
 	if err != nil {
 		return logAndReturnError("Error creating delete instance request: ", err.Error())
@@ -339,8 +414,17 @@ func (s *ServiceImpl) DeleteInstance(instanceId string) error {
 		return err
 	}
 
+	subjectId, err := s.db.GetSubjectIdByVmId(instanceId)
+	if err != nil {
+		return err
+	}
+
 	s.deleteVmFromDb(instanceId)
 	s.deleteMutex(instanceId)
+
+	if isLastInstanceInSubject {
+		s.deleteSubjectFromDb(subjectId)
+	}
 
 	return nil
 }
@@ -358,14 +442,35 @@ func (s *ServiceImpl) StartInstance(instanceId string) error {
 		return err
 	}
 
+	vlan, err := s.db.GetVlanByVmId(instanceId)
+	if err != nil {
+		return err
+	}
+
+	vmVlanIdentifier, err := s.db.GetVmVlanIdentifierByVmId(instanceId)
+	if err != nil {
+		return err
+	}
+
+	request := StartInstanceAgentRequest{
+		InstanceId:   instanceId,
+		Vid:          fmt.Sprintf("%d", vlan),
+		VlanEtiquete: getVlanEtiquete(vlan, vmVlanIdentifier),
+	}
+
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return logAndReturnError("Error marshalling start instance agent request: ", err.Error())
+	}
+
 	vmMutex := s.getMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
 	resp, err := http.Post(
-		s.serverAgentsURLs+s.startInstanceEndpoint+"/"+instanceId,
+		s.serverAgentsURLs+s.startInstanceEndpoint,
 		"application/json",
-		nil,
+		bytes.NewBuffer(jsonData),
 	)
 	if err != nil {
 		return err
@@ -466,14 +571,14 @@ func (s *ServiceImpl) getBaseImagesNames() ([]string, error) {
 		return nil, NewHttpError(resp.StatusCode, fmt.Errorf("failed to list base VMs"))
 	}
 
-	var baseImagesAgentResponse []ListBaseImagesAgentResponse
+	var baseImagesAgentResponse ListBaseImagesAgentResponse
 	if err := json.NewDecoder(resp.Body).Decode(&baseImagesAgentResponse); err != nil {
 		return nil, logAndReturnError("Error decoding list base images agent response: ", err.Error())
 	}
 
 	var baseImages []string
-	for _, baseImage := range baseImagesAgentResponse {
-		baseImages = append(baseImages, strings.TrimSuffix(baseImage.FileNames[0], filepath.Ext(baseImage.FileNames[0])))
+	for _, baseImage := range baseImagesAgentResponse.FileNames {
+		baseImages = append(baseImages, strings.TrimSuffix(baseImage, filepath.Ext(baseImage)))
 	}
 
 	return baseImages, nil
@@ -518,6 +623,11 @@ func (s *ServiceImpl) addBaseImagesToDb() error {
 
 	baseImages, err := s.getBaseImagesNames()
 	if err != nil {
+		return err
+	}
+
+	// Delete all base images that are not in the list of base images
+	if err := s.db.DeleteBaseImagesNotInList(baseImages); err != nil {
 		return err
 	}
 
@@ -660,6 +770,146 @@ func (s *ServiceImpl) checkIfVmIsTemplateOrBase(vmId string) error {
 	return nil
 }
 
+func (s *ServiceImpl) getVmNetworkConfigFromSubjectId(subjectId string) (VmNetworkConfig, error) {
+	exists, err := s.db.SubjectExistsById(subjectId)
+	if err != nil {
+		return VmNetworkConfig{}, err
+	}
+
+	var vlan int
+	if !exists {
+		vlan, err = s.getFirstAvailableVlan()
+		if err != nil {
+			return VmNetworkConfig{}, err
+		}
+
+		subject := Subject{
+			SubjectId: subjectId,
+			Vlan:      vlan,
+		}
+
+		s.addSubjectToDb(subject)
+	} else {
+		vlan, err = s.db.GetSubjectVlan(subjectId)
+		if err != nil {
+			return VmNetworkConfig{}, err
+		}
+	}
+
+	vmVlanIdentifier, err := s.getFirstAvailableVmVlanIdentifier(vlan)
+	if err != nil {
+		return VmNetworkConfig{}, err
+	}
+
+	gateway := getGatewayIp(vlan)
+	ipAddWithSubnet := getIpAddWithSubnet(vlan, vmVlanIdentifier)
+	vlanEtiquete := getVlanEtiquete(vlan, vmVlanIdentifier)
+
+	return VmNetworkConfig{
+		IpAddWithSubnet:  ipAddWithSubnet,
+		Gateway:          gateway,
+		VlanEtiquete:     vlanEtiquete,
+		VmVlanIdentifier: vmVlanIdentifier,
+	}, nil
+}
+
+func (s *ServiceImpl) getFirstAvailableVlan() (int, error) {
+	vlans, err := s.db.GetAllVlans()
+	if err != nil {
+		return 0, err
+	}
+
+	if len(vlans) == MAX_VLANS {
+		return 0, NewHttpError(
+			http.StatusInternalServerError,
+			fmt.Errorf("no more vlans available"),
+		)
+	}
+
+	auxVlan := FIRST_VLAN
+	for {
+		if !slices.Contains(vlans, auxVlan) {
+			return auxVlan, nil
+		}
+		auxVlan++
+	}
+}
+
+func (s *ServiceImpl) addSubjectToDb(subject Subject) {
+	// Try to add the subject to the database until it succeeds
+	// The only reason it might fail is if the DB has gone down
+	// All the other scenarios are checked before calling this function
+	// In that case, the subject will be added to the database when the DB is back up
+	for {
+		if err := s.db.AddSubject(subject); err != nil {
+			log.Println(err.Error())
+		} else {
+			break
+		}
+	}
+}
+
+func (s *ServiceImpl) getFirstAvailableVmVlanIdentifier(vlan int) (int, error) {
+	vmsVlanIdentifiers, err := s.db.GetVmsVlanIdentifiers(vlan)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(vmsVlanIdentifiers) == MAX_VMS_PER_VLAN {
+		return 0, NewHttpError(
+			http.StatusInternalServerError,
+			fmt.Errorf("maximum number of VMs per VLAN reached"),
+		)
+	}
+
+	auxVlanIdentifier := 1
+	for {
+		if !slices.Contains(vmsVlanIdentifiers, auxVlanIdentifier) {
+			return auxVlanIdentifier, nil
+		}
+		auxVlanIdentifier++
+	}
+}
+
+func getGatewayIp(vlan int) string {
+	return fmt.Sprintf("10.0.%d.%d", vlan, FIRST_IP_IN_SUBNET)
+}
+
+func getIpAddWithSubnet(vlan int, vmVlanIdentifier int) string {
+	return fmt.Sprintf(
+		"10.0.%d.%d/%d", vlan, vmVlanIdentifier+FIRST_IP_IN_SUBNET, SUBNET_MASK,
+	)
+}
+
+func getVlanEtiquete(vlan int, vmVlanIdentifier int) string {
+	return fmt.Sprintf("vlan%d-%d", vlan, vmVlanIdentifier)
+}
+
+func getInterfaceAddress(vmIpAddWithSubnet string) string {
+	ipParts := strings.Split(vmIpAddWithSubnet, ".")
+	return fmt.Sprintf(
+		"%s.%d.%s.%s",
+		ipParts[0],
+		INTERFACE_ADDRESS_SECOND_OCTET,
+		ipParts[2],
+		ipParts[3],
+	)
+}
+
+func (s *ServiceImpl) deleteSubjectFromDb(subjectId string) {
+	// Try to delete the subject from the database until it succeeds
+	// The only reason it might fail is if the DB has gone down
+	// All the other scenarios are checked before calling this function
+	// In that case, the subject will be deleted from the database when the DB is back up
+	for {
+		if err := s.db.DeleteSubject(subjectId); err != nil {
+			log.Println(err.Error())
+		} else {
+			break
+		}
+	}
+}
+
 func (s *ServiceImpl) getMutex(vmId string) *sync.Mutex {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -690,6 +940,8 @@ func NewService(
 	stopInstanceEndpoint string,
 	restartInstanceEndpoint string,
 	listInstancesStatusEndpoint string,
+	vmsDns1 string,
+	vmsDns2 string,
 ) (Service, error) {
 	service := &ServiceImpl{
 		db:                          db,
@@ -703,6 +955,8 @@ func NewService(
 		stopInstanceEndpoint:        stopInstanceEndpoint,
 		restartInstanceEndpoint:     restartInstanceEndpoint,
 		listInstancesStatusEndpoint: listInstancesStatusEndpoint,
+		vmsDns1:                     vmsDns1,
+		vmsDns2:                     vmsDns2,
 		mutexMap:                    make(map[string]*sync.Mutex),
 	}
 

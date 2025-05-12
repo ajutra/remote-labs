@@ -61,9 +61,12 @@ func (server *ApiServer) handleCreateInstance(w http.ResponseWriter, r *http.Req
 }
 
 func (server *ApiServer) handleDeleteVM(w http.ResponseWriter, r *http.Request) error {
-	vmId := r.PathValue("vmId")
+	var request DeleteVmRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return NewHttpError(http.StatusBadRequest, err)
+	}
 
-	if err := server.serverAgent.DeleteVm(vmId); err != nil {
+	if err := server.serverAgent.DeleteVm(request); err != nil {
 		return err
 	}
 
@@ -71,9 +74,12 @@ func (server *ApiServer) handleDeleteVM(w http.ResponseWriter, r *http.Request) 
 }
 
 func (server *ApiServer) handleStartInstance(w http.ResponseWriter, r *http.Request) error {
-	instanceId := r.PathValue("instanceId")
+	var request StartInstanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return NewHttpError(http.StatusBadRequest, err)
+	}
 
-	if err := server.serverAgent.StartInstance(instanceId); err != nil {
+	if err := server.serverAgent.StartInstance(request); err != nil {
 		return err
 	}
 
@@ -171,11 +177,11 @@ func (server *ApiServer) Run() {
 		createHttpHandler(server.handleCreateInstance),
 	)
 	mux.HandleFunc(
-		"DELETE "+server.deleteVmEndpoint+"/{vmId}",
+		"DELETE "+server.deleteVmEndpoint,
 		createHttpHandler(server.handleDeleteVM),
 	)
 	mux.HandleFunc(
-		"POST "+server.startInstanceEndpoint+"/{instanceId}",
+		"POST "+server.startInstanceEndpoint,
 		createHttpHandler(server.handleStartInstance),
 	)
 	mux.HandleFunc(
