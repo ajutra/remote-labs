@@ -572,7 +572,7 @@ func (agent *ServerAgentImpl) installVm(request CreateVmRequest) error {
 
 	log.Printf("VM installed successfully!")
 
-	// We need to wait for the VM to be started
+	// We need to wait for the VM to be started and configured
 	time.Sleep(AFTER_INSTALL_WAIT_TIME)
 
 	return nil
