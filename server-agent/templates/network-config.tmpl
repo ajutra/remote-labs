@@ -3,7 +3,7 @@ network:
   ethernets:
     enp1s0:
       dhcp4: no
-      addresses: [{{.IpAddress}}]
+      addresses: [{{.IpAddWithSubnet}}]
       nameservers:
         addresses: [{{.Dns1}}{{if .Dns2}}, {{.Dns2}}{{end}}]
       routes:
