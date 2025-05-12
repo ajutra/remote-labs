@@ -334,7 +334,7 @@ func (agent *ServerAgentImpl) removeVidFromNetworkBridge(vid string) error {
 	log.Printf("Removing vlan etiquete from network bridge...")
 
 	removeVlanEtiqueteCmd := exec.Command(
-		"bridge", "vlan", "del", "vid", vid, "dev", agent.vmNetworkBridge, "self", // TODO: Remove self
+		"bridge", "vlan", "del", "vid", vid, "dev", agent.vmNetworkBridge, "self", // TODO: Remove self on production
 	)
 
 	if output, err := removeVlanEtiqueteCmd.CombinedOutput(); err != nil {
@@ -350,7 +350,7 @@ func (agent *ServerAgentImpl) setupVMNetwork(vid string, vlanEtiquete string) er
 	log.Printf("Setting up network...")
 
 	addVlanEtiqueteCmd := exec.Command(
-		"bridge", "vlan", "add", "vid", vid, "dev", agent.vmNetworkBridge, "self", // TODO: Remove self
+		"bridge", "vlan", "add", "vid", vid, "dev", agent.vmNetworkBridge, "self", // TODO: Remove self on production
 	)
 
 	if output, err := addVlanEtiqueteCmd.CombinedOutput(); err != nil {
