@@ -58,7 +58,7 @@ const CreateSubjectSheet: React.FC = () => {
       description: 'The subject has been created successfully.',
     })
     setOpen(false)
-    // Limpiar todos los campos
+    // Clear all fields
     setSubjectName('')
     setSubjectCode('')
     setProfessorEmails([])
