@@ -159,12 +159,20 @@ func (postgres *PostgresDatabase) UpdateUser(userId string, password string, pub
 }
 
 func (postgres *PostgresDatabase) CreateTemplate(templateId string, subjectId string, sizeMB int, vcpuCount int, vramMB int, isValidated bool, description string) error {
+	// Convert subjectId to UUID
+	subjectUUID, err := uuid.Parse(subjectId)
+	if err != nil {
+		return fmt.Errorf("error parsing subject ID: %w", err)
+	}
+
 	query := `
 	INSERT INTO templates (id, subject_id, size_mb, vcpu_count, vram_mb, is_validated, description)
-	VALUES (@id, @subject_id, @size_mb, @vcpu_count, @vram_mb, @is_validated, @description)`
+	VALUES (@id, @subject_id, @size_mb, @vcpu_count, @vram_mb, @is_validated, @description)
+	ON CONFLICT (id, subject_id) DO NOTHING`
+
 	args := pgx.NamedArgs{
 		"id":           templateId,
-		"subject_id":   subjectId,
+		"subject_id":   subjectUUID,
 		"size_mb":      sizeMB,
 		"vcpu_count":   vcpuCount,
 		"vram_mb":      vramMB,
@@ -172,7 +180,7 @@ func (postgres *PostgresDatabase) CreateTemplate(templateId string, subjectId st
 		"description":  description,
 	}
 
-	_, err := postgres.db.Exec(context.Background(), query, args)
+	_, err = postgres.db.Exec(context.Background(), query, args)
 	if err != nil {
 		return fmt.Errorf("error creating template: %w", err)
 	}
