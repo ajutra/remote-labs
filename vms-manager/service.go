@@ -283,6 +283,7 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 		Dns1:            s.vmsDns1,
 		Dns2:            s.vmsDns2,
 		Gateway:         "10.0.100.1", // TODO: Make this dynamic
+		VlanEtiquete:    "vlan100-1",  // TODO: Make this dynamic
 	}
 
 	jsonData, err := json.Marshal(agentRequest)
@@ -393,8 +394,8 @@ func (s *ServiceImpl) StartInstance(instanceId string) error {
 
 	request := StartInstanceAgentRequest{
 		InstanceId:   instanceId,
-		Vid:          "100",   // TODO: Make this dynamic
-		VlanEtiquete: "100-1", // TODO: Make this dynamic
+		Vid:          "100",       // TODO: Make this dynamic
+		VlanEtiquete: "vlan100-1", // TODO: Make this dynamic
 	}
 
 	jsonData, err := json.Marshal(request)
