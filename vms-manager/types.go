@@ -67,6 +67,24 @@ type CreateInstanceAgentRequest struct {
 	Username      string   `json:"username"`
 	Password      string   `json:"password"`
 	PublicSshKeys []string `json:"publicSshKeys"`
+	/*IpAddress     string   `json:"ipAddress"`
+	Dns1          string   `json:"dns1"`
+	Dns2          string   `json:"dns2"`
+	Gateway       string   `json:"gateway"`*/
+}
+
+/*
+type StartInstanceAgentRequest struct {
+	InstanceId   string `json:"instanceId"`
+	Vid          string `json:"vid"`
+	VlanEtiquete string `json:"vlanEtiquete"`
+}
+*/
+
+type DeleteVmAgentRequest struct {
+	VmId           string `json:"vmId"`
+	RemoveEtiquete bool   `json:"removeEtiquete"`
+	Vid            string `json:"vid"`
 }
 
 // Model
