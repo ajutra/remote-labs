@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useToast } from '@/hooks/use-toast'
+import { getEnv } from '@/utils/Env'
 
 export const useVMActions = () => {
   const [isLoading, setIsLoading] = useState(false)
@@ -9,7 +10,7 @@ export const useVMActions = () => {
     setIsLoading(true)
     try {
       const response = await fetch(
-        `http://localhost:8080/instances/start/${instanceId}`,
+        getEnv().API_START_INSTANCE.replace('{instanceId}', instanceId),
         {
           method: 'POST',
         }
@@ -40,7 +41,7 @@ export const useVMActions = () => {
     setIsLoading(true)
     try {
       const response = await fetch(
-        `http://localhost:8080/instances/stop/${instanceId}`,
+        getEnv().API_STOP_INSTANCE.replace('{instanceId}', instanceId),
         {
           method: 'POST',
         }
@@ -71,9 +72,9 @@ export const useVMActions = () => {
     setIsLoading(true)
     try {
       const response = await fetch(
-        `http://localhost:8080/instances/delete/${instanceId}`,
+        getEnv().API_DELETE_INSTANCE.replace('{instanceId}', instanceId),
         {
-          method: 'POST',
+          method: 'DELETE',
         }
       )
 
