@@ -24,6 +24,8 @@ func main() {
 	stopInstanceEndpoint := os.Getenv("STOP_INSTANCE_ENDPOINT")
 	restartInstanceEndpoint := os.Getenv("RESTART_INSTANCE_ENDPOINT")
 	listInstancesStatusEndpoint := os.Getenv("LIST_INSTANCES_STATUS_ENDPOINT")
+	getResourceStatusEndpoint := os.Getenv("GET_RESOURCE_STATUS_ENDPOINT")
+	serverAgentIsAliveEndpoint := os.Getenv("SERVER_AGENT_IS_ALIVE_ENDPOINT")
 	vmsDns1 := os.Getenv("VMS_DNS_1")
 	vmsDns2 := os.Getenv("VMS_DNS_2")
 
@@ -45,6 +47,8 @@ func main() {
 		stopInstanceEndpoint,
 		restartInstanceEndpoint,
 		listInstancesStatusEndpoint,
+		getResourceStatusEndpoint,
+		serverAgentIsAliveEndpoint,
 		vmsDns1,
 		vmsDns2,
 	)

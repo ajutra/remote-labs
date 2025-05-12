@@ -88,6 +88,11 @@ type DeleteVmAgentRequest struct {
 	Vid            string `json:"vid"`
 }
 
+type GetResourceStatusAgentResponse struct {
+	CpuLoad      float64 `json:"cpuLoad"`
+	FreeMemoryMB int     `json:"freeMemoryMB"`
+}
+
 // Model
 type Vm struct {
 	ID               string

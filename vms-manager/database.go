@@ -30,6 +30,7 @@ type Database interface {
 	VmIsLastInstanceInSubject(vmId string) (bool, error)
 	GetSubjectIdByVmId(vmId string) (string, error)
 	DeleteSubject(subjectId string) error
+	GetAllVmIds() ([]string, error)
 }
 
 type PostgresDatabase struct {
@@ -387,6 +388,26 @@ func (postgres *PostgresDatabase) DeleteSubject(subjectId string) error {
 	}
 
 	return nil
+}
+
+func (postgres *PostgresDatabase) GetAllVmIds() ([]string, error) {
+	query := "SELECT id FROM vms WHERE is_base = false"
+	rows, err := postgres.db.Query(context.Background(), query)
+	if err != nil {
+		return nil, logAndReturnError("Error getting all vm ids: ", err.Error())
+	}
+	defer rows.Close()
+
+	var vmIds []string
+	for rows.Next() {
+		var vmId string
+		if err := rows.Scan(&vmId); err != nil {
+			return nil, logAndReturnError("Error getting all vm ids: ", err.Error())
+		}
+		vmIds = append(vmIds, vmId)
+	}
+
+	return vmIds, nil
 }
 
 func (dbVm *DatabaseVM) toVm() Vm {
