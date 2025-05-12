@@ -426,6 +426,21 @@ func (server *ApiServer) handleGetInstanceStatusByUserId(w http.ResponseWriter, 
 
 	return writeResponse(w, http.StatusOK, statuses)
 }
+
+func (server *ApiServer) handleGetTemplatesBySubjectId(w http.ResponseWriter, r *http.Request) error {
+	subjectId := r.PathValue("subjectId")
+	if subjectId == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing subject id"))
+	}
+
+	templates, err := server.instanceService.GetTemplatesBySubjectId(subjectId)
+	if err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, templates)
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -498,6 +513,7 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("GET /bases", createHttpHandler(server.handleBases))
 	mux.HandleFunc("POST /templates/define", createHttpHandler(server.handleDefineTemplate))
 	mux.HandleFunc("POST /templates/delete/{templateId}/{subjectId}", createHttpHandler(server.handleDeleteTemplate))
+	mux.HandleFunc("GET /templates/subjects/{subjectId}", createHttpHandler(server.handleGetTemplatesBySubjectId))
 	mux.HandleFunc("GET /instances/status/{userId}", createHttpHandler(server.handleGetInstanceStatusByUserId))
 
 	log.Println("Starting server on port", server.listenAddr)
