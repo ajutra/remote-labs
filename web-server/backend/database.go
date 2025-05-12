@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -70,7 +71,7 @@ type InstanceInfo struct {
 	UserId              string
 	SubjectId           string
 	TemplateId          *string
-	CreatedAt           string
+	CreatedAt           time.Time // Changed from string to time.Time
 	UserMail            string
 	SubjectName         string
 	Template_vcpu_count *int
@@ -79,12 +80,25 @@ type InstanceInfo struct {
 }
 
 func (postgres *PostgresDatabase) GetInstanceIdsByUserId(userId string) ([]string, error) {
-	query := "SELECT id FROM instances WHERE user_id = @user_id"
-	args := pgx.NamedArgs{"user_id": userId}
+	query := "SELECT id FROM instances WHERE user_id = $1"
+
+	rows, err := postgres.db.Query(context.Background(), query, userId)
+	if err != nil {
+		return nil, fmt.Errorf("error executing query: %w", err)
+	}
+	defer rows.Close()
 
 	var instanceIds []string
-	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&instanceIds); err != nil {
-		return nil, fmt.Errorf("error getting instance ids: %w", err)
+	for rows.Next() {
+		var instanceId string
+		if err := rows.Scan(&instanceId); err != nil {
+			return nil, fmt.Errorf("error scanning row: %w", err)
+		}
+		instanceIds = append(instanceIds, instanceId)
+	}
+
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", rows.Err())
 	}
 
 	return instanceIds, nil
@@ -854,16 +868,16 @@ func (postgres *PostgresDatabase) GetUserIdByEmail(userEmail string) (string, er
 
 func (postgres *PostgresDatabase) GetInstanceInfo(instanceId string) (InstanceInfo, error) {
 	query := `
-	SELECT i.user_id, i.subject_id, i.template_id, i.created_at, u.mail, s.name, t.vcpu_count, t.vram_mb, t.size_mb
+	SELECT i.user_id, i.subject_id, i.template_id, i.created_at, u.mail, s.name,
+	       COALESCE(t.vcpu_count, 0), COALESCE(t.vram_mb, 0), COALESCE(t.size_mb, 0)
 	FROM instances i
-	JOIN users u ON i.user_id = u.id
-	JOIN subjects s ON i.subject_id = s.id
+	LEFT JOIN users u ON i.user_id = u.id
+	LEFT JOIN subjects s ON i.subject_id = s.id
 	LEFT JOIN templates t ON i.template_id = t.id AND i.subject_id = t.subject_id
-	WHERE i.id = @instance_id`
-	args := pgx.NamedArgs{"instance_id": instanceId}
+	WHERE i.id = $1`
 
 	var info InstanceInfo
-	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(
+	if err := postgres.db.QueryRow(context.Background(), query, instanceId).Scan(
 		&info.UserId,
 		&info.SubjectId,
 		&info.TemplateId,
@@ -874,7 +888,7 @@ func (postgres *PostgresDatabase) GetInstanceInfo(instanceId string) (InstanceIn
 		&info.Template_vram_mb,
 		&info.Template_size_mb,
 	); err != nil {
-		return InstanceInfo{}, fmt.Errorf("error getting instance info: %w", err)
+		return InstanceInfo{}, fmt.Errorf("error fetching instance info: %w", err)
 	}
 
 	return info, nil

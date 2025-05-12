@@ -361,11 +361,14 @@ func (server *ApiServer) handleDeleteInstance(w http.ResponseWriter, r *http.Req
 }
 
 func (server *ApiServer) handleGetInstanceStatus(w http.ResponseWriter, r *http.Request) error {
+	log.Println("Received request for GetInstanceStatus")
 	statuses, err := server.instanceService.GetInstanceStatus()
 	if err != nil {
+		log.Printf("Error in GetInstanceStatus: %v", err)
 		return err
 	}
 
+	log.Printf("Successfully retrieved statuses: %+v", statuses)
 	return writeResponse(w, http.StatusOK, statuses)
 }
 

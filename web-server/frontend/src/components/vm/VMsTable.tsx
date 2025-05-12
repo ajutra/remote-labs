@@ -98,6 +98,7 @@ export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
               <TableHead>Subject</TableHead>
               <TableHead>Created At</TableHead>
               <TableHead>Resources</TableHead>
+              <TableHead>Template ID</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -105,7 +106,7 @@ export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
             {vms.map((vm) => (
               <TableRow key={vm.instanceId}>
                 <TableCell>
-                  <span className={`font-medium ${getStatusColor(vm.status)}`}>
+                  <span className={`font-bold ${getStatusColor(vm.status)}`}>
                     {getStatusDisplay(vm.status)}
                   </span>
                 </TableCell>
@@ -117,18 +118,19 @@ export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
                   <div className="space-y-1 text-sm">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">vCPUs:</span>
-                      <span>{vm.template_vcpu_count}</span>
+                      <span>{vm.template_vcpu_count || 'XX'}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">RAM:</span>
-                      <span>{vm.template_vram_mb / 1024} GB</span>
+                      <span>{vm.template_vram_mb ? `${vm.template_vram_mb / 1024} GB` : 'XX'}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">Disk:</span>
-                      <span>{vm.template_size_mb / 1024} GB</span>
+                      <span>{vm.template_size_mb ? `${vm.template_size_mb / 1024} GB` : 'XX'}</span>
                     </div>
                   </div>
                 </TableCell>
+                <TableCell className="font-medium">{vm.templateId || 'to be defined'}</TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-2">
                     {['shut off', 'crashed'].includes(
