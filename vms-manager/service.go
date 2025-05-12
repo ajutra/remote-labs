@@ -16,12 +16,16 @@ import (
 )
 
 const RUNNING_STATUS = "running"
+const SHUTOFF_STATUS = "shut off"
 const FIRST_VLAN = 100
 const MAX_VLANS = 255
 const MAX_VMS_PER_VLAN = 253 // 255 total IPs in the subnet, minus the first IP (gateway) and the last IP (broadcast)
 const FIRST_IP_IN_SUBNET = 1
 const SUBNET_MASK = 24
 const INTERFACE_ADDRESS_SECOND_OCTET = 1
+const MAX_CPU_USAGE = 0.9
+const MIN_AVAILABLE_RAM_MB = 1024
+const CPU_USAGE_PENALTY_FACTOR = 10240 // 10240 MB of RAM for 100% of CPU Load, adjust this value to change the penalty for high CPU usage
 
 type Service interface {
 	ListBaseImages() ([]ListBaseImagesResponse, error)
@@ -37,7 +41,7 @@ type Service interface {
 
 type ServiceImpl struct {
 	db                          Database
-	serverAgentsURLs            string
+	serverAgentsURLs            []string
 	listBaseImagesEndpoint      string
 	defineTemplateEndpoint      string
 	deleteTemplateEndpoint      string
@@ -47,6 +51,8 @@ type ServiceImpl struct {
 	stopInstanceEndpoint        string
 	restartInstanceEndpoint     string
 	listInstancesStatusEndpoint string
+	getResourceStatusEndpoint   string
+	serverAgentIsAliveEndpoint  string
 	vmsDns1                     string
 	vmsDns2                     string
 	mutexMap                    map[string]*sync.Mutex
@@ -129,12 +135,17 @@ func (s *ServiceImpl) DefineTemplate(request DefineTemplateRequest) (DefineTempl
 		return DefineTemplateResponse{}, logAndReturnError("Error marshalling define template agent request: ", err.Error())
 	}
 
+	agentUrl, err := s.selectServerAgent()
+	if err != nil {
+		return DefineTemplateResponse{}, err
+	}
+
 	vmMutex := s.getMutex(request.SourceInstanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
 	resp, err := http.Post(
-		s.serverAgentsURLs+s.defineTemplateEndpoint,
+		agentUrl+s.defineTemplateEndpoint,
 		"application/json",
 		bytes.NewBuffer(jsonData),
 	)
@@ -198,32 +209,48 @@ func (s *ServiceImpl) DeleteTemplate(templateId string) error {
 		return logAndReturnError("Error marshalling delete template agent request: ", err.Error())
 	}
 
+	// We need to call the deleteInstanceEndpoint for each server agent
+	// because the template might not exist in all of them
+	agentsCalled := 0
 	vmMutex := s.getMutex(templateId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
+	for _, agentUrl := range s.serverAgentsURLs {
+		if err := s.checkIfServerAgentIsAlive(agentUrl); err != nil {
+			continue
+		}
+		agentsCalled++
 
-	// Calling deleteInstaceEndpoint because the server agent
-	// makes no difference between a template and an instance
-	req, err := http.NewRequest(
-		http.MethodDelete,
-		s.serverAgentsURLs+s.deleteInstanceEndpoint,
-		bytes.NewBuffer(jsonData),
-	)
-	if err != nil {
-		return logAndReturnError("Error creating delete template request: ", err.Error())
+		// Calling deleteInstaceEndpoint because the server agent
+		// makes no difference between a template and an instance
+		req, err := http.NewRequest(
+			http.MethodDelete,
+			agentUrl+s.deleteInstanceEndpoint,
+			bytes.NewBuffer(jsonData),
+		)
+		if err != nil {
+			return logAndReturnError("Error creating delete template request: ", err.Error())
+		}
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			return logAndReturnError("Error sending delete template request: ", err.Error())
+		}
+
+		if err := checkIfStatusCodeIsOk(resp); err != nil {
+			return err
+		}
+
+		resp.Body.Close()
 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return logAndReturnError("Error sending delete template request: ", err.Error())
+	if agentsCalled == 0 {
+		return NewHttpError(
+			http.StatusInternalServerError,
+			fmt.Errorf("no server agents available to delete template"),
+		)
 	}
-	defer resp.Body.Close()
-
-	if err := checkIfStatusCodeIsOk(resp); err != nil {
-		return err
-	}
-
 	s.deleteVmFromDb(templateId)
 	s.deleteMutex(templateId)
 
@@ -312,12 +339,17 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 		return CreateInstanceResponse{}, logAndReturnError("Error marshalling create instance agent request: ", err.Error())
 	}
 
+	agentUrl, err := s.selectServerAgent()
+	if err != nil {
+		return CreateInstanceResponse{}, err
+	}
+
 	vmMutex := s.getMutex(request.SourceVmId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
 	resp, err := http.Post(
-		s.serverAgentsURLs+s.createInstanceEndpoint,
+		agentUrl+s.createInstanceEndpoint,
 		"application/json",
 		bytes.NewBuffer(jsonData),
 	)
@@ -390,28 +422,45 @@ func (s *ServiceImpl) DeleteInstance(instanceId string) error {
 		return logAndReturnError("Error marshalling delete instance agent request: ", err.Error())
 	}
 
+	// We need to call the deleteInstanceEndpoint for each server agent
+	// because the instance might exist in some of them
+	agentsCalled := 0
 	vmMutex := s.getMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
+	for _, agentUrl := range s.serverAgentsURLs {
+		if err := s.checkIfServerAgentIsAlive(agentUrl); err != nil {
+			continue
+		}
+		agentsCalled++
 
-	req, err := http.NewRequest(
-		http.MethodDelete,
-		s.serverAgentsURLs+s.deleteInstanceEndpoint,
-		bytes.NewBuffer(jsonData),
-	)
-	if err != nil {
-		return logAndReturnError("Error creating delete instance request: ", err.Error())
+		req, err := http.NewRequest(
+			http.MethodDelete,
+			agentUrl+s.deleteInstanceEndpoint,
+			bytes.NewBuffer(jsonData),
+		)
+		if err != nil {
+			return logAndReturnError("Error creating delete instance request: ", err.Error())
+		}
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			return logAndReturnError("Error sending delete instance request: ", err.Error())
+		}
+
+		if err := checkIfStatusCodeIsOk(resp); err != nil {
+			return err
+		}
+
+		resp.Body.Close()
 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return logAndReturnError("Error sending delete instance request: ", err.Error())
-	}
-	defer resp.Body.Close()
-
-	if err := checkIfStatusCodeIsOk(resp); err != nil {
-		return err
+	if agentsCalled != len(s.serverAgentsURLs) {
+		return NewHttpError(
+			http.StatusInternalServerError,
+			fmt.Errorf("some server agents did not respond to delete instance request, please try again later"),
+		)
 	}
 
 	subjectId, err := s.db.GetSubjectIdByVmId(instanceId)
@@ -463,12 +512,17 @@ func (s *ServiceImpl) StartInstance(instanceId string) error {
 		return logAndReturnError("Error marshalling start instance agent request: ", err.Error())
 	}
 
+	agentUrl, err := s.selectServerAgent()
+	if err != nil {
+		return err
+	}
+
 	vmMutex := s.getMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
 	resp, err := http.Post(
-		s.serverAgentsURLs+s.startInstanceEndpoint,
+		agentUrl+s.startInstanceEndpoint,
 		"application/json",
 		bytes.NewBuffer(jsonData),
 	)
@@ -492,21 +546,38 @@ func (s *ServiceImpl) StopInstance(instanceId string) error {
 		return err
 	}
 
+	// We need to call the stopInstanceEndpoint for each server agent until we get a 200 response
+	// because we don't know which server agent the instance is running on
 	vmMutex := s.getMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
+	for _, agentUrl := range s.serverAgentsURLs {
+		if err := s.checkIfServerAgentIsAlive(agentUrl); err != nil {
+			continue
+		}
 
-	resp, err := http.Post(
-		s.serverAgentsURLs+s.stopInstanceEndpoint+"/"+instanceId,
-		"application/json",
-		nil,
-	)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if err := checkIfStatusCodeIsOk(resp); err != nil {
-		return err
+		resp, err := http.Post(
+			agentUrl+s.stopInstanceEndpoint+"/"+instanceId,
+			"application/json",
+			nil,
+		)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusBadRequest {
+			resp.Body.Close()
+			continue
+		}
+
+		if err := checkIfStatusCodeIsOk(resp); err != nil {
+			return err
+		}
+
+		// If we get a 200 response, we found the server agent that is running the instance
+		// and we can break the loop
+		break
 	}
 
 	return nil
@@ -521,19 +592,166 @@ func (s *ServiceImpl) RestartInstance(instanceId string) error {
 		return err
 	}
 
+	// We need to call the restartInstanceEndpoint for each server agent until we get a 200 response
+	// because we don't know which server agent the instance is running on
+	correctServerFound := false
 	vmMutex := s.getMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
+	for _, agentUrl := range s.serverAgentsURLs {
+		if err := s.checkIfServerAgentIsAlive(agentUrl); err != nil {
+			continue
+		}
 
-	resp, err := http.Post(
-		s.serverAgentsURLs+s.restartInstanceEndpoint+"/"+instanceId,
-		"application/json",
-		nil,
-	)
+		resp, err := http.Post(
+			agentUrl+s.restartInstanceEndpoint+"/"+instanceId,
+			"application/json",
+			nil,
+		)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusBadRequest {
+			resp.Body.Close()
+			continue
+		}
+
+		if err := checkIfStatusCodeIsOk(resp); err != nil {
+			return err
+		}
+
+		correctServerFound = true
+
+		// If we get a 200 response, we found the server agent that is running the instance
+		// and we can break the loop
+		break
+	}
+
+	if !correctServerFound {
+		return NewHttpError(
+			http.StatusInternalServerError,
+			fmt.Errorf("server agent did not respond, please start the instance again"),
+		)
+	}
+
+	return nil
+}
+
+func (s *ServiceImpl) ListInstancesStatus() ([]ListInstancesStatusResponse, error) {
+	var globalStatuses []ListInstancesStatusResponse
+
+	// We need to call the listInstancesStatusEndpoint for each server agent to get the status of all instances
+	agentsCalled := 0
+	for _, agentUrl := range s.serverAgentsURLs {
+		if err := s.checkIfServerAgentIsAlive(agentUrl); err != nil {
+			continue
+		}
+		agentsCalled++
+		resp, err := http.Get(agentUrl + s.listInstancesStatusEndpoint)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := checkIfStatusCodeIsOk(resp); err != nil {
+			return nil, err
+		}
+
+		var statuses []ListInstancesStatusResponse
+		if err := json.NewDecoder(resp.Body).Decode(&statuses); err != nil {
+			return nil, logAndReturnError("Error decoding list instances status response: ", err.Error())
+		}
+
+		// We check if the vmId is already in the globalStatuses
+		// If it is, we update the status only if the new status is running
+		// If it is not, we add the status to the globalStatuses
+		for _, vmStatus := range statuses {
+			found := false
+			for i, existingStatus := range globalStatuses {
+				if existingStatus.InstanceId == vmStatus.InstanceId {
+					found = true
+					if vmStatus.Status == RUNNING_STATUS {
+						globalStatuses[i] = vmStatus
+					}
+					break
+				}
+			}
+			if !found {
+				globalStatuses = append(globalStatuses, vmStatus)
+			}
+		}
+	}
+
+	if agentsCalled != len(s.serverAgentsURLs) {
+		// In case some server agents did not respond, we need to add missing VMs with a status of "shut off"
+		vmIds, err := s.db.GetAllVmIds()
+		if err != nil {
+			return nil, err
+		}
+
+		for _, vmId := range vmIds {
+			found := false
+			for _, vmStatus := range globalStatuses {
+				if vmStatus.InstanceId == vmId {
+					found = true
+					break
+				}
+			}
+			if !found {
+				globalStatuses = append(globalStatuses, ListInstancesStatusResponse{
+					InstanceId: vmId,
+					Status:     SHUTOFF_STATUS,
+				})
+			}
+		}
+	}
+
+	return globalStatuses, nil
+}
+
+func (s *ServiceImpl) selectServerAgent() (string, error) {
+	var selectedAgent string
+	var bestScore float64
+
+	for _, agentUrl := range s.serverAgentsURLs {
+		if err := s.checkIfServerAgentIsAlive(agentUrl); err != nil {
+			continue
+		}
+
+		resourceStatus, err := s.getResourceStatus(agentUrl)
+		if err != nil {
+			continue
+		}
+
+		if resourceStatus.FreeMemoryMB < MIN_AVAILABLE_RAM_MB || resourceStatus.CpuLoad > MAX_CPU_USAGE {
+			continue
+		}
+
+		score := getServerAgentScore(resourceStatus)
+		if score > bestScore {
+			bestScore = score
+			selectedAgent = agentUrl
+		}
+	}
+
+	if selectedAgent == "" {
+		return "", NewHttpError(
+			http.StatusInternalServerError,
+			fmt.Errorf("all servers are busy, please try again later"),
+		)
+	}
+
+	return selectedAgent, nil
+}
+
+func (s *ServiceImpl) checkIfServerAgentIsAlive(agentUrl string) error {
+	resp, err := http.Get(agentUrl + s.serverAgentIsAliveEndpoint)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+
 	if err := checkIfStatusCodeIsOk(resp); err != nil {
 		return err
 	}
@@ -541,27 +759,36 @@ func (s *ServiceImpl) RestartInstance(instanceId string) error {
 	return nil
 }
 
-func (s *ServiceImpl) ListInstancesStatus() ([]ListInstancesStatusResponse, error) {
-	resp, err := http.Get(s.serverAgentsURLs + s.listInstancesStatusEndpoint)
+func (s *ServiceImpl) getResourceStatus(agentUrl string) (GetResourceStatusAgentResponse, error) {
+	resp, err := http.Get(agentUrl + s.getResourceStatusEndpoint)
 	if err != nil {
-		return nil, err
+		return GetResourceStatusAgentResponse{}, err
 	}
 	defer resp.Body.Close()
 
 	if err := checkIfStatusCodeIsOk(resp); err != nil {
-		return nil, err
+		return GetResourceStatusAgentResponse{}, err
 	}
 
-	var statuses []ListInstancesStatusResponse
-	if err := json.NewDecoder(resp.Body).Decode(&statuses); err != nil {
-		return nil, logAndReturnError("Error decoding list instances status response: ", err.Error())
+	var resourceStatus GetResourceStatusAgentResponse
+	if err := json.NewDecoder(resp.Body).Decode(&resourceStatus); err != nil {
+		return GetResourceStatusAgentResponse{}, logAndReturnError("Error decoding get resource status response: ", err.Error())
 	}
 
-	return statuses, nil
+	return resourceStatus, nil
+}
+
+func getServerAgentScore(resourceStatus GetResourceStatusAgentResponse) float64 {
+	return float64(resourceStatus.FreeMemoryMB) - (CPU_USAGE_PENALTY_FACTOR * resourceStatus.CpuLoad)
 }
 
 func (s *ServiceImpl) getBaseImagesNames() ([]string, error) {
-	resp, err := http.Get(s.serverAgentsURLs + s.listBaseImagesEndpoint)
+	agentUrl, err := s.selectServerAgent()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.Get(agentUrl + s.listBaseImagesEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -947,12 +1174,14 @@ func NewService(
 	stopInstanceEndpoint string,
 	restartInstanceEndpoint string,
 	listInstancesStatusEndpoint string,
+	getResourceStatusEndpoint string,
+	serverAgentIsAliveEndpoint string,
 	vmsDns1 string,
 	vmsDns2 string,
 ) (Service, error) {
 	service := &ServiceImpl{
 		db:                          db,
-		serverAgentsURLs:            serverAgentsURLs[0], // TODO: support multiple server agents
+		serverAgentsURLs:            serverAgentsURLs,
 		listBaseImagesEndpoint:      listBaseImagesEndpoint,
 		defineTemplateEndpoint:      defineTemplateEndpoint,
 		deleteTemplateEndpoint:      deleteTemplateEndpoint,
@@ -962,6 +1191,8 @@ func NewService(
 		stopInstanceEndpoint:        stopInstanceEndpoint,
 		restartInstanceEndpoint:     restartInstanceEndpoint,
 		listInstancesStatusEndpoint: listInstancesStatusEndpoint,
+		getResourceStatusEndpoint:   getResourceStatusEndpoint,
+		serverAgentIsAliveEndpoint:  serverAgentIsAliveEndpoint,
 		vmsDns1:                     vmsDns1,
 		vmsDns2:                     vmsDns2,
 		mutexMap:                    make(map[string]*sync.Mutex),

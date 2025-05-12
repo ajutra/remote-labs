@@ -25,6 +25,8 @@ func main() {
 	listInstancesStatusEndpoint := os.Getenv("LIST_INSTANCES_STATUS_ENDPOINT")
 	defaultNetworkBridge := os.Getenv("DEFAULT_NETWORK_BRIDGE")
 	vmNetworkBridge := os.Getenv("VM_NETWORK_BRIDGE")
+	getResourceStatusEndpoint := os.Getenv("GET_RESOURCE_STATUS_ENDPOINT")
+	isAliveEndpoint := os.Getenv("IS_ALIVE_ENDPOINT")
 
 	serverAgent := NewServerAgent(
 		vmsStoragePath,
@@ -46,6 +48,8 @@ func main() {
 		stopInstanceEndpoint,
 		restartInstanceEndpoint,
 		listInstancesStatusEndpoint,
+		getResourceStatusEndpoint,
+		isAliveEndpoint,
 	)
 	apiServer.Run()
 }

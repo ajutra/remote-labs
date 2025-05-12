@@ -19,6 +19,8 @@ type ApiServer struct {
 	stopInstanceEndpoint        string
 	restartInstanceEndpoint     string
 	listInstancesStatusEndpoint string
+	getResourceStatusEndpoint   string
+	isAliveEndpoint             string
 }
 
 type ApiError struct {
@@ -115,6 +117,19 @@ func (server *ApiServer) handleListInstancesStatus(w http.ResponseWriter, r *htt
 	return writeResponse(w, http.StatusOK, statuses)
 }
 
+func (server *ApiServer) handleGetResourceStatus(w http.ResponseWriter, r *http.Request) error {
+	status, err := server.serverAgent.GetResourceStatus()
+	if err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, status)
+}
+
+func (server *ApiServer) handleIsAlive(w http.ResponseWriter, r *http.Request) error {
+	return writeResponse(w, http.StatusOK, nil)
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -146,6 +161,8 @@ func NewApiServer(
 	stopInstanceEndpoint string,
 	restartInstanceEndpoint string,
 	listInstancesStatusEndpoint string,
+	getResourceStatusEndpoint string,
+	isAliveEndpoint string,
 ) *ApiServer {
 	return &ApiServer{
 		listenAddr:                  listenAddr,
@@ -158,6 +175,8 @@ func NewApiServer(
 		stopInstanceEndpoint:        stopInstanceEndpoint,
 		restartInstanceEndpoint:     restartInstanceEndpoint,
 		listInstancesStatusEndpoint: listInstancesStatusEndpoint,
+		getResourceStatusEndpoint:   getResourceStatusEndpoint,
+		isAliveEndpoint:             isAliveEndpoint,
 	}
 }
 
@@ -195,6 +214,14 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc(
 		"GET "+server.listInstancesStatusEndpoint,
 		createHttpHandler(server.handleListInstancesStatus),
+	)
+	mux.HandleFunc(
+		"GET "+server.getResourceStatusEndpoint,
+		createHttpHandler(server.handleGetResourceStatus),
+	)
+	mux.HandleFunc(
+		"GET "+server.isAliveEndpoint,
+		createHttpHandler(server.handleIsAlive),
 	)
 
 	log.Println("Starting server agent on", server.listenAddr)

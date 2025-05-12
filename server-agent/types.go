@@ -45,3 +45,8 @@ type ListInstancesStatusResponse struct {
 	InstanceId string `json:"instanceId"`
 	Status     string `json:"status"`
 }
+
+type GetResourceStatusResponse struct {
+	CpuLoad      float64 `json:"cpuLoad"`
+	FreeMemoryMB int     `json:"freeMemoryMB"`
+}

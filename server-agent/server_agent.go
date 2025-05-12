@@ -1,10 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"embed"
+	"errors"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"text/template"
@@ -30,6 +35,7 @@ type ServerAgent interface {
 	StopInstance(instanceId string) error
 	RestartInstance(instanceId string) error
 	ListInstancesStatus() ([]ListInstancesStatusResponse, error)
+	GetResourceStatus() (GetResourceStatusResponse, error)
 }
 
 type ServerAgentImpl struct {
@@ -84,8 +90,6 @@ type CloudInitNetworkConfig struct {
 }
 
 func (agent *ServerAgentImpl) ListBaseImages() (ListBaseImagesResponse, error) {
-	log.Printf("Getting base images...")
-
 	cmd := exec.Command(
 		"ls",
 		agent.cloudInitImagesPath,
@@ -155,6 +159,17 @@ func (agent *ServerAgentImpl) DeleteVm(request DeleteVmRequest) error {
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
+		// If the domain doesn't exist, it means it does not exist in this server
+		// we need to remove the vlan etiquete from the network bridge anyway
+		if strings.Contains(string(output), "failed to get domain") {
+			if request.RemoveEtiquete {
+				if err := agent.removeVidFromNetworkBridge(request.Vid); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+
 		return logAndReturnError("Error deleting VM '"+request.VmId+"': ", string(output))
 	}
 
@@ -163,8 +178,6 @@ func (agent *ServerAgentImpl) DeleteVm(request DeleteVmRequest) error {
 	if err := os.RemoveAll(agent.vmsStoragePath + "/" + request.VmId); err != nil {
 		return logAndReturnError("Error deleting VM '"+request.VmId+"' files from storage: ", err.Error())
 	}
-
-	log.Printf("VM '%s' files removed from storage successfully!", request.VmId)
 
 	log.Printf("Deleted VM '%s' successfully!", request.VmId)
 
@@ -179,6 +192,12 @@ func (agent *ServerAgentImpl) DeleteVm(request DeleteVmRequest) error {
 
 func (agent *ServerAgentImpl) StartInstance(request StartInstanceRequest) error {
 	log.Printf("Starting instance '%s'...", request.InstanceId)
+
+	if !agent.vmDomainExists(request.InstanceId) {
+		if err := agent.importVmDomain(request.InstanceId); err != nil {
+			return err
+		}
+	}
 
 	cmd := exec.Command(
 		"virsh", "start", request.InstanceId,
@@ -206,6 +225,12 @@ func (agent *ServerAgentImpl) StopInstance(instanceId string) error {
 	)
 
 	if output, err := cmd.CombinedOutput(); err != nil {
+		// If the domain doesn't exist, or is already shut down, we return a bad request
+		// to inform the vms-manager that the instance is not running in this server
+		if strings.Contains(string(output), "failed to get domain") || strings.Contains(string(output), "Domain is not running") {
+			return NewHttpError(http.StatusBadRequest, errors.New("instance is not running in this server"))
+		}
+
 		return logAndReturnError("Error stopping instance '"+instanceId+"': ", string(output))
 	}
 
@@ -224,7 +249,6 @@ func (agent *ServerAgentImpl) StopInstance(instanceId string) error {
 		for _, status := range statuses {
 			if status.InstanceId == instanceId {
 				if status.Status != SHUTOFF_STATUS {
-					log.Printf("Time since current time: %s, retryShutdown: %t", time.Since(currentTime), retryShutdown)
 					if time.Since(currentTime) >= FORCE_SHUTDOWN_WAIT_TIME {
 						return agent.forceStopVM(instanceId)
 					} else if time.Since(currentTime) >= RETRY_SHUTDOWN_WAIT_TIME && retryShutdown {
@@ -250,6 +274,12 @@ func (agent *ServerAgentImpl) StopInstance(instanceId string) error {
 func (agent *ServerAgentImpl) RestartInstance(instanceId string) error {
 	log.Printf("Restarting instance '%s'...", instanceId)
 
+	if !agent.vmDomainExists(instanceId) {
+		// If the domain doesn't exist, we return a bad request to inform the vms-manager
+		// that the instance is not running in this server
+		return NewHttpError(http.StatusBadRequest, errors.New("instance is not running in this server"))
+	}
+
 	cmd := exec.Command(
 		"virsh", "reboot", instanceId,
 	)
@@ -257,6 +287,12 @@ func (agent *ServerAgentImpl) RestartInstance(instanceId string) error {
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
+		// If the domain is not running, we return a bad request to inform the vms-manager
+		// that the instance is not running in this server
+		if strings.Contains(string(output), "Domain is not running") {
+			return NewHttpError(http.StatusBadRequest, errors.New("instance is not running in this server"))
+		}
+
 		return logAndReturnError("Error restarting instance '"+instanceId+"': ", string(output))
 	}
 
@@ -266,8 +302,6 @@ func (agent *ServerAgentImpl) RestartInstance(instanceId string) error {
 }
 
 func (agent *ServerAgentImpl) ListInstancesStatus() ([]ListInstancesStatusResponse, error) {
-	log.Printf("Getting VMs status...")
-
 	cmd := exec.Command(
 		"virsh", "list", "--all",
 	)
@@ -297,9 +331,24 @@ func (agent *ServerAgentImpl) ListInstancesStatus() ([]ListInstancesStatusRespon
 	return toListInstancesStatusResponse(vmStatusMap), nil
 }
 
-func (agent *ServerAgentImpl) createVm(request CreateVmRequest) error {
-	log.Printf("Creating %s '%s'...", request.VmType, request.VmId)
+func (agent *ServerAgentImpl) GetResourceStatus() (GetResourceStatusResponse, error) {
+	cpuLoad, err := getCpuLoad()
+	if err != nil {
+		return GetResourceStatusResponse{}, err
+	}
 
+	freeMemoryMB, err := getFreeMemory()
+	if err != nil {
+		return GetResourceStatusResponse{}, err
+	}
+
+	return GetResourceStatusResponse{
+		CpuLoad:      cpuLoad,
+		FreeMemoryMB: freeMemoryMB,
+	}, nil
+}
+
+func (agent *ServerAgentImpl) createVm(request CreateVmRequest) error {
 	if err := createDir(request.DirPath); err != nil {
 		return err
 	}
@@ -326,7 +375,8 @@ func (agent *ServerAgentImpl) createVm(request CreateVmRequest) error {
 		return err
 	}
 
-	log.Printf("%s '%s' created successfully!", request.VmType, request.VmId)
+	agent.dumpVmXML(request.VmId)
+
 	return nil
 }
 
@@ -340,8 +390,6 @@ func (agent *ServerAgentImpl) removeVidFromNetworkBridge(vid string) error {
 	if output, err := removeVlanEtiqueteCmd.CombinedOutput(); err != nil {
 		return logAndReturnError("Error removing vlan etiquete from network bridge: ", string(output))
 	}
-
-	log.Printf("Vlan etiquete removed from network bridge successfully!")
 
 	return nil
 }
@@ -365,8 +413,6 @@ func (agent *ServerAgentImpl) setupVMNetwork(vid string, vlanEtiquete string) er
 		return logAndReturnError("Error setting up vm interface as access port: ", string(output))
 	}
 
-	log.Printf("Network setup successfully!")
-
 	return nil
 }
 
@@ -382,7 +428,6 @@ func createDir(dirPath string) error {
 		return logAndReturnError("Error creating directory: ", err.Error())
 	}
 
-	log.Printf("Directory '%s' created successfully!", dirPath)
 	return nil
 }
 
@@ -443,7 +488,6 @@ func (agent *ServerAgentImpl) createVmConfigurationFiles(request CreateVmRequest
 		return err
 	}
 
-	log.Printf("%s configuration files created successfully!", request.VmType)
 	return nil
 }
 
@@ -466,7 +510,6 @@ func createFileFromTemplate(newFilePath string, fileName string, data interface{
 
 	file.Close()
 
-	log.Printf("File %s created successfully!", fileName)
 	return nil
 }
 
@@ -493,7 +536,6 @@ func createCidataIso(dirPath string, isTemplate bool) error {
 		return logAndReturnError("Error creating cidata.iso: ", string(createIsoCmdOutput))
 	}
 
-	log.Printf("Cidata.iso created successfully!")
 	return nil
 }
 
@@ -522,7 +564,6 @@ func (agent *ServerAgentImpl) createDiskImage(request CreateVmRequest) error {
 		return logAndReturnError("Error creating disk image: ", string(createDiskImageCmdOutput))
 	}
 
-	log.Printf("Disk image created successfully!")
 	return nil
 }
 
@@ -544,7 +585,6 @@ func (agent *ServerAgentImpl) removeBackingFileFromTemplateDiskImage(dirPath str
 		)
 	}
 
-	log.Printf("Backing file removed from template disk image successfully!")
 	return nil
 }
 
@@ -570,12 +610,34 @@ func (agent *ServerAgentImpl) installVm(request CreateVmRequest) error {
 		return logAndReturnError("Error installing VM: ", string(installVmCmdOutput))
 	}
 
-	log.Printf("VM installed successfully!")
-
 	// We need to wait for the VM to be started and configured
 	time.Sleep(AFTER_INSTALL_WAIT_TIME)
 
 	return nil
+}
+
+func (agent *ServerAgentImpl) dumpVmXML(vmId string) {
+	xmlPath := filepath.Join(agent.vmsStoragePath, vmId, vmId+".xml")
+
+	log.Printf("Dumping VM XML to %s...", xmlPath)
+
+	for {
+		cmd := exec.Command("virsh", "dumpxml", vmId)
+		output, err := cmd.Output()
+		if err != nil {
+			log.Printf("Error dumping VM XML: %v; retrying…", err)
+			time.Sleep(time.Second)
+			continue
+		}
+
+		if err := os.WriteFile(xmlPath, output, 0644); err != nil {
+			log.Printf("Error writing XML file: %v; retrying…", err)
+			time.Sleep(time.Second)
+			continue
+		}
+
+		return
+	}
 }
 
 func (agent *ServerAgentImpl) forceStopVM(vmId string) error {
@@ -591,7 +653,34 @@ func (agent *ServerAgentImpl) forceStopVM(vmId string) error {
 		return logAndReturnError("Error force stopping VM '"+vmId+"': ", string(output))
 	}
 
-	log.Printf("Force stopped VM '%s' successfully!", vmId)
+	return nil
+}
+
+func (agent *ServerAgentImpl) vmDomainExists(vmId string) bool {
+	domains, err := agent.ListInstancesStatus()
+	if err != nil {
+		return false
+	}
+
+	for _, domain := range domains {
+		if domain.InstanceId == vmId {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (agent *ServerAgentImpl) importVmDomain(vmId string) error {
+	log.Printf("Importing VM domain...")
+
+	importVmDomainCmd := exec.Command(
+		"virsh", "define", agent.vmsStoragePath+"/"+vmId+"/"+vmId+".xml",
+	)
+
+	if output, err := importVmDomainCmd.CombinedOutput(); err != nil {
+		return logAndReturnError("Error importing VM domain: ", string(output))
+	}
 
 	return nil
 }
@@ -602,6 +691,58 @@ func toListInstancesStatusResponse(vmStatusMap map[string]string) []ListInstance
 		response = append(response, ListInstancesStatusResponse{InstanceId: vmName, Status: status})
 	}
 	return response
+}
+
+func getCpuLoad() (float64, error) {
+	data, err := os.ReadFile("/proc/loadavg")
+	if err != nil {
+		return 0, err
+	}
+
+	fields := strings.Fields(string(data))
+	loadAvgString := fields[0] // 1-minute load average
+
+	loadAvg, err := strconv.ParseFloat(loadAvgString, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	cpuCount := runtime.NumCPU()
+
+	cpuLoad := loadAvg / float64(cpuCount)
+
+	return cpuLoad, nil
+}
+
+func getFreeMemory() (int, error) {
+	file, err := os.Open("/proc/meminfo")
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+
+		if len(fields) < 2 {
+			continue
+		}
+
+		key := strings.TrimSuffix(fields[0], ":")
+		value, err2 := strconv.Atoi(fields[1])
+		if err2 != nil {
+			continue
+		}
+
+		if key == "MemFree" {
+			// Return in MB
+			return value / 1024, nil
+		}
+	}
+
+	return 0, logAndReturnError("MemFree not found", "")
 }
 
 func NewServerAgent(
