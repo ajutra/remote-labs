@@ -391,14 +391,25 @@ func (s *ServiceImpl) StartInstance(instanceId string) error {
 		return err
 	}
 
+	request := StartInstanceAgentRequest{
+		InstanceId:   instanceId,
+		Vid:          "100",   // TODO: Make this dynamic
+		VlanEtiquete: "100-1", // TODO: Make this dynamic
+	}
+
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return logAndReturnError("Error marshalling start instance agent request: ", err.Error())
+	}
+
 	vmMutex := s.getMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
 	resp, err := http.Post(
-		s.serverAgentsURLs+s.startInstanceEndpoint+"/"+instanceId,
+		s.serverAgentsURLs+s.startInstanceEndpoint,
 		"application/json",
-		nil,
+		bytes.NewBuffer(jsonData),
 	)
 	if err != nil {
 		return err

@@ -73,13 +73,11 @@ type CreateInstanceAgentRequest struct {
 	Gateway         string   `json:"gateway"`
 }
 
-/*
 type StartInstanceAgentRequest struct {
 	InstanceId   string `json:"instanceId"`
 	Vid          string `json:"vid"`
 	VlanEtiquete string `json:"vlanEtiquete"`
 }
-*/
 
 type DeleteVmAgentRequest struct {
 	VmId           string `json:"vmId"`
