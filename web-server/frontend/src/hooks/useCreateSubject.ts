@@ -4,11 +4,6 @@ import { useAuth } from '../context/AuthContext'
 import { useDefineTemplate } from './useDefineTemplate'
 import { useAlertDialog } from '../context/AlertDialogContext'
 
-interface ValidationResult {
-  email: string
-  valid: boolean
-}
-
 interface Base {
   baseId: string
   description: string
@@ -21,10 +16,6 @@ interface CreateSubjectResponse {
 interface EnrollmentError {
   email: string
   error: string
-}
-
-interface CreateInstanceFrontendResponse {
-  instanceId: string
 }
 
 interface CreateInstanceFrontendRequest {
@@ -199,6 +190,7 @@ const useCreateSubject = (onSuccess: () => void) => {
       },
       body: JSON.stringify(request),
     })
+
     if (!response.ok) {
       console.error(
         '[useCreateSubject] Failed to create professor VM. Status:',
@@ -206,10 +198,19 @@ const useCreateSubject = (onSuccess: () => void) => {
       )
       throw new Error('Failed to create professor VM')
     }
-    const { instanceId }: CreateInstanceFrontendResponse = await response.json()
+
+    // Procesar correctamente el JSON de respuesta
+    const responseData = await response.json()
+    const instanceId = responseData.instanceId
+
+    if (!instanceId) {
+      throw new Error('Response does not contain instanceId')
+    }
+
     console.log('[useCreateSubject] Successfully created professor VM:', {
       instanceId,
     })
+
     return instanceId
   }
 
@@ -308,7 +309,7 @@ const useCreateSubject = (onSuccess: () => void) => {
       try {
         if (customizeVm) {
           console.log('[useCreateSubject] Creating customized VM')
-          createProfessorVm(
+          await createProfessorVm(
             subjectId,
             base, // Use base as templateId
             vmUsername,
@@ -317,6 +318,7 @@ const useCreateSubject = (onSuccess: () => void) => {
             vmCpu,
             vmStorage
           )
+
           console.log(
             '[useCreateSubject] VM creation initiated. Informing user.'
           )
@@ -346,6 +348,8 @@ const useCreateSubject = (onSuccess: () => void) => {
           error
         )
       }
+
+      await new Promise((resolve) => setTimeout(resolve, 15000))
 
       console.log('[useCreateSubject] Subject creation completed successfully')
       onSuccess()

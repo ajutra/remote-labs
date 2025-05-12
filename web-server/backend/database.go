@@ -34,7 +34,7 @@ type Database interface {
 	DeleteUser(userId string) error
 	UpdateVerificationToken(email string, token uuid.UUID) error
 	GetTemplateConfig(templateId string, subjectId string) (TemplateConfig, error)
-	CreateInstance(instanceId string, userId string, subjectId string, templateId *string) error
+	CreateInstance(instanceId string, userId string, subjectId string, templateId *string, wgPrivateKey string, wgPublicKey string, interfaceIp string, peerPublicKey string, peerAllowedIps []string, peerEndpointPort int) error
 	DeleteInstance(instanceId string) error
 	CreateTemplate(templateId string, subjectId string, sizeMB int, vcpuCount int, vramMB int, isValidated bool, description string) error
 	DeleteTemplate(templateId string, subjectId string) error
@@ -236,7 +236,7 @@ func (postgres *PostgresDatabase) GetTemplateConfig(templateId string, subjectId
 	return templateConfig, nil
 }
 
-func (postgres *PostgresDatabase) CreateInstance(instanceId string, userId string, subjectId string, templateId *string) error {
+func (postgres *PostgresDatabase) CreateInstance(instanceId string, userId string, subjectId string, templateId *string, wgPrivateKey string, wgPublicKey string, interfaceIp string, peerPublicKey string, peerAllowedIps []string, peerEndpointPort int) error {
 	// Convertir los strings a UUID
 	instanceUUID, err := uuid.Parse(instanceId)
 	if err != nil {
@@ -263,13 +263,19 @@ func (postgres *PostgresDatabase) CreateInstance(instanceId string, userId strin
 	}
 
 	query := `
-	INSERT INTO instances (id, user_id, subject_id, template_id)
-	VALUES (@id, @user_id, @subject_id, @template_id)`
+	INSERT INTO instances (id, user_id, subject_id, template_id, wg_private_key, wg_public_key, interface_ip, peer_public_key, peer_allowed_ips, peer_endpoint_port)
+	VALUES (@id, @user_id, @subject_id, @template_id, @wg_private_key, @wg_public_key, @interface_ip, @peer_public_key, @peer_allowed_ips, @peer_endpoint_port)`
 	args := pgx.NamedArgs{
-		"id":          instanceUUID,
-		"user_id":     userUUID,
-		"subject_id":  subjectUUID,
-		"template_id": templateUUID,
+		"id":                 instanceUUID,
+		"user_id":            userUUID,
+		"subject_id":         subjectUUID,
+		"template_id":        templateUUID,
+		"wg_private_key":     wgPrivateKey,
+		"wg_public_key":      wgPublicKey,
+		"interface_ip":       interfaceIp,
+		"peer_public_key":    peerPublicKey,
+		"peer_allowed_ips":   peerAllowedIps,
+		"peer_endpoint_port": peerEndpointPort,
 	}
 
 	_, err = postgres.db.Exec(context.Background(), query, args)
@@ -814,6 +820,12 @@ func getDDLStatements() string {
 			user_id UUID NOT NULL REFERENCES users(id),
 			subject_id UUID NOT NULL REFERENCES subjects(id),
 			template_id VARCHAR(100),
+			wg_private_key TEXT NOT NULL,
+			wg_public_key TEXT NOT NULL,
+			interface_ip TEXT NOT NULL,
+			peer_public_key TEXT NOT NULL,
+			peer_allowed_ips TEXT[] NOT NULL,
+			peer_endpoint_port INTEGER NOT NULL,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (template_id, subject_id) REFERENCES templates(id, subject_id) ON DELETE SET NULL
 		);
