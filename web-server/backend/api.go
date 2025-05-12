@@ -455,7 +455,7 @@ func NewApiServer(listenAddr string, userService UserService, subjectService Sub
 
 func enableCors(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 }
 

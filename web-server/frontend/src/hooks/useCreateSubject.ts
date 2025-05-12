@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { getEnv } from '../utils/Env'
 import { useAuth } from '../context/AuthContext'
 import { useDefineTemplate } from './useDefineTemplate'
+import { useAlertDialog } from '../context/AlertDialogContext'
 
 interface ValidationResult {
   email: string
@@ -67,6 +68,7 @@ const useCreateSubject = (onSuccess: () => void) => {
   console.log('[useCreateSubject] Hook initialized')
   const { user } = useAuth()
   const { defineTemplate } = useDefineTemplate()
+  const { showAlert } = useAlertDialog()
   const [isCreating, setIsCreating] = useState(false)
   const [creationError, setCreationError] = useState<string | null>(null)
   const [bases, setBases] = useState<Base[]>([])
@@ -167,12 +169,13 @@ const useCreateSubject = (onSuccess: () => void) => {
       templateId,
       username,
     })
-    if (!user?.id || !user?.publicSshKeys) {
-      console.error('[useCreateSubject] Missing user information', {
-        userId: user?.id,
-        hasSshKeys: !!user?.publicSshKeys,
-      })
-      throw new Error('User information is required')
+    if (!user?.id) {
+      console.error('[useCreateSubject] No user ID available')
+      throw new Error('User ID is required')
+    }
+    if (!user?.publicSshKeys) {
+      console.error('[useCreateSubject] No SSH keys available')
+      throw new Error('SSH keys are required')
     }
     const request: CreateInstanceFrontendRequest = {
       userId: user.id,
@@ -189,7 +192,7 @@ const useCreateSubject = (onSuccess: () => void) => {
       ...request,
       password: '[REDACTED]',
     })
-    const response = await fetch(getEnv().API_CREATE_INSTANCE + '/create', {
+    const response = await fetch(getEnv().API_CREATE_INSTANCE, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -304,9 +307,8 @@ const useCreateSubject = (onSuccess: () => void) => {
       console.log('[useCreateSubject] Step 4: Creating template/VM')
       try {
         if (customizeVm) {
-          // Create VM for professor using base as template
           console.log('[useCreateSubject] Creating customized VM')
-          await createProfessorVm(
+          createProfessorVm(
             subjectId,
             base, // Use base as templateId
             vmUsername,
@@ -315,9 +317,15 @@ const useCreateSubject = (onSuccess: () => void) => {
             vmCpu,
             vmStorage
           )
+          console.log(
+            '[useCreateSubject] VM creation initiated. Informing user.'
+          )
+          showAlert(
+            'Virtual Machine Creation',
+            'Your virtual machine is being created. This process may take a few minutes. Please check your subject later to verify its creation.'
+          )
         } else {
           console.log('[useCreateSubject] Creating template directly from base')
-          // Create template directly from base
           const templateParams: DefineTemplateRequest = {
             sourceInstanceId: base,
             sizeMB: parseInt(vmStorage) * 1024, // Convert GB to MB
@@ -337,16 +345,8 @@ const useCreateSubject = (onSuccess: () => void) => {
           '[useCreateSubject] Error in template/VM creation:',
           error
         )
-        if (subjectId) {
-          console.log(
-            '[useCreateSubject] Cleaning up - deleting subject due to template creation failure'
-          )
-          await fetch(getEnv().API_DELETE_SUBJECT.replace('{id}', subjectId), {
-            method: 'DELETE',
-          })
-        }
-        throw error
       }
+
       console.log('[useCreateSubject] Subject creation completed successfully')
       onSuccess()
     } catch (error) {

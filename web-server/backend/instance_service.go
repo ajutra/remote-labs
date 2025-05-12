@@ -79,6 +79,7 @@ type vmManagerStatus struct {
 
 func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendRequest) (CreateInstanceFrontendResponse, error) {
 	log.Printf("Starting instance creation process for user %s and subject %s", request.UserId, request.SubjectId)
+	log.Printf("Received request: %+v", request)
 
 	// Check if the sourceVmId is a base
 	isBase := false
@@ -108,10 +109,12 @@ func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendReque
 		// If it's not a base, get the template config from the database
 		templateConfig, err = s.db.GetTemplateConfig(request.SourceVmId, request.SubjectId)
 		if err != nil {
-			log.Printf("Error getting template config: %v", err)
-			return CreateInstanceFrontendResponse{}, fmt.Errorf("error getting template config: %w", err)
+			log.Printf("Error fetching template config: %v", err)
+			return CreateInstanceFrontendResponse{}, fmt.Errorf("error fetching template config: %w", err)
 		}
 	}
+
+	log.Printf("Template configuration: %+v", templateConfig)
 
 	createInstanceRequest := CreateInstanceRequest{
 		SourceVmId:    request.SourceVmId,
@@ -153,6 +156,8 @@ func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendReque
 		return CreateInstanceFrontendResponse{}, fmt.Errorf("error decoding VM manager response: %w", err)
 	}
 
+	log.Printf("VM manager response: %+v", response)
+
 	// Create the instance record in the database
 	var templateId *string
 	if !isBase {
@@ -161,9 +166,11 @@ func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendReque
 
 	err = s.db.CreateInstance(response.InstanceId, request.UserId, request.SubjectId, templateId)
 	if err != nil {
-		log.Printf("Error creating instance record: %v", err)
+		log.Printf("Error creating instance record in database: %v", err)
 		return CreateInstanceFrontendResponse{}, fmt.Errorf("error creating instance record: %w", err)
 	}
+
+	log.Printf("Instance record created successfully in database")
 
 	return CreateInstanceFrontendResponse{
 		InstanceId: response.InstanceId,

@@ -10,7 +10,7 @@ export const getEnv = () => {
     API_BASES: `${VITE_API_URL}/bases`,
     API_ENROLL_USER_IN_SUBJECT: `${VITE_API_URL}/subjects/{subjectId}/add/users/{userEmail}`,
     API_CREATE_INSTANCE: `${VITE_API_URL}/instances/create`,
-    API_CREATE_TEMPLATE: `${VITE_API_URL}/templates`,
+    API_CREATE_TEMPLATE: `${VITE_API_URL}/templates/define`,
     API_DELETE_SUBJECT: `${VITE_API_URL}/subjects/{id}`,
     API_DELETE_INSTANCE: `${VITE_API_URL}/instances/delete/{instanceId}`,
     __vite__: otherViteConfig,
