@@ -15,6 +15,9 @@ export const getEnv = () => {
     API_DELETE_INSTANCE: `${VITE_API_URL}/instances/delete/{instanceId}`,
     API_GET_INSTANCE_STATUS: `${VITE_API_URL}/instances/status/{userId}`,
     API_GET_INSTANCE: `${VITE_API_URL}/instances/{instanceId}`,
+    API_START_INSTANCE: `${VITE_API_URL}/instances/start/{instanceId}`,
+    API_STOP_INSTANCE: `${VITE_API_URL}/instances/stop/{instanceId}`,
+    API_GET_SUBJECT: `${VITE_API_URL}/subjects/{id}`,
     __vite__: otherViteConfig,
   }
 }
