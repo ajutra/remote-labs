@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,8 @@ import (
 	"net/http"
 	"slices"
 	"time"
+
+	"golang.org/x/crypto/curve25519"
 )
 
 type InstanceService interface {
@@ -63,10 +66,16 @@ type CreateInstanceRequest struct {
 	Username      string   `json:"username"`
 	Password      string   `json:"password"`
 	PublicSshKeys []string `json:"publicSshKeys"`
+	SubjectId     string   `json:"subjectId"`
+	UserWgPubKey  string   `json:"userWgPubKey"` // User's WireGuard public key
 }
 
 type CreateInstanceResponse struct {
-	InstanceId string `json:"instanceId"`
+	InstanceId       string   `json:"instanceId"`
+	InterfaceAddress string   `json:"interfaceAddress"`
+	PeerPublicKey    string   `json:"peerPublicKey"`
+	PeerAllowedIps   []string `json:"peerAllowedIps"`
+	PeerEndpointPort int      `json:"peerEndpointPort"`
 }
 
 type DefineTemplateResponse struct {
@@ -117,6 +126,14 @@ func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendReque
 
 	log.Printf("Template configuration: %+v", templateConfig)
 
+	// Generate a new WireGuard key pair
+	wgPrivateKey, wgPublicKey, err := GenerateKeyPair()
+	if err != nil {
+		log.Printf("Error generating WireGuard key pair: %v", err)
+		return CreateInstanceFrontendResponse{}, fmt.Errorf("error generating WireGuard key pair: %w", err)
+	}
+	log.Printf("Generated WireGuard key pair: PrivateKey: %s, PublicKey: %s", wgPrivateKey, wgPublicKey)
+
 	createInstanceRequest := CreateInstanceRequest{
 		SourceVmId:    request.SourceVmId,
 		SizeMB:        templateConfig.SizeMB,
@@ -125,6 +142,8 @@ func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendReque
 		Username:      request.Username,
 		Password:      request.Password,
 		PublicSshKeys: request.PublicSshKeys,
+		SubjectId:     request.SubjectId,
+		UserWgPubKey:  wgPublicKey,
 	}
 
 	jsonData, err := json.Marshal(createInstanceRequest)
@@ -165,7 +184,7 @@ func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendReque
 		templateId = &request.SourceVmId
 	}
 
-	err = s.db.CreateInstance(response.InstanceId, request.UserId, request.SubjectId, templateId)
+	err = s.db.CreateInstance(response.InstanceId, request.UserId, request.SubjectId, templateId, wgPrivateKey, wgPublicKey, response.InterfaceAddress, response.PeerPublicKey, response.PeerAllowedIps, response.PeerEndpointPort)
 	if err != nil {
 		log.Printf("Error creating instance record in database: %v", err)
 		return CreateInstanceFrontendResponse{}, fmt.Errorf("error creating instance record: %w", err)
@@ -511,4 +530,24 @@ func (s *InstanceServiceImpl) GetInstanceStatusByUserId(userId string) ([]Instan
 	log.Printf("Enriched VM statuses: %+v", enrichedStatuses)
 
 	return enrichedStatuses, nil
+}
+
+func GenerateKeyPair() (string, string, error) {
+	privateKey := make([]byte, 32)
+	_, err := rand.Read(privateKey)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate private key: %w", err)
+	}
+
+	// Ensure the private key is valid for X25519
+	privateKey[0] &= 248
+	privateKey[31] &= 127
+	privateKey[31] |= 64
+
+	publicKey, err := curve25519.X25519(privateKey, curve25519.Basepoint)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate public key: %w", err)
+	}
+
+	return fmt.Sprintf("%x", privateKey), fmt.Sprintf("%x", publicKey), nil
 }
