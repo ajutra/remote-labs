@@ -29,7 +29,7 @@ export const useSubjectVMs = (subjectId: string) => {
         .filter((vm: VMListItem) => vm.subjectId === subjectId)
         .map((vm: VMListItem) => ({
           ...vm,
-          templateDescription: vm.templateDescription, // Map the field
+          templateDescription: vm.template_description, // Correctly map the field
         }))
       console.log('Mapped VMs for subject:', subjectVMs) // Log the mapped data
       setVms(subjectVMs)

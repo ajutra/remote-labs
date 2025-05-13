@@ -12,4 +12,5 @@ export interface VMListItem {
   template_vram_mb: number
   template_size_mb: number
   template_os: string
+  template_description?: string
 }

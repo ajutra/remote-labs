@@ -105,19 +105,28 @@ export const VMDetails: React.FC<VMDetailsProps> = ({
           {/* Actions Section */}
           <div className="flex justify-end space-x-2">
             {vm.status.toLowerCase() === 'shut off' && (
-              <VMStartButton instanceId={vm.instanceId} onSuccess={() => {}} />
+              <VMStartButton
+                instanceId={vm.instanceId}
+                onSuccess={() => window.location.reload()}
+              />
             )}
             {vm.status.toLowerCase() === 'running' && (
-              <VMStopButton instanceId={vm.instanceId} onSuccess={() => {}} />
+              <VMStopButton
+                instanceId={vm.instanceId}
+                onSuccess={() => window.location.reload()}
+              />
             )}
             {isTeacherOrAdmin && !vm.templateId && (
               <DefineTemplateButton
                 vm={vm}
-                onSuccess={() => {}}
+                onSuccess={() => window.location.reload()}
                 isTeacherOrAdmin={isTeacherOrAdmin}
               />
             )}
-            <VMDeleteButton instanceId={vm.instanceId} onSuccess={() => {}} />
+            <VMDeleteButton
+              instanceId={vm.instanceId}
+              onSuccess={() => window.location.reload()}
+            />
           </div>
         </div>
       </CardContent>
