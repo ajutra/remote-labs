@@ -38,11 +38,7 @@ export const useDefineTemplate = () => {
       })
     } catch (error) {
       console.error('Error creating template:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to create template. Please try again.',
-        variant: 'destructive',
-      })
+
       throw error
     } finally {
       setLoading(false)

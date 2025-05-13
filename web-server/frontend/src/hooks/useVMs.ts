@@ -36,7 +36,7 @@ export const useVMs = () => {
       const enrichedData = (data || []).map((vm: VMListItem) => ({
         ...vm,
         templateDescription:
-          vm.templateDescription || 'No description provided',
+          vm.template_description || 'No description provided',
       }))
       console.log('Enriched VMs data:', enrichedData) // Log the enriched data
       setVms(enrichedData)
