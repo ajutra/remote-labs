@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -115,6 +116,22 @@ func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendReque
 			break
 		}
 	}
+
+	// Check if the sourceVmId exists asa template for the subject
+	isTemplate, err := s.db.GetTemplatesBySubjectId(request.SubjectId)
+	if err != nil {
+		log.Printf("Error checking templates: %v", err)
+		return CreateInstanceFrontendResponse{}, fmt.Errorf("error checking templates: %w", err)
+	}
+	if isTemplate != nil {
+		for _, template := range isTemplate {
+			if template.ID == request.SourceVmId {
+				isBase = false
+				break
+			}
+		}
+	}
+
 	log.Printf("Source VM is base: %v", isBase)
 
 	var templateConfig TemplateConfig
@@ -596,7 +613,7 @@ func GenerateKeyPair() (string, string, error) {
 		return "", "", fmt.Errorf("failed to generate private key: %w", err)
 	}
 
-	// Ensure the private key is valid for X25519
+	// Optional: clamp manually
 	privateKey[0] &= 248
 	privateKey[31] &= 127
 	privateKey[31] |= 64
@@ -606,5 +623,8 @@ func GenerateKeyPair() (string, string, error) {
 		return "", "", fmt.Errorf("failed to generate public key: %w", err)
 	}
 
-	return fmt.Sprintf("%x", privateKey), fmt.Sprintf("%x", publicKey), nil
+	privB64 := base64.StdEncoding.EncodeToString(privateKey)
+	pubB64 := base64.StdEncoding.EncodeToString(publicKey)
+
+	return privB64, pubB64, nil
 }
