@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -26,6 +27,7 @@ const INTERFACE_ADDRESS_SECOND_OCTET = 1
 const MAX_CPU_USAGE = 0.9
 const MIN_AVAILABLE_RAM_MB = 1024
 const CPU_USAGE_PENALTY_FACTOR = 10240 // 10240 MB of RAM for 100% of CPU Load, adjust this value to change the penalty for high CPU usage
+const VLAN_TO_ROUTER_PORT_OFFSET = 20000
 
 type Service interface {
 	ListBaseImages() ([]ListBaseImagesResponse, error)
@@ -55,8 +57,14 @@ type ServiceImpl struct {
 	serverAgentIsAliveEndpoint  string
 	vmsDns1                     string
 	vmsDns2                     string
-	mutexMap                    map[string]*sync.Mutex
+	routerosService             RouterOSService
+	routerosVlanBridge          string
+	routerosTaggedBridges       []string
+	routerosExternalGateway     string
+	vmsMutexMap                 map[string]*sync.Mutex
 	mutex                       sync.Mutex
+	routerVlanConfSharedMemory  []int
+	routerVlanConfMutex         sync.Mutex
 }
 
 type VmNetworkConfig struct {
@@ -140,7 +148,7 @@ func (s *ServiceImpl) DefineTemplate(request DefineTemplateRequest) (DefineTempl
 		return DefineTemplateResponse{}, err
 	}
 
-	vmMutex := s.getMutex(request.SourceInstanceId)
+	vmMutex := s.getVmMutex(request.SourceInstanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
@@ -212,7 +220,7 @@ func (s *ServiceImpl) DeleteTemplate(templateId string) error {
 	// We need to call the deleteInstanceEndpoint for each server agent
 	// because the template might not exist in all of them
 	agentsCalled := 0
-	vmMutex := s.getMutex(templateId)
+	vmMutex := s.getVmMutex(templateId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 	for _, agentUrl := range s.serverAgentsURLs {
@@ -252,7 +260,7 @@ func (s *ServiceImpl) DeleteTemplate(templateId string) error {
 		)
 	}
 	s.deleteVmFromDb(templateId)
-	s.deleteMutex(templateId)
+	s.deleteVmMutex(templateId)
 
 	return nil
 }
@@ -344,7 +352,7 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 		return CreateInstanceResponse{}, err
 	}
 
-	vmMutex := s.getMutex(request.SourceVmId)
+	vmMutex := s.getVmMutex(request.SourceVmId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
@@ -371,18 +379,32 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 
 	s.addVmToDb(vm, false)
 
+	vlan, err := s.db.GetVlanByVmId(instanceId)
+	if err != nil {
+		return CreateInstanceResponse{}, err
+	}
+
+	s.addVlanConfigIfNotExists(vlan)
+
 	interfaceAddress := getInterfaceAddress(vmNetworkConfig.IpAddWithSubnet)
 	peerAllowedIps := []string{
 		vmNetworkConfig.IpAddWithSubnet,
 		interfaceAddress,
 	}
 
+	peerPublicKey, err := s.routerosService.GetWireguardPublicKey(fmt.Sprintf("wireguard%d", vlan))
+	if err != nil {
+		return CreateInstanceResponse{}, err
+	}
+
+	go s.applyRouterVmConfig(vmNetworkConfig, vlan, request.UserWgPubKey)
+
 	return CreateInstanceResponse{
 		InstanceId:       instanceId,
 		InterfaceAddress: interfaceAddress,
-		PeerPublicKey:    "Not implemented yet", // TODO: Implement this
+		PeerPublicKey:    peerPublicKey,
 		PeerAllowedIps:   peerAllowedIps,
-		PeerEndpointPort: 0, // TODO: Implement this
+		PeerEndpointPort: getVlanRouterPort(vlan),
 	}, nil
 }
 
@@ -425,7 +447,7 @@ func (s *ServiceImpl) DeleteInstance(instanceId string) error {
 	// We need to call the deleteInstanceEndpoint for each server agent
 	// because the instance might exist in some of them
 	agentsCalled := 0
-	vmMutex := s.getMutex(instanceId)
+	vmMutex := s.getVmMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 	for _, agentUrl := range s.serverAgentsURLs {
@@ -468,11 +490,18 @@ func (s *ServiceImpl) DeleteInstance(instanceId string) error {
 		return err
 	}
 
+	vmVlanIdentifier, err := s.db.GetVmVlanIdentifierByVmId(instanceId)
+	if err != nil {
+		return err
+	}
+
 	s.deleteVmFromDb(instanceId)
-	s.deleteMutex(instanceId)
+	s.deleteVmMutex(instanceId)
+	go s.removeRouterVmConfig(vlan, vmVlanIdentifier)
 
 	if isLastInstanceInSubject {
 		s.deleteSubjectFromDb(subjectId)
+		go s.deleteVlanConfigWhenAvailable(vlan)
 	}
 
 	return nil
@@ -517,7 +546,7 @@ func (s *ServiceImpl) StartInstance(instanceId string) error {
 		return err
 	}
 
-	vmMutex := s.getMutex(instanceId)
+	vmMutex := s.getVmMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
@@ -548,7 +577,7 @@ func (s *ServiceImpl) StopInstance(instanceId string) error {
 
 	// We need to call the stopInstanceEndpoint for each server agent until we get a 200 response
 	// because we don't know which server agent the instance is running on
-	vmMutex := s.getMutex(instanceId)
+	vmMutex := s.getVmMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 	for _, agentUrl := range s.serverAgentsURLs {
@@ -595,7 +624,7 @@ func (s *ServiceImpl) RestartInstance(instanceId string) error {
 	// We need to call the restartInstanceEndpoint for each server agent until we get a 200 response
 	// because we don't know which server agent the instance is running on
 	correctServerFound := false
-	vmMutex := s.getMutex(instanceId)
+	vmMutex := s.getVmMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 	for _, agentUrl := range s.serverAgentsURLs {
@@ -1028,7 +1057,7 @@ func (s *ServiceImpl) getVmNetworkConfigFromSubjectId(subjectId string) (VmNetwo
 		return VmNetworkConfig{}, err
 	}
 
-	gateway := getGatewayIp(vlan)
+	gateway := getVlanGatewayIp(vlan)
 	ipAddWithSubnet := getIpAddWithSubnet(vlan, vmVlanIdentifier)
 	vlanEtiquete := getVlanEtiquete(vlan, vmVlanIdentifier)
 
@@ -1098,8 +1127,16 @@ func (s *ServiceImpl) getFirstAvailableVmVlanIdentifier(vlan int) (int, error) {
 	}
 }
 
-func getGatewayIp(vlan int) string {
+func getVlanGatewayIp(vlan int) string {
 	return fmt.Sprintf("10.0.%d.%d", mapVlanToThirdIpOctet(vlan), FIRST_IP_IN_SUBNET)
+}
+
+func getVpnGatewayIp(vlan int) string {
+	return fmt.Sprintf("10.1.%d.%d", mapVlanToThirdIpOctet(vlan), FIRST_IP_IN_SUBNET)
+}
+
+func getVlanNetworkIpWithSubnet(vlan int) string {
+	return fmt.Sprintf("10.0.%d.0/%d", mapVlanToThirdIpOctet(vlan), SUBNET_MASK)
 }
 
 func getIpAddWithSubnet(vlan int, vmVlanIdentifier int) string {
@@ -1144,22 +1181,304 @@ func (s *ServiceImpl) deleteSubjectFromDb(subjectId string) {
 	}
 }
 
-func (s *ServiceImpl) getMutex(vmId string) *sync.Mutex {
+func (s *ServiceImpl) getVmMutex(vmId string) *sync.Mutex {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	if s.mutexMap[vmId] == nil {
-		s.mutexMap[vmId] = &sync.Mutex{}
+	if s.vmsMutexMap[vmId] == nil {
+		s.vmsMutexMap[vmId] = &sync.Mutex{}
 	}
 
-	return s.mutexMap[vmId]
+	return s.vmsMutexMap[vmId]
 }
 
-func (s *ServiceImpl) deleteMutex(vmId string) {
+func (s *ServiceImpl) deleteVmMutex(vmId string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	delete(s.mutexMap, vmId)
+	delete(s.vmsMutexMap, vmId)
+}
+
+func (s *ServiceImpl) addVlanConfigIfNotExists(vlan int) {
+	s.routerVlanConfMutex.Lock()
+	defer s.routerVlanConfMutex.Unlock()
+
+	if !slices.Contains(s.routerVlanConfSharedMemory, vlan) {
+		s.routerVlanConfSharedMemory = append(s.routerVlanConfSharedMemory, vlan)
+	}
+
+	for {
+		if err := s.applyRouterVlanConfig(vlan); err != nil {
+			log.Println("Error applying router vlan config: ", err.Error())
+			log.Println("Retrying...")
+			s.removeRouterVlanConfig(vlan)
+			continue
+		}
+		break
+	}
+}
+
+func (s *ServiceImpl) deleteVlanConfigWhenAvailable(vlan int) {
+	s.routerVlanConfMutex.Lock()
+	defer s.routerVlanConfMutex.Unlock()
+
+	found := false
+	for i, v := range s.routerVlanConfSharedMemory {
+		if v == vlan {
+			s.routerVlanConfSharedMemory = slices.Delete(s.routerVlanConfSharedMemory, i, i)
+			found = true
+			break
+		}
+	}
+
+	if found {
+		s.removeRouterVlanConfig(vlan)
+	}
+}
+
+func (s *ServiceImpl) applyRouterVlanConfig(vlan int) error {
+	listenPort := getVlanRouterPort(vlan)
+
+	if err := s.routerosService.AddWireguard(
+		fmt.Sprintf("VPN%d", vlan),
+		listenPort,
+		1420,
+		fmt.Sprintf("wireguard%d", vlan),
+	); err != nil {
+		return err
+	}
+
+	if err := s.routerosService.AddVlan(
+		fmt.Sprintf("VLAN%d", vlan),
+		s.routerosVlanBridge,
+		fmt.Sprintf("vlan%d", vlan),
+		vlan,
+	); err != nil {
+		return err
+	}
+
+	if err := s.routerosService.AddInterfaceList(
+		fmt.Sprintf("VRF%d", vlan),
+	); err != nil {
+		return err
+	}
+
+	if err := s.routerosService.AddVrf(
+		fmt.Sprintf("VRF%d", vlan),
+		fmt.Sprintf("vrf%d", vlan),
+		fmt.Sprintf("vlan%d", vlan),
+		fmt.Sprintf("wireguard%d", vlan),
+	); err != nil {
+		return err
+	}
+
+	if err := s.routerosService.AddBridgeVlan(
+		s.routerosVlanBridge,
+		fmt.Sprintf("VLAN%d", vlan),
+		vlan,
+		s.routerosTaggedBridges...,
+	); err != nil {
+		return err
+	}
+
+	if err := s.routerosService.AddListMember(
+		fmt.Sprintf("VRF%d", vlan),
+		fmt.Sprintf("vlan%d", vlan),
+		fmt.Sprintf("VRF%d", vlan),
+	); err != nil {
+		return err
+	}
+
+	if err := s.routerosService.AddListMember(
+		fmt.Sprintf("VRF%d", vlan),
+		fmt.Sprintf("wireguard%d", vlan),
+		fmt.Sprintf("VRF%d", vlan),
+	); err != nil {
+		return err
+	}
+
+	if err := s.routerosService.AddIPAddress(
+		fmt.Sprintf("%s/%d", getVlanGatewayIp(vlan), SUBNET_MASK),
+		fmt.Sprintf("VLAN%d", vlan),
+		fmt.Sprintf("vlan%d", vlan),
+	); err != nil {
+		return err
+	}
+
+	if err := s.routerosService.AddIPAddress(
+		fmt.Sprintf("%s/%d", getVpnGatewayIp(vlan), SUBNET_MASK),
+		fmt.Sprintf("VPN%d", vlan),
+		fmt.Sprintf("wireguard%d", vlan),
+	); err != nil {
+		return err
+	}
+
+	if err := s.routerosService.AddFirewallFilter(
+		"accept",
+		"input",
+		"defconf: accept from WAN for Wireguard",
+		map[string]string{
+			"dst-port":          strconv.Itoa(listenPort),
+			"in-interface-list": "WAN",
+			"protocol":          "udp",
+		},
+	); err != nil {
+		return err
+	}
+
+	if err := s.routerosService.AddFirewallFilter(
+		"accept",
+		"forward",
+		fmt.Sprintf("defconf: accept from VRF%d to WAN", vlan),
+		map[string]string{
+			"in-interface-list":  fmt.Sprintf("VRF%d", vlan),
+			"out-interface-list": "WAN",
+		},
+	); err != nil {
+		return err
+	}
+
+	if err := s.routerosService.AddFirewallFilter(
+		"accept",
+		"forward",
+		fmt.Sprintf("defconf: accept from VRF%d to VRF%d", vlan, vlan),
+		map[string]string{
+			"in-interface-list":  fmt.Sprintf("VRF%d", vlan),
+			"out-interface-list": fmt.Sprintf("VRF%d", vlan),
+		},
+	); err != nil {
+		return err
+	}
+
+	if err := s.routerosService.AddRoute(
+		getVlanNetworkIpWithSubnet(vlan),
+		fmt.Sprintf("vlan%d@vrf%d", vlan, vlan),
+		"main",
+	); err != nil {
+		return err
+	}
+
+	if err := s.routerosService.AddRoute(
+		"0.0.0.0/0",
+		s.routerosExternalGateway+"@main",
+		fmt.Sprintf("vrf%d", vlan),
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *ServiceImpl) removeRouterVlanConfig(vlan int) {
+	listenPort := getVlanRouterPort(vlan)
+
+	if err := s.routerosService.RemoveWireguard(fmt.Sprintf("wireguard%d", vlan)); err != nil {
+		log.Println("Error removing wireguard: ", err.Error())
+	}
+	if err := s.routerosService.RemoveVlan(fmt.Sprintf("vlan%d", vlan)); err != nil {
+		log.Println("Error removing vlan: ", err.Error())
+	}
+	if err := s.routerosService.RemoveInterfaceList(fmt.Sprintf("VRF%d", vlan)); err != nil {
+		log.Println("Error removing interface list: ", err.Error())
+	}
+	if err := s.routerosService.RemoveVrf(fmt.Sprintf("vrf%d", vlan)); err != nil {
+		log.Println("Error removing vrf: ", err.Error())
+	}
+	if err := s.routerosService.RemoveBridgeVlan(s.routerosVlanBridge, vlan); err != nil {
+		log.Println("Error removing bridge vlan: ", err.Error())
+	}
+	if err := s.routerosService.RemoveListMember(fmt.Sprintf("VRF%d", vlan), fmt.Sprintf("vlan%d", vlan)); err != nil {
+		log.Println("Error removing list member: ", err.Error())
+	}
+	if err := s.routerosService.RemoveListMember(fmt.Sprintf("VRF%d", vlan), fmt.Sprintf("wireguard%d", vlan)); err != nil {
+		log.Println("Error removing list member: ", err.Error())
+	}
+	if err := s.routerosService.RemoveIPAddress(
+		fmt.Sprintf("%s/%d", getVlanGatewayIp(vlan), SUBNET_MASK),
+		fmt.Sprintf("vlan%d", vlan),
+	); err != nil {
+		log.Println("Error removing ip address: ", err.Error())
+	}
+	if err := s.routerosService.RemoveIPAddress(
+		fmt.Sprintf("%s/%d", getVpnGatewayIp(vlan), SUBNET_MASK),
+		fmt.Sprintf("wireguard%d", vlan),
+	); err != nil {
+		log.Println("Error removing ip address: ", err.Error())
+	}
+	if err := s.routerosService.RemoveFirewallFilter(
+		map[string]string{
+			"action":            "accept",
+			"chain":             "input",
+			"dst-port":          strconv.Itoa(listenPort),
+			"in-interface-list": "WAN",
+			"protocol":          "udp",
+		},
+	); err != nil {
+		log.Println("Error removing firewall filter: ", err.Error())
+	}
+	if err := s.routerosService.RemoveFirewallFilter(
+		map[string]string{
+			"action":             "accept",
+			"chain":              "forward",
+			"in-interface-list":  fmt.Sprintf("VRF%d", vlan),
+			"out-interface-list": "WAN",
+		},
+	); err != nil {
+		log.Println("Error removing firewall filter: ", err.Error())
+	}
+	if err := s.routerosService.RemoveFirewallFilter(
+		map[string]string{
+			"action":             "accept",
+			"chain":              "forward",
+			"in-interface-list":  fmt.Sprintf("VRF%d", vlan),
+			"out-interface-list": fmt.Sprintf("VRF%d", vlan),
+		},
+	); err != nil {
+		log.Println("Error removing firewall filter: ", err.Error())
+	}
+	if err := s.routerosService.RemoveRoute(
+		getVlanNetworkIpWithSubnet(vlan),
+		fmt.Sprintf("vlan%d@vrf%d", vlan, vlan),
+		"main",
+	); err != nil {
+		log.Println("Error removing route: ", err.Error())
+	}
+	if err := s.routerosService.RemoveRoute(
+		"0.0.0.0/0",
+		s.routerosExternalGateway,
+		fmt.Sprintf("vrf%d", vlan),
+	); err != nil {
+		log.Println("Error removing route: ", err.Error())
+	}
+}
+
+func getVlanRouterPort(vlan int) int {
+	return vlan + VLAN_TO_ROUTER_PORT_OFFSET
+}
+
+func (s *ServiceImpl) applyRouterVmConfig(vmNetworkConfig VmNetworkConfig, vlan int, userPubKey string) {
+	for {
+		if err := s.routerosService.AddWireguardPeer(
+			fmt.Sprintf("VPN%d", vlan),
+			fmt.Sprintf("wireguard%d", vlan),
+			fmt.Sprintf("peer%d-%d", vlan, vmNetworkConfig.VmVlanIdentifier),
+			userPubKey,
+			vmNetworkConfig.IpAddWithSubnet,
+			fmt.Sprintf("%s/%d", getInterfaceAddress(vmNetworkConfig.IpAddWithSubnet), SUBNET_MASK),
+		); err != nil {
+			log.Println("Error adding wireguard peer: ", err.Error())
+			log.Println("Retrying...")
+			s.removeRouterVlanConfig(vlan)
+			continue
+		}
+		break
+	}
+}
+
+func (s *ServiceImpl) removeRouterVmConfig(vlan int, vlanIdentifier int) {
+	if err := s.routerosService.RemoveWireguardPeer(fmt.Sprintf("peer%d-%d", vlan, vlanIdentifier)); err != nil {
+		log.Println("Error removing wireguard peer: ", err.Error())
+	}
 }
 
 func NewService(
@@ -1178,6 +1497,10 @@ func NewService(
 	serverAgentIsAliveEndpoint string,
 	vmsDns1 string,
 	vmsDns2 string,
+	routerosService RouterOSService,
+	routerosVlanBridge string,
+	routerosTaggedBridges []string,
+	routerosExternalGateway string,
 ) (Service, error) {
 	service := &ServiceImpl{
 		db:                          db,
@@ -1195,7 +1518,14 @@ func NewService(
 		serverAgentIsAliveEndpoint:  serverAgentIsAliveEndpoint,
 		vmsDns1:                     vmsDns1,
 		vmsDns2:                     vmsDns2,
-		mutexMap:                    make(map[string]*sync.Mutex),
+		routerosService:             routerosService,
+		routerosVlanBridge:          routerosVlanBridge,
+		routerosTaggedBridges:       routerosTaggedBridges,
+		routerosExternalGateway:     routerosExternalGateway,
+		vmsMutexMap:                 make(map[string]*sync.Mutex),
+		mutex:                       sync.Mutex{},
+		routerVlanConfSharedMemory:  []int{},
+		routerVlanConfMutex:         sync.Mutex{},
 	}
 
 	if err := service.addBaseImagesToDb(); err != nil {
