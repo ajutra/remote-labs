@@ -98,7 +98,7 @@ export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
               <TableHead>Subject</TableHead>
               <TableHead>Created At</TableHead>
               <TableHead>Resources</TableHead>
-              <TableHead>Template ID</TableHead>
+              <TableHead>Template Description</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -139,7 +139,7 @@ export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
                   </div>
                 </TableCell>
                 <TableCell className="font-medium">
-                  {vm.templateId || 'to be defined'}
+                  {vm.templateDescription || 'No description available'}
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-2">
