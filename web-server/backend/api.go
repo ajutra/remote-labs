@@ -125,6 +125,18 @@ func (server *ApiServer) handleCreateSubject(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+func (server *ApiServer) handleGetSubjectById(w http.ResponseWriter, r *http.Request) error {
+	subjectId := r.PathValue("id")
+	if subjectId == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing subject id"))
+	}
+	subject, err := server.subjectService.GetSubjectById(subjectId)
+	if err != nil {
+		return err
+	}
+	return writeResponse(w, http.StatusOK, subject)
+}
+
 func (server *ApiServer) handleListAllSubjectsByUserId(w http.ResponseWriter, r *http.Request) error {
 	userId := r.PathValue("id")
 	if userId == "" {
@@ -496,6 +508,8 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("POST /subjects", createHttpHandler(server.handleCreateSubject))
 	mux.HandleFunc("GET /users/{id}/subjects", createHttpHandler(server.handleListAllSubjectsByUserId))
 	mux.HandleFunc("GET /subjects/{id}/users", createHttpHandler(server.handleListAllUsersBySubjectId))
+	mux.HandleFunc("GET /subjects/{id}", createHttpHandler(server.handleGetSubjectById))
+
 	mux.HandleFunc("POST /users/validate", createHttpHandler(server.handleValidateUserCredentials))
 	mux.HandleFunc("GET /users/{id}", createHttpHandler(server.handleGetUserInfo))
 	mux.HandleFunc("PUT /subjects/{subjectId}/add/users/{userEmail}", createHttpHandler(server.handleEnrollUserInSubject))

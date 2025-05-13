@@ -32,7 +32,14 @@ export const useVMs = () => {
         throw new Error('Failed to fetch VMs')
       }
       const data = await response.json()
-      setVms(data || [])
+      console.log('Fetched VMs data:', data) // Log the fetched data
+      const enrichedData = (data || []).map((vm: VMListItem) => ({
+        ...vm,
+        templateDescription:
+          vm.templateDescription || 'No description provided',
+      }))
+      console.log('Enriched VMs data:', enrichedData) // Log the enriched data
+      setVms(enrichedData)
     } catch (error) {
       console.error('Error fetching VMs:', error)
       toast({

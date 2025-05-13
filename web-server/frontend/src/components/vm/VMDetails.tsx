@@ -1,50 +1,42 @@
-import React from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { RefreshCw } from 'lucide-react'
-import { VMListItem } from '@/types/vm'
-import { VMStartButton } from './VMStartButton'
-import { VMStopButton } from './VMStopButton'
-import { VMDeleteButton } from './VMDeleteButton'
-import { DefineTemplateButton } from './DefineTemplateButton'
+import React from 'react';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Monitor } from 'lucide-react';
+import { VMListItem } from '@/types/vm';
+import { VMStartButton } from './VMStartButton';
+import { VMStopButton } from './VMStopButton';
+import { VMDeleteButton } from './VMDeleteButton';
+import { DefineTemplateButton } from './DefineTemplateButton';
 
 interface VMDetailsProps {
-  vm: VMListItem
-  onRefresh: () => Promise<void>
-  isTeacherOrAdmin: boolean
+  vm: VMListItem;
+  isTeacherOrAdmin: boolean;
 }
 
 export const VMDetails: React.FC<VMDetailsProps> = ({
   vm,
-  onRefresh,
   isTeacherOrAdmin,
 }) => {
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'running':
-        return 'bg-green-500'
+        return 'bg-green-500';
       case 'stopped':
-        return 'bg-yellow-500'
+        return 'bg-yellow-500';
       case 'error':
-        return 'bg-red-500'
+        return 'bg-red-500';
       default:
-        return 'bg-gray-500'
+        return 'bg-gray-500';
     }
-  }
+  };
 
   return (
     <Card className="mb-6">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div className="space-y-1">
-          <CardTitle className="text-2xl font-bold">{vm.subjectName}</CardTitle>
+          <Monitor className="h-8 w-8 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
             Created at: {new Date(vm.createdAt).toLocaleDateString()}
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onRefresh}>
-            <RefreshCw className="h-4 w-4" />
-          </Button>
         </div>
       </CardHeader>
       <CardContent>
@@ -94,7 +86,7 @@ export const VMDetails: React.FC<VMDetailsProps> = ({
                       Template Description
                     </span>
                     <span className="break-words font-medium">
-                      {vm.templateDescription}
+                      {vm.templateDescription || 'No description available'}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -113,22 +105,22 @@ export const VMDetails: React.FC<VMDetailsProps> = ({
           {/* Actions Section */}
           <div className="flex justify-end space-x-2">
             {vm.status.toLowerCase() === 'shut off' && (
-              <VMStartButton instanceId={vm.instanceId} onSuccess={onRefresh} />
+              <VMStartButton instanceId={vm.instanceId} onSuccess={() => {}} />
             )}
             {vm.status.toLowerCase() === 'running' && (
-              <VMStopButton instanceId={vm.instanceId} onSuccess={onRefresh} />
+              <VMStopButton instanceId={vm.instanceId} onSuccess={() => {}} />
             )}
             {isTeacherOrAdmin && !vm.templateId && (
               <DefineTemplateButton
                 vm={vm}
-                onSuccess={onRefresh}
+                onSuccess={() => {}}
                 isTeacherOrAdmin={isTeacherOrAdmin}
               />
             )}
-            <VMDeleteButton instanceId={vm.instanceId} onSuccess={onRefresh} />
+            <VMDeleteButton instanceId={vm.instanceId} onSuccess={() => {}} />
           </div>
         </div>
       </CardContent>
     </Card>
-  )
-}
+  );
+};

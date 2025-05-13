@@ -24,9 +24,14 @@ export const useSubjectVMs = (subjectId: string) => {
         throw new Error('Failed to fetch VMs')
       }
       const data = await response.json()
-      const subjectVMs = data.filter(
-        (vm: VMListItem) => vm.subjectId === subjectId
-      )
+      console.log('Fetched VMs data for subject:', data) // Log the fetched data
+      const subjectVMs = data
+        .filter((vm: VMListItem) => vm.subjectId === subjectId)
+        .map((vm: VMListItem) => ({
+          ...vm,
+          templateDescription: vm.templateDescription, // Map the field
+        }))
+      console.log('Mapped VMs for subject:', subjectVMs) // Log the mapped data
       setVms(subjectVMs)
     } catch {
       toast({

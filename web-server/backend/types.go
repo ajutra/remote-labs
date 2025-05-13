@@ -24,6 +24,7 @@ type Subject struct {
 	Name          string
 	Code          string
 	ProfessorMail string
+	ProfessorName string // Added to store the professor's name
 }
 
 type UserResponse struct {
@@ -57,6 +58,7 @@ type SubjectResponse struct {
 	Name          string    `json:"name"`
 	Code          string    `json:"code"`
 	ProfessorMail string    `json:"professorMail"`
+	ProfessorName string    `json:"professorName"`
 }
 
 type ValidateUserRequest struct {

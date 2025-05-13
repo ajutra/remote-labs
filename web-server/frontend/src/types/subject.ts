@@ -9,7 +9,7 @@ export interface Subject {
 export interface VM {
   id: string
   name: string
-  status: 'running' | 'stopped' | 'paused'
+  status: 'running' | 'shut off' | 'paused' | 'idle' | 'crashed'
   subjectId: string
   ipAddress: string
   os: string

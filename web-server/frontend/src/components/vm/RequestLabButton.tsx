@@ -19,11 +19,13 @@ import { useNavigate } from 'react-router-dom'
 interface RequestLabButtonProps {
   subjectId: string
   templateId: string
+  onSuccess?: () => void
 }
 
 export const RequestLabButton: React.FC<RequestLabButtonProps> = ({
   subjectId,
   templateId,
+  onSuccess,
 }) => {
   const [open, setOpen] = useState(false)
   const [username, setUsername] = useState('')
@@ -64,6 +66,7 @@ export const RequestLabButton: React.FC<RequestLabButtonProps> = ({
         setUsername('')
         setPassword('')
         if (response?.instanceId) {
+          onSuccess?.()
           window.location.reload() // Reload the subject page
         }
       }, 60000) // Wait for 1 minute

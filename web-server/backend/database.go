@@ -47,6 +47,7 @@ type Database interface {
 	GetInstanceInfo(instanceId string) (InstanceInfo, error)
 	GetInstanceIdsByUserId(userId string) ([]string, error)
 	GetTemplatesBySubjectId(subjectId string) ([]TemplateDb, error)
+	GetSubjectById(subjectId string) (Subject, error)
 }
 
 type PostgresDatabase struct {
@@ -89,6 +90,38 @@ type TemplateDb struct {
 	SizeMB      int
 	VcpuCount   int
 	VramMB      int
+}
+
+func (postgres *PostgresDatabase) GetSubjectById(subjectId string) (Subject, error) {
+	query := `
+	SELECT s.id, s.name, s.code, s.main_professor_id
+	FROM subjects s
+	WHERE s.id = @id`
+	args := pgx.NamedArgs{"id": subjectId}
+
+	var dbSubject DatabaseSubject
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&dbSubject.ID, &dbSubject.Name, &dbSubject.Code, &dbSubject.ProfessorMail); err != nil {
+		return Subject{}, fmt.Errorf("error getting subject: %w", err)
+	}
+
+	// Fetch professor details
+	professorQuery := `
+	SELECT name, mail
+	FROM users
+	WHERE id = @id`
+	professorArgs := pgx.NamedArgs{"id": dbSubject.ProfessorMail}
+
+	var professorName, professorMail string
+	if err := postgres.db.QueryRow(context.Background(), professorQuery, professorArgs).Scan(&professorName, &professorMail); err != nil {
+		return Subject{}, fmt.Errorf("error getting professor details: %w", err)
+	}
+
+	// Map to Subject
+	subject := dbSubject.toSubject()
+	subject.ProfessorName = professorName
+	subject.ProfessorMail = professorMail
+
+	return subject, nil
 }
 
 func (postgres *PostgresDatabase) GetTemplatesBySubjectId(subjectId string) ([]TemplateDb, error) {

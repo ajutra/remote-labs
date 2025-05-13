@@ -38,7 +38,7 @@ export const VMActions = ({ vm, onAction, loading }: VMActionsProps) => {
         variant="outline"
         className="bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
         onClick={() => onAction('stop')}
-        disabled={vm.status === 'stopped' || loading === 'stop'}
+        disabled={vm.status === 'shut off' || loading === 'stop'}
       >
         {loading === 'stop' ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />

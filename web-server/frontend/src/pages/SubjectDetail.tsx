@@ -1,7 +1,7 @@
 import React from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Loader2 } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import { useSubject } from '@/hooks/useSubject'
 import { useSubjectVMs } from '@/hooks/useSubjectVMs'
 import { useTemplates } from '@/hooks/useTemplates'
@@ -12,6 +12,7 @@ import { TemplateSelector } from '@/components/vm/TemplateSelector'
 
 const SubjectDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>()
+  console.log('SubjectDetail: id from useParams:', id)
   const navigate = useNavigate()
   const { subject, loading: subjectLoading } = useSubject(id!)
   const { vms, loading: vmsLoading, refresh: refreshVMs } = useSubjectVMs(id!)
@@ -32,13 +33,20 @@ const SubjectDetail: React.FC = () => {
 
   return (
     <div className="container mx-auto py-8">
-      <Button
-        variant="outline"
-        onClick={() => navigate('/subjects')}
-        className="mb-4"
-      >
-        Back to Subjects
-      </Button>
+      <div className="mb-4 flex items-center justify-between">
+        <Button variant="outline" onClick={() => navigate('/subjects')}>
+          Back to Subjects
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            refreshVMs()
+            console.log('Refreshing all VMs and hooks')
+          }}
+        >
+          <RefreshCw className="mr-2 h-4 w-4" />
+        </Button>
+      </div>
 
       <SubjectInfo subject={subject} />
 
@@ -49,7 +57,6 @@ const SubjectDetail: React.FC = () => {
             <VMDetails
               key={vm.instanceId}
               vm={vm}
-              onRefresh={refreshVMs}
               isTeacherOrAdmin={isTeacherOrAdmin}
             />
           ))}
