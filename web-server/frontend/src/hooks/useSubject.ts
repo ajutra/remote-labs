@@ -27,6 +27,7 @@ export const useSubject = (id: string) => {
         }
 
         const subjectData: Subject = await response.json()
+
         setSubject(subjectData)
       } catch (error) {
         console.error('useSubject: Error fetching subject details:', error)
