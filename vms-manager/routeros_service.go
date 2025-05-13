@@ -10,9 +10,9 @@ import (
 
 type RouterOSService interface {
 	Close()
-	AddWireguard(name string, listenPort, mtu int, comment string) error
+	AddWireguard(comment string, listenPort, mtu int, name string) error
 	RemoveWireguard(name string) error
-	AddVlan(name, iface, comment string, vlanID int) error
+	AddVlan(comment string, iface, name string, vlanID int) error
 	RemoveVlan(name string) error
 	AddInterfaceList(name string) error
 	RemoveInterfaceList(name string) error
