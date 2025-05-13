@@ -20,8 +20,6 @@ type RouterOSService interface {
 	RemoveVrf(name string) error
 	AddBridgeVlan(bridge, comment string, vlanID int, tagged ...string) error
 	RemoveBridgeVlan(bridge string, vlanID int) error
-	AddList(name string) error
-	RemoveList(name string) error
 	AddListMember(comment, iface, list string) error
 	RemoveListMember(list, iface string) error
 	AddWireguardPeer(comment, iface, name, pubKey string, allowedAddrs ...string) error
@@ -207,18 +205,6 @@ func (s *RouterOSServiceImpl) RemoveBridgeVlan(bridge string, vlanID int) error 
 		"bridge="+bridge,
 		"vlan-ids="+strconv.Itoa(vlanID),
 	)
-}
-
-func (s *RouterOSServiceImpl) AddList(name string) error {
-	_, err := s.client.RunArgs([]string{
-		"/interface/list/add",
-		fmt.Sprintf("=name=%s", name),
-	})
-	return err
-}
-
-func (s *RouterOSServiceImpl) RemoveList(name string) error {
-	return s.removeByFilter("/interface/list", "name="+name)
 }
 
 func (s *RouterOSServiceImpl) AddListMember(comment, iface, list string) error {
