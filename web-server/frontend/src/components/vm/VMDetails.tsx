@@ -1,15 +1,15 @@
-import React from 'react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Monitor } from 'lucide-react';
-import { VMListItem } from '@/types/vm';
-import { VMStartButton } from './VMStartButton';
-import { VMStopButton } from './VMStopButton';
-import { VMDeleteButton } from './VMDeleteButton';
-import { DefineTemplateButton } from './DefineTemplateButton';
+import React from 'react'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Monitor } from 'lucide-react'
+import { VMListItem } from '@/types/vm'
+import { VMStartButton } from './VMStartButton'
+import { VMStopButton } from './VMStopButton'
+import { VMDeleteButton } from './VMDeleteButton'
+import { DefineTemplateButton } from './DefineTemplateButton'
 
 interface VMDetailsProps {
-  vm: VMListItem;
-  isTeacherOrAdmin: boolean;
+  vm: VMListItem
+  isTeacherOrAdmin: boolean
 }
 
 export const VMDetails: React.FC<VMDetailsProps> = ({
@@ -19,15 +19,15 @@ export const VMDetails: React.FC<VMDetailsProps> = ({
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'running':
-        return 'bg-green-500';
+        return 'bg-green-500'
       case 'stopped':
-        return 'bg-yellow-500';
+        return 'bg-yellow-500'
       case 'error':
-        return 'bg-red-500';
+        return 'bg-red-500'
       default:
-        return 'bg-gray-500';
+        return 'bg-gray-500'
     }
-  };
+  }
 
   return (
     <Card className="mb-6">
@@ -122,5 +122,5 @@ export const VMDetails: React.FC<VMDetailsProps> = ({
         </div>
       </CardContent>
     </Card>
-  );
-};
+  )
+}
