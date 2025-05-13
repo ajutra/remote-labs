@@ -36,7 +36,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
     )
   }
 
-  if (templates.length === 0) {
+  if (!templates || templates.length === 0) {
     return (
       <Card>
         <CardContent className="flex h-32 items-center justify-center">

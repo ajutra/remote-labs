@@ -13,6 +13,7 @@ type SubjectService interface {
 	EnrollUserInSubject(userEmail, subjectId string) error
 	RemoveUserFromSubject(userEmail, subjectId string) error
 	DeleteSubject(subjectId string) error
+	GetSubjectById(subjectId string) (SubjectResponse, error)
 }
 
 type SubjService struct {
@@ -139,6 +140,15 @@ func (s *SubjService) DeleteSubject(subjectId string) error {
 	}
 
 	return NewHttpError(http.StatusBadRequest, fmt.Errorf("cannot delete subject with users enrolled"))
+}
+
+func (s *SubjService) GetSubjectById(subjectId string) (SubjectResponse, error) {
+	subject, err := s.db.GetSubjectById(subjectId)
+	if err != nil {
+		return SubjectResponse{}, err
+	}
+
+	return subject.toSubjectResponse(), nil
 }
 
 func (createSubjReq *CreateSubjectRequest) toSubject() Subject {

@@ -9,17 +9,27 @@ export const useSubject = (id: string) => {
 
   useEffect(() => {
     const fetchSubject = async () => {
+      console.log('useSubject: Fetching subject with id:', id)
       try {
-        // TODO: Replace with actual API call
-        // Mock data
-        setSubject({
-          id,
-          name: 'Mathematics',
-          code: '101',
-          professorName: 'John Doe',
-          professorMail: 'john@tecnocampus.cat',
+        const response = await fetch(`http://localhost:8080/subjects/${id}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
         })
-      } catch {
+
+        if (!response.ok) {
+          console.error(
+            'useSubject: Failed to fetch subject details, status:',
+            response.status
+          )
+          throw new Error('Failed to fetch subject details')
+        }
+
+        const subjectData: Subject = await response.json()
+        setSubject(subjectData)
+      } catch (error) {
+        console.error('useSubject: Error fetching subject details:', error)
         toast({
           title: 'Error',
           description: 'Failed to load subject details',
@@ -30,7 +40,12 @@ export const useSubject = (id: string) => {
       }
     }
 
-    fetchSubject()
+    if (id) {
+      fetchSubject()
+    } else {
+      console.warn('useSubject: No id provided')
+      setLoading(false)
+    }
   }, [id, toast])
 
   return { subject, loading }
