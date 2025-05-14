@@ -9,6 +9,7 @@ import useUserRole from '@/hooks/useUserRole'
 import { SubjectInfo } from '@/components/subject/SubjectInfo'
 import { VMDetails } from '@/components/vm/VMDetails'
 import { TemplateSelector } from '@/components/vm/TemplateSelector'
+import { SubjectManagementModal } from '@/components/subject/SubjectManagementModal'
 
 const SubjectDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -37,15 +38,18 @@ const SubjectDetail: React.FC = () => {
         <Button variant="outline" onClick={() => navigate('/subjects')}>
           Back to Subjects
         </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            refreshVMs()
-            console.log('Refreshing all VMs and hooks')
-          }}
-        >
-          <RefreshCw className="mr-2 h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              refreshVMs()
+              console.log('Refreshing all VMs and hooks')
+            }}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+          </Button>
+          {isTeacherOrAdmin && <SubjectManagementModal subjectId={id!} />}
+        </div>
       </div>
 
       <SubjectInfo subject={subject} />

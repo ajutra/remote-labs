@@ -63,19 +63,47 @@ const getStatusDisplay = (status: string) => {
   }
 }
 
-export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
+export const VMsTable: React.FC<VMsTableProps> = ({
+  vms: initialVMs,
+  onRefresh,
+}) => {
+  const [vms, setVMs] = useState(initialVMs)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const { user } = useAuth()
-  const isProfessorOrAdmin = user?.role === 'professor' || user?.role === 'admin'
-  const runningVMsCount = vms.filter((vm) => vm.status.toLowerCase() === 'running').length
+  const isProfessorOrAdmin =
+    user?.role === 'professor' || user?.role === 'admin'
+  const runningVMsCount = vms.filter(
+    (vm) => vm.status.toLowerCase() === 'running'
+  ).length
+
+  // Sync local state with prop when refreshed
+  React.useEffect(() => {
+    setVMs(initialVMs)
+  }, [initialVMs])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
-    try {
-      await onRefresh()
-    } finally {
-      setIsRefreshing(false)
-    }
+    await onRefresh()
+    setIsRefreshing(false)
+  }
+
+  // Actualizadores locales
+  const handleDelete = (instanceId: string) => {
+    setVMs((prev) => prev.filter((vm) => vm.instanceId !== instanceId))
+  }
+  const handleStart = (instanceId: string) => {
+    setVMs((prev) =>
+      prev.map((vm) =>
+        vm.instanceId === instanceId ? { ...vm, status: 'running' } : vm
+      )
+    )
+  }
+  const handleStop = (instanceId: string) => {
+    setVMs((prev) =>
+      prev.map((vm) =>
+        vm.instanceId === instanceId ? { ...vm, status: 'shut off' } : vm
+      )
+    )
   }
 
   return (
@@ -120,7 +148,9 @@ export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
                       {getStatusDisplay(vm.status)}
                     </span>
                   </TableCell>
-                  <TableCell className="font-medium">{vm.subjectName}</TableCell>
+                  <TableCell className="font-medium">
+                    {vm.subjectName}
+                  </TableCell>
                   <TableCell>
                     {new Date(vm.createdAt).toLocaleDateString()}
                   </TableCell>
@@ -154,13 +184,24 @@ export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
                   <TableCell>
                     <div className="flex space-x-2">
                       {vm.status.toLowerCase() === 'shut off' && canStart && (
-                        <VMStartButton instanceId={vm.instanceId} />
+                        <VMStartButton
+                          instanceId={vm.instanceId}
+                          onSuccess={() => handleStart(vm.instanceId)}
+                        />
                       )}
                       {vm.status.toLowerCase() === 'running' && (
-                        <VMStopButton instanceId={vm.instanceId} />
+                        <VMStopButton
+                          instanceId={vm.instanceId}
+                          onSuccess={() => handleStop(vm.instanceId)}
+                        />
                       )}
                       <WireguardConfigButton instanceId={vm.instanceId} />
-                      <VMDeleteButton instanceId={vm.instanceId} />
+                      {vm.status.toLowerCase() === 'shut off' && (
+                        <VMDeleteButton
+                          instanceId={vm.instanceId}
+                          onSuccess={() => handleDelete(vm.instanceId)}
+                        />
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

@@ -6,9 +6,10 @@ import { useState } from 'react'
 
 interface VMStopButtonProps {
   instanceId: string
+  onSuccess?: () => void
 }
 
-export const VMStopButton = ({ instanceId }: VMStopButtonProps) => {
+export const VMStopButton = ({ instanceId, onSuccess }: VMStopButtonProps) => {
   const { stopVM } = useVMActions()
   const { isLoading: globalLoading, setLoading } = useLoading()
   const [localLoading, setLocalLoading] = useState(false)
@@ -18,7 +19,7 @@ export const VMStopButton = ({ instanceId }: VMStopButtonProps) => {
     setLocalLoading(true)
     try {
       await stopVM(instanceId)
-      window.location.reload()
+      if (onSuccess) onSuccess()
     } finally {
       setLoading(false)
       setLocalLoading(false)

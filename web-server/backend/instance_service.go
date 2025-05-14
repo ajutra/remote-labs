@@ -478,11 +478,39 @@ func (s *InstanceServiceImpl) DefineTemplate(request DefineTemplateRequest) erro
 
 func (s *InstanceServiceImpl) DeleteTemplate(templateId string, subjectId string) error {
 	log.Printf("[DeleteTemplate] Called with templateId=%s, subjectId=%s", templateId, subjectId)
-	resp, err := http.Post(
+
+	// Comprobar si templateId es una base
+	bases, err := s.Bases()
+	if err != nil {
+		log.Printf("[DeleteTemplate] Error getting bases: %v", err)
+		return fmt.Errorf("error getting bases: %w", err)
+	}
+	for _, base := range bases {
+		if base.Id == templateId {
+			// Es una base, solo eliminar de la base de datos
+			err = s.db.DeleteTemplate(templateId, subjectId)
+			if err != nil {
+				log.Printf("[DeleteTemplate] Error deleting base template in DB: %v", err)
+				return fmt.Errorf("error deleting base template: %w", err)
+			}
+			log.Printf("[DeleteTemplate] Successfully deleted base template %s from subject %s", templateId, subjectId)
+			return nil
+		}
+	}
+
+	// Si no es base, eliminar también en el VM manager
+	req, err := http.NewRequest(
+		http.MethodDelete,
 		fmt.Sprintf("%s/templates/delete/%s", s.vmManagerBaseUrl, templateId),
-		"application/json",
 		nil,
 	)
+	if err != nil {
+		log.Printf("[DeleteTemplate] Error creating DELETE request: %v", err)
+		return fmt.Errorf("error creating DELETE request: %w", err)
+	}
+
+	client := http.DefaultClient
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("[DeleteTemplate] Error calling VM manager API: %v", err)
 		return fmt.Errorf("error calling VM manager API: %w", err)

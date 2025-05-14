@@ -540,7 +540,7 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("GET /instances/status", createHttpHandler(server.handleGetInstanceStatus))
 	mux.HandleFunc("GET /bases", createHttpHandler(server.handleBases))
 	mux.HandleFunc("POST /templates/define", createHttpHandler(server.handleDefineTemplate))
-	mux.HandleFunc("POST /templates/delete/{templateId}/{subjectId}", createHttpHandler(server.handleDeleteTemplate))
+	mux.HandleFunc("DELETE /templates/delete/{templateId}/{subjectId}", createHttpHandler(server.handleDeleteTemplate))
 	mux.HandleFunc("GET /templates/subjects/{subjectId}", createHttpHandler(server.handleGetTemplatesBySubjectId))
 	mux.HandleFunc("GET /instances/status/{userId}", createHttpHandler(server.handleGetInstanceStatusByUserId))
 	mux.HandleFunc("GET /instances/wireguard/{instanceId}", createHttpHandler(server.handleWireguard))
