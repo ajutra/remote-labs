@@ -17,9 +17,13 @@ import { useState } from 'react'
 
 interface VMDeleteButtonProps {
   instanceId: string
+  onSuccess?: () => void
 }
 
-export const VMDeleteButton = ({ instanceId }: VMDeleteButtonProps) => {
+export const VMDeleteButton = ({
+  instanceId,
+  onSuccess,
+}: VMDeleteButtonProps) => {
   const { deleteVM } = useVMActions()
   const { isLoading: globalLoading, setLoading } = useLoading()
   const [localLoading, setLocalLoading] = useState(false)
@@ -29,7 +33,7 @@ export const VMDeleteButton = ({ instanceId }: VMDeleteButtonProps) => {
     setLocalLoading(true)
     try {
       await deleteVM(instanceId)
-      window.location.reload()
+      if (onSuccess) onSuccess()
     } finally {
       setLoading(false)
       setLocalLoading(false)

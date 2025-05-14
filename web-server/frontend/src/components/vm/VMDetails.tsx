@@ -14,9 +14,18 @@ interface VMDetailsProps {
 }
 
 export const VMDetails: React.FC<VMDetailsProps> = ({
-  vm,
+  vm: initialVM,
   isTeacherOrAdmin,
 }) => {
+  const [vm, setVM] = React.useState(initialVM)
+
+  const handleStart = () => setVM((prev) => ({ ...prev, status: 'running' }))
+  const handleStop = () => setVM((prev) => ({ ...prev, status: 'shut off' }))
+  const [deleted, setDeleted] = React.useState(false)
+  const handleDelete = () => setDeleted(true)
+
+  if (deleted) return null
+
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'running':
@@ -106,13 +115,21 @@ export const VMDetails: React.FC<VMDetailsProps> = ({
           {/* Actions Section */}
           <div className="flex justify-end space-x-2">
             {vm.status.toLowerCase() === 'shut off' && (
-              <VMStartButton instanceId={vm.instanceId} />
+              <VMStartButton
+                instanceId={vm.instanceId}
+                onSuccess={handleStart}
+              />
             )}
             {vm.status.toLowerCase() === 'running' && (
-              <VMStopButton instanceId={vm.instanceId} />
+              <VMStopButton instanceId={vm.instanceId} onSuccess={handleStop} />
             )}
             <WireguardConfigButton instanceId={vm.instanceId} />
-            <VMDeleteButton instanceId={vm.instanceId} />
+            {vm.status.toLowerCase() === 'shut off' && (
+              <VMDeleteButton
+                instanceId={vm.instanceId}
+                onSuccess={handleDelete}
+              />
+            )}
           </div>
           {isTeacherOrAdmin && !vm.templateId && (
             <div className="mt-4 flex justify-end">

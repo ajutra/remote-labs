@@ -9,6 +9,7 @@ export const getEnv = () => {
     API_VALIDATE_USER: `${VITE_API_URL}/users/validate`,
     API_BASES: `${VITE_API_URL}/bases`,
     API_ENROLL_USER_IN_SUBJECT: `${VITE_API_URL}/subjects/{subjectId}/add/users/{userEmail}`,
+    API_REMOVE_USER_FROM_SUBJECT: `${VITE_API_URL}/subjects/{subjectId}/remove/users/{userEmail}`,
     API_CREATE_INSTANCE: `${VITE_API_URL}/instances/create`,
     API_CREATE_TEMPLATE: `${VITE_API_URL}/templates/define`,
     API_DELETE_SUBJECT: `${VITE_API_URL}/subjects/{id}`,
@@ -20,6 +21,7 @@ export const getEnv = () => {
     API_GET_SUBJECT: `${VITE_API_URL}/subjects/{id}`,
     API_GET_TEMPLATES: `${VITE_API_URL}/templates/subjects/{subjectId}`,
     API_GET_WIREGUARD: `${VITE_API_URL}/instances/wireguard/{instanceId}`,
+    API_DELETE_TEMPLATE: `${VITE_API_URL}/templates/delete/{templateId}/{subjectId}`,
     __vite__: otherViteConfig,
   }
 }

@@ -6,9 +6,13 @@ import { useState } from 'react'
 
 interface VMStartButtonProps {
   instanceId: string
+  onSuccess?: () => void
 }
 
-export const VMStartButton = ({ instanceId }: VMStartButtonProps) => {
+export const VMStartButton = ({
+  instanceId,
+  onSuccess,
+}: VMStartButtonProps) => {
   const { startVM } = useVMActions()
   const { isLoading: globalLoading, setLoading } = useLoading()
   const [localLoading, setLocalLoading] = useState(false)
@@ -18,7 +22,7 @@ export const VMStartButton = ({ instanceId }: VMStartButtonProps) => {
     setLocalLoading(true)
     try {
       await startVM(instanceId)
-      window.location.reload()
+      if (onSuccess) onSuccess()
     } finally {
       setLoading(false)
       setLocalLoading(false)
