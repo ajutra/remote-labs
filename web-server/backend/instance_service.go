@@ -26,6 +26,7 @@ type InstanceService interface {
 	DefineTemplate(request DefineTemplateRequest) error
 	DeleteTemplate(templateId string, subjectId string) error
 	GetTemplatesBySubjectId(subjectId string) ([]Template, error)
+	GetWireguardConfig(instanceId string) (string, error)
 }
 
 type InstanceStatus struct {
@@ -604,6 +605,17 @@ func (s *InstanceServiceImpl) GetInstanceStatusByUserId(userId string) ([]Instan
 	log.Printf("Enriched VM statuses: %+v", enrichedStatuses)
 
 	return enrichedStatuses, nil
+}
+
+func (s *InstanceServiceImpl) GetWireguardConfig(instanceId string) (string, error) {
+	conf, err := s.db.GetWireguardConfig(instanceId)
+	if err != nil {
+		return "", fmt.Errorf("error getting WireGuard config: %w", err)
+	}
+	var endpoint = "vpn.nethermir.cloud:55558"
+	wgConfig := fmt.Sprintf("[Interface]\nPrivateKey = %s\nAddress = %s\n\n[Peer]\nPublicKey = %s\nAllowedIPs = %s\nEndpoint = %s:%d",
+		conf.PrivateKey, conf.InterfaceIp, conf.PublicKey, conf.PeerAllowedIps, endpoint, conf.PeerPort)
+	return wgConfig, nil
 }
 
 func GenerateKeyPair() (string, string, error) {

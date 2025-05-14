@@ -19,6 +19,7 @@ export const getEnv = () => {
     API_STOP_INSTANCE: `${VITE_API_URL}/instances/stop/{instanceId}`,
     API_GET_SUBJECT: `${VITE_API_URL}/subjects/{id}`,
     API_GET_TEMPLATES: `${VITE_API_URL}/templates/subjects/{subjectId}`,
+    API_GET_WIREGUARD: `${VITE_API_URL}/instances/wireguard/{instanceId}`,
     __vite__: otherViteConfig,
   }
 }
