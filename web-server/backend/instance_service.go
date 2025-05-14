@@ -477,25 +477,31 @@ func (s *InstanceServiceImpl) DefineTemplate(request DefineTemplateRequest) erro
 }
 
 func (s *InstanceServiceImpl) DeleteTemplate(templateId string, subjectId string) error {
+	log.Printf("[DeleteTemplate] Called with templateId=%s, subjectId=%s", templateId, subjectId)
 	resp, err := http.Post(
 		fmt.Sprintf("%s/templates/delete/%s", s.vmManagerBaseUrl, templateId),
 		"application/json",
 		nil,
 	)
 	if err != nil {
+		log.Printf("[DeleteTemplate] Error calling VM manager API: %v", err)
 		return fmt.Errorf("error calling VM manager API: %w", err)
 	}
 	defer resp.Body.Close()
 
+	log.Printf("[DeleteTemplate] VM manager response status: %d", resp.StatusCode)
 	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("[DeleteTemplate] VM manager API returned status code %d with body: %s", resp.StatusCode, string(body))
 		return fmt.Errorf("VM manager API returned status code %d", resp.StatusCode)
 	}
 
 	err = s.db.DeleteTemplate(templateId, subjectId)
 	if err != nil {
+		log.Printf("[DeleteTemplate] Error deleting template in DB: %v", err)
 		return fmt.Errorf("error deleting template: %w", err)
 	}
-
+	log.Printf("[DeleteTemplate] Successfully deleted template %s from subject %s", templateId, subjectId)
 	return nil
 }
 

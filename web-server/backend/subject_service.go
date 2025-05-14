@@ -97,49 +97,31 @@ func (s *SubjService) DeleteSubject(subjectId string) error {
 		return err
 	}
 
-	//list all instancesIds of the subject
+	// Check for associated instances
 	instancesIds, err := s.db.ListAllInstancesBySubjectId(subjectId)
 	if err != nil {
 		return err
 	}
-	//stop all instances
-	for _, instanceId := range instancesIds {
-		if err := s.instanceService.StopInstance(instanceId); err != nil {
-			return err
-		}
+	if len(instancesIds) > 0 {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("Cannot delete a subject with associated instances"))
 	}
 
-	//delete all instances
-	for _, instanceId := range instancesIds {
-		if err := s.instanceService.DeleteInstance(instanceId); err != nil {
-			return err
-		}
-	}
-
-	//list all templatesIds of the subject
+	// Check for associated templates
 	templatesIds, err := s.db.ListAllTemplatesBySubjectId(subjectId)
 	if err != nil {
 		return err
 	}
-	//delete all templates
-	for _, templateId := range templatesIds {
-		if err := s.instanceService.DeleteTemplate(templateId, subjectId); err != nil {
-			return err
-		}
+	if len(templatesIds) > 0 {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("Cannot delete a subject with associated templates"))
 	}
 
-	//delete all users enrolled in the subject
+	// Remove all users from the subject
 	if err := s.db.DeleteAllUsersFromSubject(subjectId); err != nil {
 		return err
 	}
 
-	// Check if there are users enrolled in the subject
-	// An error means there are no users enrolled in the subject
-	if _, err := s.db.ListAllUsersBySubjectId(subjectId); err != nil {
-		return s.db.DeleteSubject(subjectId)
-	}
-
-	return NewHttpError(http.StatusBadRequest, fmt.Errorf("cannot delete subject with users enrolled"))
+	// Delete the subject
+	return s.db.DeleteSubject(subjectId)
 }
 
 func (s *SubjService) GetSubjectById(subjectId string) (SubjectResponse, error) {

@@ -209,9 +209,23 @@ func (postgres *PostgresDatabase) ListAllTemplatesBySubjectId(subjectId string) 
 	query := "SELECT id FROM templates WHERE subject_id = @subject_id"
 	args := pgx.NamedArgs{"subject_id": subjectId}
 
-	var templates []string
-	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&templates); err != nil {
+	rows, err := postgres.db.Query(context.Background(), query, args)
+	if err != nil {
 		return nil, fmt.Errorf("error listing templates: %w", err)
+	}
+	defer rows.Close()
+
+	var templates []string
+	for rows.Next() {
+		var templateId string
+		if err := rows.Scan(&templateId); err != nil {
+			return nil, fmt.Errorf("error scanning template id: %w", err)
+		}
+		templates = append(templates, templateId)
+	}
+
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("error iterating template rows: %w", rows.Err())
 	}
 
 	return templates, nil
@@ -221,9 +235,23 @@ func (postgres *PostgresDatabase) ListAllInstancesBySubjectId(subjectId string) 
 	query := "SELECT id FROM instances WHERE subject_id = @subject_id"
 	args := pgx.NamedArgs{"subject_id": subjectId}
 
-	var instances []string
-	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&instances); err != nil {
+	rows, err := postgres.db.Query(context.Background(), query, args)
+	if err != nil {
 		return nil, fmt.Errorf("error listing instances: %w", err)
+	}
+	defer rows.Close()
+
+	var instances []string
+	for rows.Next() {
+		var instanceId string
+		if err := rows.Scan(&instanceId); err != nil {
+			return nil, fmt.Errorf("error scanning instance id: %w", err)
+		}
+		instances = append(instances, instanceId)
+	}
+
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("error iterating instance rows: %w", rows.Err())
 	}
 
 	return instances, nil
