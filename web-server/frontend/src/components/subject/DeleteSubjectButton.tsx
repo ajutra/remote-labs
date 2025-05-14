@@ -4,11 +4,11 @@ import { useDeleteSubject } from '@/hooks/useDeleteSubject'
 import {
   AlertDialog,
   AlertDialogContent,
-  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
+  AlertDialogDescription,
 } from '@/components/ui/alert-dialog'
 import { Loader2 } from 'lucide-react'
 
@@ -21,12 +21,13 @@ export const DeleteSubjectButton: React.FC<DeleteSubjectButtonProps> = ({
   subjectId,
   onSuccess,
 }) => {
-  const { deleteSubject } = useDeleteSubject()
+  const { deleteSubject, error, setError } = useDeleteSubject()
   const [isLoading, setIsLoading] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   const handleDelete = async () => {
     setIsLoading(true)
+    setError(null)
     try {
       await deleteSubject(subjectId)
       if (onSuccess) {
@@ -34,7 +35,7 @@ export const DeleteSubjectButton: React.FC<DeleteSubjectButtonProps> = ({
       }
       setIsDialogOpen(false) // Close dialog after successful deletion
     } catch (error) {
-      console.error('Error deleting subject:', error)
+      // El error ya se gestiona y expone en el hook
     } finally {
       setIsLoading(false)
     }
@@ -42,10 +43,17 @@ export const DeleteSubjectButton: React.FC<DeleteSubjectButtonProps> = ({
 
   const handleCancel = () => {
     setIsDialogOpen(false) // Close dialog on cancel
+    setError(null)
   }
 
   return (
-    <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+    <AlertDialog
+      open={isDialogOpen}
+      onOpenChange={(open) => {
+        setIsDialogOpen(open)
+        if (!open) setError(null)
+      }}
+    >
       <AlertDialogTrigger asChild>
         <Button
           variant="outline"
@@ -64,11 +72,14 @@ export const DeleteSubjectButton: React.FC<DeleteSubjectButtonProps> = ({
         <AlertDialogHeader>
           <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to delete this subject? This action cannot be
-            undone. Deleting a subject will also remove all its associated
-            instances and templates.
+            Are you sure you want to delete this subject?
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {error && (
+          <div className="mb-2 rounded border border-red-300 bg-red-100 p-2 text-red-700">
+            {error}
+          </div>
+        )}
         <AlertDialogFooter>
           <Button variant="outline" onClick={handleCancel}>
             Cancel
