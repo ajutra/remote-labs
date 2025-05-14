@@ -143,29 +143,16 @@ export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
                   {vm.templateDescription || 'No description available'}
                 </TableCell>
                 <TableCell>
-                  <div className="flex justify-end gap-2">
-                    {['shut off', 'crashed'].includes(
-                      vm.status.toLowerCase()
-                    ) && (
-                      <VMStartButton
-                        instanceId={vm.instanceId}
-                        onSuccess={onRefresh}
-                      />
+                  <div className="flex space-x-2">
+                    {vm.status.toLowerCase() === 'shut off' && (
+                      <VMStartButton instanceId={vm.instanceId} />
                     )}
-                    {['running', 'idle'].includes(vm.status.toLowerCase()) && (
-                      <VMStopButton
-                        instanceId={vm.instanceId}
-                        onSuccess={onRefresh}
-                      />
+                    {vm.status.toLowerCase() === 'running' && (
+                      <VMStopButton instanceId={vm.instanceId} />
                     )}
-                    <VMDeleteButton
-                      instanceId={vm.instanceId}
-                      onSuccess={onRefresh}
-                    />
+                    <WireguardConfigButton instanceId={vm.instanceId} />
+                    <VMDeleteButton instanceId={vm.instanceId} />
                   </div>
-                </TableCell>
-                <TableCell>
-                  <WireguardConfigButton instanceId={vm.instanceId} />
                 </TableCell>
               </TableRow>
             ))}

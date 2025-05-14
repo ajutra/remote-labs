@@ -74,7 +74,15 @@ export const DefineTemplateButton: React.FC<DefineTemplateButtonProps> = ({
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !loading && setOpen(isOpen)}>
       <DialogTrigger asChild>
-        <Button variant="outline">Define Template</Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-yellow-50 text-yellow-700 hover:bg-yellow-100 hover:text-yellow-800"
+          onClick={() => setOpen(true)}
+          disabled={loading}
+        >
+          Define Template
+        </Button>
       </DialogTrigger>
       <DialogContent>
         {loading ? (

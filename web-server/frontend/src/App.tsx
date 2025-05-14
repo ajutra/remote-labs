@@ -15,6 +15,7 @@ import useIsAdmin from '@/hooks/useIsAdmin'
 import VerifyEmail from './pages/VerifyEmail'
 import { Layout } from '@/pages/Layout'
 import UserSettings from './pages/UserSettings'
+import { LoadingProvider } from '@/context/LoadingContext'
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const isAdmin = useIsAdmin()
@@ -27,38 +28,43 @@ const App: React.FC = () => {
       <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
         <AuthProvider>
           <AlertDialogProvider>
-            <Routes>
-              <Route path={AppRoutes.LOGIN} element={<LoginPage />} />
-              <Route path="/verify-email" element={<VerifyEmail />} />
-              <Route
-                path="*"
-                element={
-                  <Layout>
-                    <Routes>
-                      <Route path={AppRoutes.HOME} element={<Home />} />
-                      <Route path={AppRoutes.SUBJECTS} element={<Subjects />} />
-                      <Route
-                        path={`${AppRoutes.SUBJECTS}/:id`}
-                        element={<SubjectDetail />}
-                      />
-                      <Route path={AppRoutes.MYLABS} element={<MyLabs />} />
-                      <Route
-                        path={AppRoutes.USER_SETTINGS}
-                        element={<UserSettings />}
-                      />
-                      <Route
-                        path={AppRoutes.CONTROL_PLANE}
-                        element={
-                          <AdminRoute>
-                            <ControlPlane />
-                          </AdminRoute>
-                        }
-                      />
-                    </Routes>
-                  </Layout>
-                }
-              />
-            </Routes>
+            <LoadingProvider>
+              <Routes>
+                <Route path={AppRoutes.LOGIN} element={<LoginPage />} />
+                <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route
+                  path="*"
+                  element={
+                    <Layout>
+                      <Routes>
+                        <Route path={AppRoutes.HOME} element={<Home />} />
+                        <Route
+                          path={AppRoutes.SUBJECTS}
+                          element={<Subjects />}
+                        />
+                        <Route
+                          path={`${AppRoutes.SUBJECTS}/:id`}
+                          element={<SubjectDetail />}
+                        />
+                        <Route path={AppRoutes.MYLABS} element={<MyLabs />} />
+                        <Route
+                          path={AppRoutes.USER_SETTINGS}
+                          element={<UserSettings />}
+                        />
+                        <Route
+                          path={AppRoutes.CONTROL_PLANE}
+                          element={
+                            <AdminRoute>
+                              <ControlPlane />
+                            </AdminRoute>
+                          }
+                        />
+                      </Routes>
+                    </Layout>
+                  }
+                />
+              </Routes>
+            </LoadingProvider>
           </AlertDialogProvider>
         </AuthProvider>
       </ThemeProvider>

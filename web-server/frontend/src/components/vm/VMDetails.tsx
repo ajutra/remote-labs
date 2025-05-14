@@ -106,30 +106,23 @@ export const VMDetails: React.FC<VMDetailsProps> = ({
           {/* Actions Section */}
           <div className="flex justify-end space-x-2">
             {vm.status.toLowerCase() === 'shut off' && (
-              <VMStartButton
-                instanceId={vm.instanceId}
-                onSuccess={() => window.location.reload()}
-              />
+              <VMStartButton instanceId={vm.instanceId} />
             )}
             {vm.status.toLowerCase() === 'running' && (
-              <VMStopButton
-                instanceId={vm.instanceId}
-                onSuccess={() => window.location.reload()}
-              />
+              <VMStopButton instanceId={vm.instanceId} />
             )}
-            {isTeacherOrAdmin && !vm.templateId && (
+            <WireguardConfigButton instanceId={vm.instanceId} />
+            <VMDeleteButton instanceId={vm.instanceId} />
+          </div>
+          {isTeacherOrAdmin && !vm.templateId && (
+            <div className="mt-4 flex justify-end">
               <DefineTemplateButton
                 vm={vm}
                 isTeacherOrAdmin={isTeacherOrAdmin}
               />
-            )}
-            <VMDeleteButton
-              instanceId={vm.instanceId}
-              onSuccess={() => window.location.reload()}
-            />
-          </div>
+            </div>
+          )}
         </div>
-        <WireguardConfigButton instanceId={vm.instanceId} />
       </CardContent>
     </Card>
   )
