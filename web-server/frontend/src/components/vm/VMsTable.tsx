@@ -14,6 +14,7 @@ import { VMStartButton } from './VMStartButton'
 import { VMStopButton } from './VMStopButton'
 import { VMDeleteButton } from './VMDeleteButton'
 import { WireguardConfigButton } from './WireguardConfigButton'
+import { useAuth } from '@/context/AuthContext'
 
 interface VMsTableProps {
   vms: VMListItem[]
@@ -64,6 +65,9 @@ const getStatusDisplay = (status: string) => {
 
 export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const { user } = useAuth()
+  const isProfessorOrAdmin = user?.role === 'professor' || user?.role === 'admin'
+  const runningVMsCount = vms.filter((vm) => vm.status.toLowerCase() === 'running').length
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -104,58 +108,64 @@ export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {vms.map((vm) => (
-              <TableRow key={vm.instanceId}>
-                <TableCell>
-                  <span className={`font-bold ${getStatusColor(vm.status)}`}>
-                    {getStatusDisplay(vm.status)}
-                  </span>
-                </TableCell>
-                <TableCell className="font-medium">{vm.subjectName}</TableCell>
-                <TableCell>
-                  {new Date(vm.createdAt).toLocaleDateString()}
-                </TableCell>
-                <TableCell>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">vCPUs:</span>
-                      <span>{vm.template_vcpu_count || 'XX'}</span>
+            {vms.map((vm) => {
+              const canStart =
+                isProfessorOrAdmin ||
+                runningVMsCount === 0 ||
+                vm.status.toLowerCase() === 'running'
+              return (
+                <TableRow key={vm.instanceId}>
+                  <TableCell>
+                    <span className={`font-bold ${getStatusColor(vm.status)}`}>
+                      {getStatusDisplay(vm.status)}
+                    </span>
+                  </TableCell>
+                  <TableCell className="font-medium">{vm.subjectName}</TableCell>
+                  <TableCell>
+                    {new Date(vm.createdAt).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">vCPUs:</span>
+                        <span>{vm.template_vcpu_count || 'XX'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">RAM:</span>
+                        <span>
+                          {vm.template_vram_mb
+                            ? `${vm.template_vram_mb / 1024} GB`
+                            : 'XX'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Disk:</span>
+                        <span>
+                          {vm.template_size_mb
+                            ? `${vm.template_size_mb / 1024} GB`
+                            : 'XX'}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">RAM:</span>
-                      <span>
-                        {vm.template_vram_mb
-                          ? `${vm.template_vram_mb / 1024} GB`
-                          : 'XX'}
-                      </span>
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    {vm.templateDescription || 'No description available'}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex space-x-2">
+                      {vm.status.toLowerCase() === 'shut off' && canStart && (
+                        <VMStartButton instanceId={vm.instanceId} />
+                      )}
+                      {vm.status.toLowerCase() === 'running' && (
+                        <VMStopButton instanceId={vm.instanceId} />
+                      )}
+                      <WireguardConfigButton instanceId={vm.instanceId} />
+                      <VMDeleteButton instanceId={vm.instanceId} />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">Disk:</span>
-                      <span>
-                        {vm.template_size_mb
-                          ? `${vm.template_size_mb / 1024} GB`
-                          : 'XX'}
-                      </span>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="font-medium">
-                  {vm.templateDescription || 'No description available'}
-                </TableCell>
-                <TableCell>
-                  <div className="flex space-x-2">
-                    {vm.status.toLowerCase() === 'shut off' && (
-                      <VMStartButton instanceId={vm.instanceId} />
-                    )}
-                    {vm.status.toLowerCase() === 'running' && (
-                      <VMStopButton instanceId={vm.instanceId} />
-                    )}
-                    <WireguardConfigButton instanceId={vm.instanceId} />
-                    <VMDeleteButton instanceId={vm.instanceId} />
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
       </div>
