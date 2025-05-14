@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { useVMActions } from '@/hooks/useVMActions'
-import { Trash2 } from 'lucide-react'
+import { Trash, Loader2 } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,22 +12,27 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { useLoading } from '@/context/LoadingContext'
+import { useState } from 'react'
 
 interface VMDeleteButtonProps {
   instanceId: string
-  onSuccess?: () => void
 }
 
-export const VMDeleteButton = ({
-  instanceId,
-  onSuccess,
-}: VMDeleteButtonProps) => {
-  const { deleteVM, isLoading } = useVMActions()
+export const VMDeleteButton = ({ instanceId }: VMDeleteButtonProps) => {
+  const { deleteVM } = useVMActions()
+  const { isLoading: globalLoading, setLoading } = useLoading()
+  const [localLoading, setLocalLoading] = useState(false)
 
   const handleDelete = async () => {
-    const success = await deleteVM(instanceId)
-    if (success && onSuccess) {
-      onSuccess()
+    setLoading(true)
+    setLocalLoading(true)
+    try {
+      await deleteVM(instanceId)
+      window.location.reload()
+    } finally {
+      setLoading(false)
+      setLocalLoading(false)
     }
   }
 
@@ -38,17 +43,22 @@ export const VMDeleteButton = ({
           variant="outline"
           size="sm"
           className="bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
-          disabled={isLoading}
+          disabled={globalLoading}
         >
-          <Trash2 className="mr-2 h-4 w-4" />
+          {localLoading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Trash className="mr-2 h-4 w-4" />
+          )}
           Delete
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+          <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
           <AlertDialogDescription>
-            This action cannot be undone. This will permanently delete your VM.
+            Are you sure you want to delete this virtual machine? This action
+            cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

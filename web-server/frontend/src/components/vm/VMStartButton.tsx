@@ -1,22 +1,27 @@
 import { Button } from '@/components/ui/button'
 import { useVMActions } from '@/hooks/useVMActions'
-import { Play } from 'lucide-react'
+import { Play, Loader2 } from 'lucide-react'
+import { useLoading } from '@/context/LoadingContext'
+import { useState } from 'react'
 
 interface VMStartButtonProps {
   instanceId: string
-  onSuccess?: () => void
 }
 
-export const VMStartButton = ({
-  instanceId,
-  onSuccess,
-}: VMStartButtonProps) => {
-  const { startVM, isLoading } = useVMActions()
+export const VMStartButton = ({ instanceId }: VMStartButtonProps) => {
+  const { startVM } = useVMActions()
+  const { isLoading: globalLoading, setLoading } = useLoading()
+  const [localLoading, setLocalLoading] = useState(false)
 
   const handleStart = async () => {
-    const success = await startVM(instanceId)
-    if (success && onSuccess) {
-      onSuccess()
+    setLoading(true)
+    setLocalLoading(true)
+    try {
+      await startVM(instanceId)
+      window.location.reload()
+    } finally {
+      setLoading(false)
+      setLocalLoading(false)
     }
   }
 
@@ -26,9 +31,13 @@ export const VMStartButton = ({
       size="sm"
       className="bg-green-50 text-green-700 hover:bg-green-100 hover:text-green-800"
       onClick={handleStart}
-      disabled={isLoading}
+      disabled={globalLoading}
     >
-      <Play className="mr-2 h-4 w-4" />
+      {localLoading ? (
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      ) : (
+        <Play className="mr-2 h-4 w-4" />
+      )}
       Start
     </Button>
   )
