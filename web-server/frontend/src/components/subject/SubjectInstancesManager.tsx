@@ -22,7 +22,11 @@ interface SubjectInstancesManagerProps {
 export const SubjectInstancesManager: React.FC<
   SubjectInstancesManagerProps
 > = ({ subjectId }) => {
-  const { vms: initialInstances, loading: vmsLoading, refresh } = useSubjectVMs(subjectId)
+  const {
+    vms: initialInstances,
+    loading: vmsLoading,
+    refresh,
+  } = useSubjectVMs(subjectId)
   const [instances, setInstances] = useState(initialInstances)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const { user } = useAuth()
@@ -80,7 +84,9 @@ export const SubjectInstancesManager: React.FC<
       </div>
       <div className="overflow-x-auto rounded-md border">
         {vmsLoading ? (
-          <div className="p-8 text-center text-muted-foreground">Loading instances...</div>
+          <div className="p-8 text-center text-muted-foreground">
+            Loading instances...
+          </div>
         ) : (
           <Table>
             <TableHeader>
@@ -102,7 +108,9 @@ export const SubjectInstancesManager: React.FC<
                 return (
                   <TableRow key={vm.instanceId}>
                     <TableCell>
-                      <span className={`font-bold ${getStatusColor(vm.status)}`}>
+                      <span
+                        className={`font-bold ${getStatusColor(vm.status)}`}
+                      >
                         {getStatusDisplay(vm.status)}
                       </span>
                     </TableCell>
