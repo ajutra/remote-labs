@@ -21,6 +21,7 @@ export const VMStopButton = ({ instanceId, onSuccess }: VMStopButtonProps) => {
     <Button
       variant="outline"
       size="sm"
+      className="bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
       onClick={handleStop}
       disabled={isLoading}
     >

@@ -6,6 +6,7 @@ import { VMStartButton } from './VMStartButton'
 import { VMStopButton } from './VMStopButton'
 import { VMDeleteButton } from './VMDeleteButton'
 import { DefineTemplateButton } from './DefineTemplateButton'
+import { WireguardConfigButton } from './WireguardConfigButton'
 
 interface VMDetailsProps {
   vm: VMListItem
@@ -119,7 +120,6 @@ export const VMDetails: React.FC<VMDetailsProps> = ({
             {isTeacherOrAdmin && !vm.templateId && (
               <DefineTemplateButton
                 vm={vm}
-                onSuccess={() => window.location.reload()}
                 isTeacherOrAdmin={isTeacherOrAdmin}
               />
             )}
@@ -129,6 +129,7 @@ export const VMDetails: React.FC<VMDetailsProps> = ({
             />
           </div>
         </div>
+        <WireguardConfigButton instanceId={vm.instanceId} />
       </CardContent>
     </Card>
   )

@@ -48,6 +48,7 @@ type Database interface {
 	GetInstanceIdsByUserId(userId string) ([]string, error)
 	GetTemplatesBySubjectId(subjectId string) ([]TemplateDb, error)
 	GetSubjectById(subjectId string) (Subject, error)
+	GetWireguardConfig(instanceId string) (wireguardConfig, error)
 }
 
 type PostgresDatabase struct {
@@ -90,6 +91,30 @@ type TemplateDb struct {
 	SizeMB      int
 	VcpuCount   int
 	VramMB      int
+}
+
+type wireguardConfig struct {
+	PrivateKey     string   `json:"private_key"`
+	PublicKey      string   `json:"public_key"`
+	InterfaceIp    string   `json:"interface_ip"`
+	PeerPublicKey  string   `json:"peer_public_key"`
+	PeerAllowedIps []string `json:"peer_allowed_ips"`
+	PeerPort       int      `json:"peer_port"`
+}
+
+func (postgres *PostgresDatabase) GetWireguardConfig(instanceId string) (wireguardConfig, error) {
+	query := `
+	SELECT wg_private_key, wg_public_key, interface_ip, peer_public_key, peer_allowed_ips, peer_endpoint_port
+	FROM instances
+	WHERE id = @id`
+	args := pgx.NamedArgs{"id": instanceId}
+
+	var config wireguardConfig
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&config.PrivateKey, &config.PublicKey, &config.InterfaceIp, &config.PeerPublicKey, &config.PeerAllowedIps, &config.PeerPort); err != nil {
+		return wireguardConfig{}, fmt.Errorf("error getting wireguard config: %w", err)
+	}
+
+	return config, nil
 }
 
 func (postgres *PostgresDatabase) GetSubjectById(subjectId string) (Subject, error) {

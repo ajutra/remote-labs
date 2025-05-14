@@ -24,6 +24,7 @@ export const VMStartButton = ({
     <Button
       variant="outline"
       size="sm"
+      className="bg-green-50 text-green-700 hover:bg-green-100 hover:text-green-800"
       onClick={handleStart}
       disabled={isLoading}
     >

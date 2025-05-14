@@ -34,7 +34,12 @@ export const VMDeleteButton = ({
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={isLoading}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
+          disabled={isLoading}
+        >
           <Trash2 className="mr-2 h-4 w-4" />
           Delete
         </Button>

@@ -453,6 +453,20 @@ func (server *ApiServer) handleGetTemplatesBySubjectId(w http.ResponseWriter, r 
 	return writeResponse(w, http.StatusOK, templates)
 }
 
+func (server *ApiServer) handleWireguard(w http.ResponseWriter, r *http.Request) error {
+	instanceId := r.PathValue("instanceId")
+	if instanceId == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing instance id"))
+	}
+
+	wireguardConfig, err := server.instanceService.GetWireguardConfig(instanceId)
+	if err != nil {
+		return err
+	}
+
+	return writeResponse(w, http.StatusOK, wireguardConfig)
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -529,6 +543,7 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("POST /templates/delete/{templateId}/{subjectId}", createHttpHandler(server.handleDeleteTemplate))
 	mux.HandleFunc("GET /templates/subjects/{subjectId}", createHttpHandler(server.handleGetTemplatesBySubjectId))
 	mux.HandleFunc("GET /instances/status/{userId}", createHttpHandler(server.handleGetInstanceStatusByUserId))
+	mux.HandleFunc("GET /instances/wireguard/{instanceId}", createHttpHandler(server.handleWireguard))
 
 	log.Println("Starting server on port", server.listenAddr)
 

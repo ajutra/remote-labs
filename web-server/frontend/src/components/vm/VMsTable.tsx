@@ -13,6 +13,7 @@ import { VMListItem } from '@/types/vm'
 import { VMStartButton } from './VMStartButton'
 import { VMStopButton } from './VMStopButton'
 import { VMDeleteButton } from './VMDeleteButton'
+import { WireguardConfigButton } from './WireguardConfigButton'
 
 interface VMsTableProps {
   vms: VMListItem[]
@@ -162,6 +163,9 @@ export const VMsTable: React.FC<VMsTableProps> = ({ vms, onRefresh }) => {
                       onSuccess={onRefresh}
                     />
                   </div>
+                </TableCell>
+                <TableCell>
+                  <WireguardConfigButton instanceId={vm.instanceId} />
                 </TableCell>
               </TableRow>
             ))}
