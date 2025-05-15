@@ -102,12 +102,12 @@ const VerifyEmail: React.FC = () => {
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="w-full max-w-md rounded-lg bg-card p-8 shadow-md">
           <h1 className="mb-6 text-2xl font-bold text-card-foreground">
-            ¡Email Verificado Exitosamente!
+            Email Verified Successfully
           </h1>
           <div className="text-center text-green-600">
             <p className="mb-4">
-              Tu email ha sido verificado. Por favor, cierra esta pestaña y
-              dirígete a la página de login para acceder a tu cuenta.
+              Your email has been verified successfully! You can close this
+              window and return to login page.
             </p>
           </div>
         </div>
