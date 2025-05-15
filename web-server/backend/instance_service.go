@@ -646,7 +646,7 @@ func (s *InstanceServiceImpl) GetWireguardConfig(instanceId string) (string, err
 	if err != nil {
 		return "", fmt.Errorf("error getting WireGuard config: %w", err)
 	}
-	var endpoint = "vpn.nethermir.cloud:55558"
+	var endpoint = "vpn.nethermir.cloud"
 	wgConfig := fmt.Sprintf("[Interface]\nPrivateKey = %s\nAddress = %s\n\n[Peer]\nPublicKey = %s\nAllowedIPs = %s\nEndpoint = %s:%d",
 		conf.PrivateKey, conf.InterfaceIp, conf.PublicKey, conf.PeerAllowedIps, endpoint, conf.PeerPort)
 	return wgConfig, nil
