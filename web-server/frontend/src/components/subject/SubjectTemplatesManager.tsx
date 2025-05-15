@@ -57,7 +57,7 @@ export const SubjectTemplatesManager: React.FC<
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(templates && templates.length > 0) ? (
+            {templates && templates.length > 0 ? (
               templates.map((tpl) => (
                 <TableRow key={tpl.id}>
                   <TableCell>{tpl.description}</TableCell>
@@ -85,7 +85,10 @@ export const SubjectTemplatesManager: React.FC<
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                <TableCell
+                  colSpan={5}
+                  className="text-center text-muted-foreground"
+                >
                   No templates found for this subject.
                 </TableCell>
               </TableRow>
