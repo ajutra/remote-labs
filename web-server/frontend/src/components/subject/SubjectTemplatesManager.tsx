@@ -57,31 +57,39 @@ export const SubjectTemplatesManager: React.FC<
             </TableRow>
           </TableHeader>
           <TableBody>
-            {templates.map((tpl) => (
-              <TableRow key={tpl.id}>
-                <TableCell>{tpl.description}</TableCell>
-                <TableCell>{tpl.vcpuCount}</TableCell>
-                <TableCell>{(tpl.vramMB / 1024).toFixed(1)}</TableCell>
-                <TableCell>{(tpl.sizeMB / 1024).toFixed(1)}</TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
-                    onClick={() => handleDelete(tpl.id)}
-                    disabled={deleting === tpl.id}
-                  >
-                    {deleting === tpl.id ? (
-                      'Deleting...'
-                    ) : (
-                      <>
-                        <Trash className="mr-2 h-4 w-4" /> Delete
-                      </>
-                    )}
-                  </Button>
+            {(templates && templates.length > 0) ? (
+              templates.map((tpl) => (
+                <TableRow key={tpl.id}>
+                  <TableCell>{tpl.description}</TableCell>
+                  <TableCell>{tpl.vcpuCount}</TableCell>
+                  <TableCell>{(tpl.vramMB / 1024).toFixed(1)}</TableCell>
+                  <TableCell>{(tpl.sizeMB / 1024).toFixed(1)}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
+                      onClick={() => handleDelete(tpl.id)}
+                      disabled={deleting === tpl.id}
+                    >
+                      {deleting === tpl.id ? (
+                        'Deleting...'
+                      ) : (
+                        <>
+                          <Trash className="mr-2 h-4 w-4" /> Delete
+                        </>
+                      )}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  No templates found for this subject.
                 </TableCell>
               </TableRow>
-            ))}
+            )}
           </TableBody>
         </Table>
       </div>
