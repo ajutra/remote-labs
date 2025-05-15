@@ -14,7 +14,7 @@ const Subjects: React.FC = () => {
   }
 
   return (
-    <div className="flex min-h-screen w-full flex-col p-4">
+    <div className="container mx-auto py-8">
       <h1 className="mb-4 text-2xl font-bold">Subjects</h1>
       <div className="mb-4 flex justify-end">
         <Button
