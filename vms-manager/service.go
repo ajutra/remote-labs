@@ -24,6 +24,7 @@ const MAX_VMS_PER_VLAN = 253 // 255 total IPs in the subnet, minus the first IP 
 const FIRST_IP_IN_SUBNET = 1
 const SUBNET_MASK = 24
 const INTERFACE_ADDRESS_SECOND_OCTET = 1
+const INTERFACE_ADDRESS_SUBNET_MASK = 32
 const MAX_CPU_USAGE = 0.9
 const MIN_AVAILABLE_RAM_MB = 1024
 const CPU_USAGE_PENALTY_FACTOR = 10240 // 10240 MB of RAM for 100% of CPU Load, adjust this value to change the penalty for high CPU usage
@@ -386,10 +387,10 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 
 	s.addVlanConfigIfNotExists(vlan)
 
-	interfaceAddress := getInterfaceAddress(vmNetworkConfig.IpAddWithSubnet)
+	interfaceAddress := getInterfaceAddressWithSubnet(vmNetworkConfig.IpAddWithSubnet)
 	peerAllowedIps := []string{
-		vmNetworkConfig.IpAddWithSubnet,
-		interfaceAddress,
+		getNetworkAddressWithSubnet(vmNetworkConfig.IpAddWithSubnet),
+		strings.Split(interfaceAddress, "/")[0] + "/30",
 	}
 
 	peerPublicKey, err := s.routerosService.GetWireguardPublicKey(fmt.Sprintf("wireguard%d", vlan))
@@ -1156,14 +1157,26 @@ func getVlanEtiquete(vlan int, vmVlanIdentifier int) string {
 	return fmt.Sprintf("vlan%d-%d", vlan, vmVlanIdentifier)
 }
 
-func getInterfaceAddress(vmIpAddWithSubnet string) string {
+func getInterfaceAddressWithSubnet(vmIpAddWithSubnet string) string {
 	ipParts := strings.Split(vmIpAddWithSubnet, ".")
 	return fmt.Sprintf(
-		"%s.%d.%s.%s",
+		"%s.%d.%s.%s/%d",
 		ipParts[0],
 		INTERFACE_ADDRESS_SECOND_OCTET,
 		ipParts[2],
-		ipParts[3],
+		strings.Split(ipParts[3], "/")[0],
+		INTERFACE_ADDRESS_SUBNET_MASK,
+	)
+}
+
+func getNetworkAddressWithSubnet(vmIpAddWithSubnet string) string {
+	ipParts := strings.Split(vmIpAddWithSubnet, ".")
+	return fmt.Sprintf(
+		"%s.%s.%s.0/%d",
+		ipParts[0],
+		ipParts[1],
+		ipParts[2],
+		SUBNET_MASK,
 	)
 }
 
@@ -1463,8 +1476,8 @@ func (s *ServiceImpl) applyRouterVmConfig(vmNetworkConfig VmNetworkConfig, vlan 
 			fmt.Sprintf("wireguard%d", vlan),
 			fmt.Sprintf("peer%d-%d", vlan, vmNetworkConfig.VmVlanIdentifier),
 			userPubKey,
-			vmNetworkConfig.IpAddWithSubnet,
-			fmt.Sprintf("%s/%d", getInterfaceAddress(vmNetworkConfig.IpAddWithSubnet), SUBNET_MASK),
+			getNetworkAddressWithSubnet(vmNetworkConfig.IpAddWithSubnet),
+			getInterfaceAddressWithSubnet(vmNetworkConfig.IpAddWithSubnet),
 		); err != nil {
 			log.Println("Error adding wireguard peer: ", err.Error())
 			log.Println("Retrying...")
