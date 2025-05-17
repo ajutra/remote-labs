@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useToast } from '@/hooks/use-toast'
 import { Subject } from '@/types/subject'
+import { getEnv } from '@/utils/Env'
 
 export const useSubject = (id: string) => {
   const [subject, setSubject] = useState<Subject | null>(null)
@@ -11,7 +12,7 @@ export const useSubject = (id: string) => {
     const fetchSubject = async () => {
       console.log('useSubject: Fetching subject with id:', id)
       try {
-        const response = await fetch(`http://localhost:8080/subjects/${id}`, {
+        const response = await fetch(`${getEnv().API_GET_SUBJECTS}/${id}`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
