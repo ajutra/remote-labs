@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/context/AuthContext'
+import { getEnv } from '@/utils/Env'
 
 export const useRequestLab = () => {
   const [isLoading, setIsLoading] = useState(false)
@@ -19,7 +20,7 @@ export const useRequestLab = () => {
 
     setIsLoading(true)
     try {
-      const response = await fetch('http://localhost:8080/instances/create', {
+      const response = await fetch(`${getEnv().API_CREATE_INSTANCE}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
