@@ -198,18 +198,14 @@ const CreateSubjectSheet: React.FC = () => {
 
       await handleCreateSubject(params)
 
-      setTimeout(() => {
-        setLoading(false)
-        setOpen(false)
-        window.location.reload() // Refresh the page after completion
-      }, 70000) // Wait for 1.2 minutes
+      setLoading(false)
+      setOpen(false)
+      window.location.reload() // Refresh the page after completion
     } catch (error) {
       console.error('Error creating subject:', error)
-      setTimeout(() => {
-        setLoading(false)
-        setOpen(false)
-        window.location.reload() // Refresh the page after error
-      }, 70000)
+      setLoading(false)
+      setOpen(false)
+      window.location.reload() // Refresh the page after error
     }
   }
 

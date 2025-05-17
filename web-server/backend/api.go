@@ -17,6 +17,7 @@ type ApiServer struct {
 	subjectService  SubjectService
 	emailService    EmailService
 	instanceService InstanceService
+	frontendUrl     string
 }
 
 type ApiError struct {
@@ -51,7 +52,7 @@ func (server *ApiServer) handleCreateUser(w http.ResponseWriter, r *http.Request
 	}
 
 	// Send verification email
-	verificationLink := fmt.Sprintf("http://localhost:5173/verify-email?token=%s", verificationToken.String())
+	verificationLink := fmt.Sprintf("%s/verify-email?token=%s", server.frontendUrl, verificationToken.String())
 	emailBody := fmt.Sprintf("Please click the following link to verify your email: %s", verificationLink)
 	if err := server.emailService.SendEmail(request.Mail, "Email Verification", emailBody); err != nil {
 		// Log the error but don't return it to the user
@@ -289,7 +290,7 @@ func (server *ApiServer) handleVerifyEmail(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Send verification email
-	verificationLink := fmt.Sprintf("http://localhost:5173/verify-email?token=%s", verificationToken.String())
+	verificationLink := fmt.Sprintf("%s/verify-email?token=%s", server.frontendUrl, verificationToken.String())
 	emailBody := fmt.Sprintf("Please click the following link to verify your email: %s", verificationLink)
 	if err := server.emailService.SendEmail(request.Mail, "Email Verification", emailBody); err != nil {
 		return NewHttpError(http.StatusInternalServerError, fmt.Errorf("error sending verification email: %w", err))
@@ -487,25 +488,26 @@ func createHttpHandler(fn apiFunc) http.HandlerFunc {
 	}
 }
 
-func NewApiServer(listenAddr string, userService UserService, subjectService SubjectService, emailService EmailService, instanceService InstanceService) *ApiServer {
+func NewApiServer(listenAddr string, userService UserService, subjectService SubjectService, emailService EmailService, instanceService InstanceService, frontendUrl string) *ApiServer {
 	return &ApiServer{
 		listenAddr:      listenAddr,
 		userService:     userService,
 		subjectService:  subjectService,
 		emailService:    emailService,
 		instanceService: instanceService,
+		frontendUrl:     frontendUrl,
 	}
 }
 
-func enableCors(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+func (server *ApiServer) enableCors(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", server.frontendUrl)
 	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 }
 
-func corsMiddleware(next http.Handler) http.Handler {
+func (server *ApiServer) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		enableCors(w)
+		server.enableCors(w)
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -547,5 +549,5 @@ func (server *ApiServer) Run() {
 
 	log.Println("Starting server on port", server.listenAddr)
 
-	http.ListenAndServe(server.listenAddr, corsMiddleware(mux))
+	http.ListenAndServe(server.listenAddr, server.corsMiddleware(mux))
 }

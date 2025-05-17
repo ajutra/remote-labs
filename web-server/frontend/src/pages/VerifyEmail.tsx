@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-
+import { getEnv } from '@/utils/Env' 
 const VerifyEmail: React.FC = () => {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -27,7 +27,7 @@ const VerifyEmail: React.FC = () => {
         await new Promise((resolve) => setTimeout(resolve, 1000))
 
         const response = await fetch(
-          `http://localhost:8080/verify-email/${token}`,
+          `${getEnv().API_VERIFY_EMAIL.replace('{token}', token)}`,
           {
             method: 'GET',
             headers: {
