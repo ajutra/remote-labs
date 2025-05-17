@@ -162,13 +162,20 @@ func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendReque
 	}
 	log.Printf("Generated WireGuard key pair: PrivateKey: %s, PublicKey: %s", wgPrivateKey, wgPublicKey)
 
+	// Hash password
+	hashedPassword, err := HashPassword(request.Password)
+	if err != nil {
+		log.Printf("Error hashing password: %v", err)
+		return CreateInstanceFrontendResponse{}, fmt.Errorf("error hashing password: %w", err)
+	}
+
 	createInstanceRequest := CreateInstanceRequest{
 		SourceVmId:    request.SourceVmId,
 		SizeMB:        templateConfig.SizeMB,
 		VcpuCount:     templateConfig.VcpuCount,
 		VramMB:        templateConfig.VramMB,
 		Username:      request.Username,
-		Password:      request.Password,
+		Password:      hashedPassword,
 		PublicSshKeys: request.PublicSshKeys,
 		SubjectId:     request.SubjectId,
 		UserWgPubKey:  wgPublicKey,
