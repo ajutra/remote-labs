@@ -36,6 +36,15 @@ type VerifyEmailRequest struct {
 	Mail string `json:"mail"`
 }
 
+type ForgotPasswordRequest struct {
+	Email string `json:"email"`
+}
+
+type ResetPasswordRequest struct {
+	Token    string `json:"token"`
+	Password string `json:"password"`
+}
+
 func (server *ApiServer) handleCreateUser(w http.ResponseWriter, r *http.Request) error {
 	var request CreateUserRequest
 
@@ -468,6 +477,62 @@ func (server *ApiServer) handleWireguard(w http.ResponseWriter, r *http.Request)
 	return writeResponse(w, http.StatusOK, wireguardConfig)
 }
 
+func (server *ApiServer) handleForgotPassword(w http.ResponseWriter, r *http.Request) error {
+	var req ForgotPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+	}
+
+	// Check if user exists
+	if err := server.userService.UserExistsByEmail(req.Email); err != nil {
+		// Don't reveal if the email exists or not
+		return writeResponse(w, http.StatusOK, nil)
+	}
+
+	// Generate a new token
+	token := uuid.New()
+
+	// Store the token in the database
+	if err := server.userService.CreatePasswordResetToken(req.Email, token); err != nil {
+		return NewHttpError(http.StatusInternalServerError, fmt.Errorf("failed to create reset token: %w", err))
+	}
+
+	// Send email with reset link
+	resetLink := fmt.Sprintf("%s/reset-password?token=%s", server.frontendUrl, token.String())
+	emailBody := fmt.Sprintf("Click the following link to reset your password: %s\n\nThis link will expire in 24 hours.", resetLink)
+	if err := server.emailService.SendEmail(req.Email, "Password Reset", emailBody); err != nil {
+		return NewHttpError(http.StatusInternalServerError, fmt.Errorf("failed to send reset email: %w", err))
+	}
+
+	return writeResponse(w, http.StatusOK, "Reset email sent successfully")
+}
+
+func (server *ApiServer) handleResetPassword(w http.ResponseWriter, r *http.Request) error {
+	var req ResetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+	}
+
+	// Validate token and get user ID
+	userId, err := server.userService.ValidatePasswordResetToken(req.Token)
+	if err != nil {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("invalid or expired token: %w", err))
+	}
+
+	// Hash the new password
+	hashedPassword, err := HashPassword(req.Password)
+	if err != nil {
+		return NewHttpError(http.StatusInternalServerError, fmt.Errorf("failed to hash password: %w", err))
+	}
+
+	// Update the password
+	if err := server.userService.UpdatePassword(userId, hashedPassword); err != nil {
+		return NewHttpError(http.StatusInternalServerError, fmt.Errorf("failed to update password: %w", err))
+	}
+
+	return writeResponse(w, http.StatusOK, "Password reset successfully")
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -546,6 +611,8 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("GET /templates/subjects/{subjectId}", createHttpHandler(server.handleGetTemplatesBySubjectId))
 	mux.HandleFunc("GET /instances/status/{userId}", createHttpHandler(server.handleGetInstanceStatusByUserId))
 	mux.HandleFunc("GET /instances/wireguard/{instanceId}", createHttpHandler(server.handleWireguard))
+	mux.HandleFunc("POST /auth/forgot-password", createHttpHandler(server.handleForgotPassword))
+	mux.HandleFunc("POST /auth/reset-password", createHttpHandler(server.handleResetPassword))
 
 	log.Println("Starting server on port", server.listenAddr)
 

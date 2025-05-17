@@ -16,6 +16,7 @@ import VerifyEmail from './pages/VerifyEmail'
 import { Layout } from '@/pages/Layout'
 import UserSettings from './pages/UserSettings'
 import { LoadingProvider } from '@/context/LoadingContext'
+import ResetPassword from './pages/ResetPassword'
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const isAdmin = useIsAdmin()
@@ -32,6 +33,7 @@ const App: React.FC = () => {
               <Routes>
                 <Route path={AppRoutes.LOGIN} element={<LoginPage />} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path={AppRoutes.RESET_PASSWORD} element={<ResetPassword />} />
                 <Route
                   path="*"
                   element={

@@ -5,4 +5,5 @@ export enum AppRoutes {
   MYLABS = '/mylabs',
   CONTROL_PLANE = '/control-plane',
   USER_SETTINGS = '/user-settings',
+  RESET_PASSWORD = '/reset-password',
 }

@@ -19,6 +19,10 @@ type UserService interface {
 	VerifyUser(token string) error
 	UpdateVerificationToken(email string, token uuid.UUID) error
 	UpdateUser(request UpdateUserRequest) error
+	UserExistsByEmail(email string) error
+	CreatePasswordResetToken(email string, token uuid.UUID) error
+	ValidatePasswordResetToken(token string) (string, error)
+	UpdatePassword(userId string, password string) error
 }
 
 type UserServiceImpl struct {
@@ -170,4 +174,20 @@ func (s *UserServiceImpl) UpdateUser(request UpdateUserRequest) error {
 	}
 
 	return s.db.UpdateUser(request.UserId, request.Password, request.PublicSshKeys)
+}
+
+func (s *UserServiceImpl) UserExistsByEmail(email string) error {
+	return s.db.UserExistsByEmailorError(email)
+}
+
+func (s *UserServiceImpl) CreatePasswordResetToken(email string, token uuid.UUID) error {
+	return s.db.CreatePasswordResetToken(email, token)
+}
+
+func (s *UserServiceImpl) ValidatePasswordResetToken(token string) (string, error) {
+	return s.db.ValidatePasswordResetToken(token)
+}
+
+func (s *UserServiceImpl) UpdatePassword(userId string, password string) error {
+	return s.db.UpdatePassword(userId, password)
 }

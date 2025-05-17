@@ -49,6 +49,9 @@ type Database interface {
 	GetTemplatesBySubjectId(subjectId string) ([]TemplateDb, error)
 	GetSubjectById(subjectId string) (Subject, error)
 	GetWireguardConfig(instanceId string) (wireguardConfig, error)
+	CreatePasswordResetToken(email string, token uuid.UUID) error
+	ValidatePasswordResetToken(token string) (string, error)
+	UpdatePassword(userId string, password string) error
 }
 
 type PostgresDatabase struct {
@@ -913,7 +916,9 @@ func getDDLStatements() string {
 			name VARCHAR(100) NOT NULL,
 			mail VARCHAR(100) NOT NULL UNIQUE,
 			password VARCHAR(100) NOT NULL,
-			public_ssh_keys TEXT[] DEFAULT NULL
+			public_ssh_keys TEXT[] DEFAULT NULL,
+			password_reset_token UUID,
+			password_reset_token_created_at TIMESTAMP
 		);
 
 		CREATE TABLE IF NOT EXISTS unverified_users (
@@ -1034,4 +1039,65 @@ func (postgres *PostgresDatabase) GetInstanceInfo(instanceId string) (InstanceIn
 	}
 
 	return info, nil
+}
+
+func (postgres *PostgresDatabase) CreatePasswordResetToken(email string, token uuid.UUID) error {
+	query := `
+	UPDATE users
+	SET password_reset_token = @token,
+		password_reset_token_created_at = NOW()
+	WHERE mail = @email`
+	args := pgx.NamedArgs{
+		"token": token,
+		"email": email,
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error creating password reset token: %w", err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) ValidatePasswordResetToken(token string) (string, error) {
+	query := `
+	SELECT id
+	FROM users
+	WHERE password_reset_token = @token
+	AND password_reset_token_created_at > NOW() - INTERVAL '24 hours'`
+	args := pgx.NamedArgs{
+		"token": token,
+	}
+
+	var userId string
+	err := postgres.db.QueryRow(context.Background(), query, args).Scan(&userId)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return "", fmt.Errorf("invalid or expired token")
+		}
+		return "", fmt.Errorf("error validating password reset token: %w", err)
+	}
+
+	return userId, nil
+}
+
+func (postgres *PostgresDatabase) UpdatePassword(userId string, password string) error {
+	query := `
+	UPDATE users
+	SET password = @password,
+		password_reset_token = NULL,
+		password_reset_token_created_at = NULL
+	WHERE id = @userId`
+	args := pgx.NamedArgs{
+		"password": password,
+		"userId":   userId,
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error updating password: %w", err)
+	}
+
+	return nil
 }
