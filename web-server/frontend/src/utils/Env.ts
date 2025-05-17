@@ -23,7 +23,7 @@ export const getEnv = () => {
     API_GET_WIREGUARD: `${API_BASE_URL}/instances/wireguard/{instanceId}`,
     API_DELETE_TEMPLATE: `${API_BASE_URL}/templates/delete/{templateId}/{subjectId}`,
     API_GET_SUBJECTS: `${API_BASE_URL}/subjects`,
-      
+    API_VERIFY_EMAIL: `${API_BASE_URL}/verify-email/{token}`,
     __vite__: otherViteConfig,
   }
 }
