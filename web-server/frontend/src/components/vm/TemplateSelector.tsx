@@ -79,6 +79,9 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
           <RequestLabButton
             subjectId={subjectId}
             templateId={selectedTemplate}
+            vcpuCount={templates.find(t => t.id === selectedTemplate)?.vcpuCount ?? 0}
+            vramMB={templates.find(t => t.id === selectedTemplate)?.vramMB ?? 0}
+            sizeMB={templates.find(t => t.id === selectedTemplate)?.sizeMB ?? 0}
             onSuccess={onRequestSuccess}
           />
         )}

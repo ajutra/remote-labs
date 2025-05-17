@@ -19,7 +19,7 @@ export const useSubjectVMs = (subjectId: string) => {
     setLoading(true)
     try {
       const response = await fetch(
-        `${getEnv().API_GET_INSTANCE_STATUS}/${user.id}`
+        getEnv().API_GET_INSTANCE_STATUS.replace('{userId}', user.id)
       )
       if (!response.ok) {
         throw new Error('Failed to fetch VMs')

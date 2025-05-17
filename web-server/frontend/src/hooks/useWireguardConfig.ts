@@ -6,7 +6,24 @@ export const useWireguardConfig = () => {
   const [isLoading, setIsLoading] = useState(false)
 
   const formatConfig = (rawConfig: string): string => {
-    return rawConfig.replace(/^"|"$/g, '').replace(/\\n/g, '\n')
+    // Remove first and last character (quotes) and escape sequences
+    let formatted = rawConfig.slice(1, -1).replace(/\\n/g, '\n')
+    
+    // Fix AllowedIPs format
+    formatted = formatted.replace(/AllowedIPs = (.*?)(?=\n|$)/g, (match, ips) => {
+      console.log('Original IPs:', ips)
+      // Split by spaces and filter out empty strings
+      const ipList = ips.split(/\s+/).filter(Boolean)
+      console.log('IP List:', ipList)
+      const result = `AllowedIPs = ${ipList.join(', ')}`
+      console.log('Result:', result)
+      return result
+    })
+
+    // Remove any trailing quote that might be left
+    formatted = formatted.replace(/"$/, '')
+
+    return formatted
   }
 
   const getConfig = async (instanceId: string) => {
@@ -25,7 +42,9 @@ export const useWireguardConfig = () => {
         throw new Error('Failed to fetch Wireguard configuration')
       }
       const rawConfig = await response.text()
+      console.log('Raw config:', rawConfig)
       const formattedConfig = formatConfig(rawConfig)
+      console.log('Formatted config:', formattedConfig)
       setConfig(formattedConfig)
     } catch (error) {
       console.error('Failed to fetch Wireguard configuration:', error)

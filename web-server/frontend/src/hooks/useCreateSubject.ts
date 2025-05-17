@@ -349,8 +349,6 @@ const useCreateSubject = (onSuccess: () => void) => {
         )
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 15000))
-
       console.log('[useCreateSubject] Subject creation completed successfully')
       onSuccess()
     } catch (error) {
