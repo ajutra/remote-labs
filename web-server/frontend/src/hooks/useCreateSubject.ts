@@ -64,6 +64,7 @@ const useCreateSubject = (onSuccess: () => void) => {
   const [creationError, setCreationError] = useState<string | null>(null)
   const [bases, setBases] = useState<Base[]>([])
   const [isLoadingBases, setIsLoadingBases] = useState(true)
+  const [basesError, setBasesError] = useState<string | null>(null)
   const [enrollmentErrors, setEnrollmentErrors] = useState<EnrollmentError[]>(
     []
   )
@@ -87,14 +88,28 @@ const useCreateSubject = (onSuccess: () => void) => {
             '[useCreateSubject] Successfully parsed bases data:',
             data
           )
+          if (data.error) {
+            console.error('[useCreateSubject] Error in response:', data.error)
+            setBasesError(data.error)
+            setBases([])
+            return
+          }
+          if (!Array.isArray(data)) {
+            console.error('[useCreateSubject] Response is not an array:', data)
+            setBasesError('Invalid response format from server')
+            setBases([])
+            return
+          }
+          setBases(data)
+          setBasesError(null)
         } catch (jsonErr) {
           console.error('[useCreateSubject] Error parsing JSON:', jsonErr)
+          setBasesError('Error parsing server response')
           setBases([])
-          return
         }
-        setBases(data)
       } catch (error) {
         console.error('[useCreateSubject] Error fetching bases:', error)
+        setBasesError('Failed to fetch bases from server')
         setBases([])
       } finally {
         setIsLoadingBases(false)
@@ -368,6 +383,7 @@ const useCreateSubject = (onSuccess: () => void) => {
   return {
     bases,
     isLoadingBases,
+    basesError,
     isCreating,
     creationError,
     enrollmentErrors,

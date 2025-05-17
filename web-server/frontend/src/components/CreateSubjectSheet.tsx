@@ -79,6 +79,7 @@ const CreateSubjectSheet: React.FC = () => {
   const {
     bases,
     isLoadingBases,
+    basesError,
     isCreating,
     creationError,
     handleCreateSubject,
@@ -349,37 +350,44 @@ const CreateSubjectSheet: React.FC = () => {
                   Virtual Machine Configuration
                 </h3>
 
-                <div className="mb-4">
+                <div className="space-y-2">
                   <Label htmlFor="base">Base</Label>
-                  <Select value={base} onValueChange={setBase} required>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select Base" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {isLoadingBases ? (
-                        <SelectItem value="loading" disabled>
-                          Loading operating systems...
-                        </SelectItem>
-                      ) : bases.length === 0 ? (
-                        <SelectItem value="no-bases" disabled>
-                          No operating systems available
-                        </SelectItem>
-                      ) : (
-                        bases.map((b) => (
-                          <SelectItem key={b.baseId} value={b.baseId}>
-                            {b.description}
+                  {basesError ? (
+                    <div className="flex items-center gap-2 text-destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <p className="text-sm">
+                        {basesError.includes('connection refused')
+                          ? 'The VM manager service is currently unavailable. Please try again later.'
+                          : basesError}
+                      </p>
+                    </div>
+                  ) : isLoadingBases ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <p className="text-sm">Loading bases...</p>
+                    </div>
+                  ) : (
+                    <Select
+                      value={base}
+                      onValueChange={(value) => {
+                        setBase(value)
+                        setBaseError('')
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a base" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {bases.map((base) => (
+                          <SelectItem key={base.baseId} value={base.baseId}>
+                            {base.description}
                           </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  {baseError && (
-                    <p className="mt-1 text-sm text-red-500">{baseError}</p>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
-                  {bases.length === 0 && !isLoadingBases && (
-                    <p className="mt-1 text-sm text-red-500">
-                      Please ensure the server is running and try again
-                    </p>
+                  {baseError && (
+                    <p className="text-sm text-destructive">{baseError}</p>
                   )}
                 </div>
 
