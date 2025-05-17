@@ -28,6 +28,8 @@ type RouterOSService interface {
 	RemoveIPAddress(addr, iface string) error
 	AddFirewallFilter(action, chain, comment string, params map[string]string) error
 	RemoveFirewallFilter(filters map[string]string) error
+	AddRoutingTable(name string) error
+	RemoveRoutingTable(name string) error
 	AddRoute(dst, gateway, table string) error
 	RemoveRoute(dst, gateway, table string) error
 	GetWireguardPublicKey(name string) (string, error)
@@ -114,9 +116,11 @@ func (s *RouterOSServiceImpl) AddWireguard(comment string, listenPort, mtu int, 
 		return err
 	}
 
-	if err := s.addComment("/interface/wireguard", comment, "name="+name); err != nil {
-		return err
-	}
+	/*
+		if err := s.addComment("/interface/wireguard", comment, "name="+name); err != nil {
+			return err
+		}
+	*/
 
 	return nil
 }
@@ -137,10 +141,11 @@ func (s *RouterOSServiceImpl) AddVlan(comment string, iface, name string, vlanID
 		return err
 	}
 
-	if err := s.addComment("/interface/vlan", comment, "name="+name); err != nil {
-		return err
-	}
-
+	/*
+		if err := s.addComment("/interface/vlan", comment, "name="+name); err != nil {
+			return err
+		}
+	*/
 	return nil
 }
 
@@ -169,10 +174,11 @@ func (s *RouterOSServiceImpl) AddVrf(comment string, name string, ifaces ...stri
 		return err
 	}
 
-	if err := s.addComment("/ip/vrf", comment, "name="+name); err != nil {
-		return err
-	}
-
+	/*
+		if err := s.addComment("/ip/vrf", comment, "name="+name); err != nil {
+			return err
+		}
+	*/
 	return nil
 }
 
@@ -192,10 +198,11 @@ func (s *RouterOSServiceImpl) AddBridgeVlan(bridge, comment string, vlanID int, 
 		return err
 	}
 
-	if err := s.addComment("/interface/bridge/vlan", comment, "vlan-ids="+strconv.Itoa(vlanID)); err != nil {
-		return err
-	}
-
+	/*
+		if err := s.addComment("/interface/bridge/vlan", comment, "vlan-ids="+strconv.Itoa(vlanID)); err != nil {
+			return err
+		}
+	*/
 	return nil
 }
 
@@ -218,15 +225,16 @@ func (s *RouterOSServiceImpl) AddListMember(comment, iface, list string) error {
 		return err
 	}
 
-	if err := s.addComment(
-		"/interface/list/member",
-		comment,
-		"list="+list,
-		"interface="+iface,
-	); err != nil {
-		return err
-	}
-
+	/*
+		if err := s.addComment(
+			"/interface/list/member",
+			comment,
+			"list="+list,
+			"interface="+iface,
+		); err != nil {
+			return err
+		}
+	*/
 	return nil
 }
 
@@ -251,10 +259,11 @@ func (s *RouterOSServiceImpl) AddWireguardPeer(comment, iface, name, pubKey stri
 		return err
 	}
 
-	if err := s.addComment("/interface/wireguard/peers", comment, "name="+name); err != nil {
-		return err
-	}
-
+	/*
+		if err := s.addComment("/interface/wireguard/peers", comment, "name="+name); err != nil {
+				return err
+			}
+	*/
 	return nil
 }
 
@@ -273,9 +282,11 @@ func (s *RouterOSServiceImpl) AddIPAddress(addr, comment, iface string) error {
 		return err
 	}
 
-	if err := s.addComment("/ip/address", comment, "interface="+iface, "address="+addr); err != nil {
-		return err
-	}
+	/*
+		if err := s.addComment("/ip/address", comment, "interface="+iface, "address="+addr); err != nil {
+			return err
+		}
+	*/
 	return nil
 }
 
@@ -306,9 +317,11 @@ func (s *RouterOSServiceImpl) AddFirewallFilter(action, chain, comment string, p
 		filter = append(filter, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	if err := s.addComment("/ip/firewall/filter", comment, filter...); err != nil {
-		return err
-	}
+	/*
+		if err := s.addComment("/ip/firewall/filter", comment, filter...); err != nil {
+			return err
+		}
+	*/
 	return nil
 }
 
@@ -320,6 +333,19 @@ func (s *RouterOSServiceImpl) RemoveFirewallFilter(filters map[string]string) er
 	return s.removeByFilter("/ip/firewall/filter", parts...)
 }
 
+func (s *RouterOSServiceImpl) AddRoutingTable(name string) error {
+	_, err := s.client.RunArgs([]string{
+		"/routing/table/add",
+		fmt.Sprintf("=name=%s", name),
+	})
+
+	return err
+}
+
+func (s *RouterOSServiceImpl) RemoveRoutingTable(name string) error {
+	return s.removeByFilter("/routing/table", "name="+name)
+}
+
 func (s *RouterOSServiceImpl) AddRoute(dst, gateway, table string) error {
 	_, err := s.client.RunArgs([]string{
 		"/ip/route/add",
@@ -327,6 +353,7 @@ func (s *RouterOSServiceImpl) AddRoute(dst, gateway, table string) error {
 		fmt.Sprintf("=gateway=%s", gateway),
 		fmt.Sprintf("=routing-table=%s", table),
 	})
+
 	return err
 }
 
