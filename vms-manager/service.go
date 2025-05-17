@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -26,7 +27,7 @@ const SUBNET_MASK = 24
 const INTERFACE_ADDRESS_SECOND_OCTET = 1
 const INTERFACE_ADDRESS_SUBNET_MASK = 32
 const MAX_CPU_USAGE = 0.9
-const MIN_AVAILABLE_RAM_MB = 1024
+const MIN_AVAILABLE_RAM_MB = 256
 const CPU_USAGE_PENALTY_FACTOR = 10240 // 10240 MB of RAM for 100% of CPU Load, adjust this value to change the penalty for high CPU usage
 const VLAN_TO_ROUTER_PORT_OFFSET = 20000
 
@@ -742,7 +743,8 @@ func (s *ServiceImpl) ListInstancesStatus() ([]ListInstancesStatusResponse, erro
 
 func (s *ServiceImpl) selectServerAgent() (string, error) {
 	var selectedAgent string
-	var bestScore float64
+
+	bestScore := float64(math.Inf(-1))
 
 	for _, agentUrl := range s.serverAgentsURLs {
 		if err := s.checkIfServerAgentIsAlive(agentUrl); err != nil {
@@ -1363,6 +1365,10 @@ func (s *ServiceImpl) applyRouterVlanConfig(vlan int) error {
 		return err
 	}
 
+	if err := s.routerosService.AddRoutingTable(fmt.Sprintf("vrf%d", vlan)); err != nil {
+		return err
+	}
+
 	if err := s.routerosService.AddRoute(
 		getVlanNetworkIpWithSubnet(vlan),
 		fmt.Sprintf("vlan%d@vrf%d", vlan, vlan),
@@ -1385,39 +1391,58 @@ func (s *ServiceImpl) applyRouterVlanConfig(vlan int) error {
 func (s *ServiceImpl) removeRouterVlanConfig(vlan int) {
 	listenPort := getVlanRouterPort(vlan)
 
-	if err := s.routerosService.RemoveWireguard(fmt.Sprintf("wireguard%d", vlan)); err != nil {
-		log.Println("Error removing wireguard: ", err.Error())
-	}
-	if err := s.routerosService.RemoveVlan(fmt.Sprintf("vlan%d", vlan)); err != nil {
-		log.Println("Error removing vlan: ", err.Error())
-	}
-	if err := s.routerosService.RemoveInterfaceList(fmt.Sprintf("VRF%d", vlan)); err != nil {
-		log.Println("Error removing interface list: ", err.Error())
-	}
-	if err := s.routerosService.RemoveVrf(fmt.Sprintf("vrf%d", vlan)); err != nil {
-		log.Println("Error removing vrf: ", err.Error())
-	}
-	if err := s.routerosService.RemoveBridgeVlan(s.routerosVlanBridge, vlan); err != nil {
-		log.Println("Error removing bridge vlan: ", err.Error())
-	}
-	if err := s.routerosService.RemoveListMember(fmt.Sprintf("VRF%d", vlan), fmt.Sprintf("vlan%d", vlan)); err != nil {
-		log.Println("Error removing list member: ", err.Error())
-	}
-	if err := s.routerosService.RemoveListMember(fmt.Sprintf("VRF%d", vlan), fmt.Sprintf("wireguard%d", vlan)); err != nil {
-		log.Println("Error removing list member: ", err.Error())
-	}
-	if err := s.routerosService.RemoveIPAddress(
-		fmt.Sprintf("%s/%d", getVlanGatewayIp(vlan), SUBNET_MASK),
-		fmt.Sprintf("vlan%d", vlan),
+	if err := s.routerosService.RemoveRoute(
+		"0.0.0.0/0",
+		s.routerosExternalGateway,
+		fmt.Sprintf("vrf%d", vlan),
 	); err != nil {
-		log.Println("Error removing ip address: ", err.Error())
+		log.Println("Error removing route: ", err.Error())
+	} else {
+		log.Println("Route removed for vlan: ", vlan)
 	}
-	if err := s.routerosService.RemoveIPAddress(
-		fmt.Sprintf("%s/%d", getVpnGatewayIp(vlan), SUBNET_MASK),
-		fmt.Sprintf("wireguard%d", vlan),
+
+	if err := s.routerosService.RemoveRoute(
+		getVlanNetworkIpWithSubnet(vlan),
+		fmt.Sprintf("vlan%d@vrf%d", vlan, vlan),
+		"main",
 	); err != nil {
-		log.Println("Error removing ip address: ", err.Error())
+		log.Println("Error removing route: ", err.Error())
+	} else {
+		log.Println("Route removed for vlan: ", vlan)
 	}
+
+	if err := s.routerosService.RemoveRoutingTable(fmt.Sprintf("vrf%d", vlan)); err != nil {
+		log.Println("Error removing routing table: ", err.Error())
+	} else {
+		log.Println("Routing table removed for vlan: ", vlan)
+	}
+
+	if err := s.routerosService.RemoveFirewallFilter(
+		map[string]string{
+			"action":             "accept",
+			"chain":              "forward",
+			"in-interface-list":  fmt.Sprintf("VRF%d", vlan),
+			"out-interface-list": fmt.Sprintf("VRF%d", vlan),
+		},
+	); err != nil {
+		log.Println("Error removing firewall filter: ", err.Error())
+	} else {
+		log.Println("Firewall filter removed for vlan: ", vlan)
+	}
+
+	if err := s.routerosService.RemoveFirewallFilter(
+		map[string]string{
+			"action":             "accept",
+			"chain":              "forward",
+			"in-interface-list":  fmt.Sprintf("VRF%d", vlan),
+			"out-interface-list": "WAN",
+		},
+	); err != nil {
+		log.Println("Error removing firewall filter: ", err.Error())
+	} else {
+		log.Println("Firewall filter removed for vlan: ", vlan)
+	}
+
 	if err := s.routerosService.RemoveFirewallFilter(
 		map[string]string{
 			"action":            "accept",
@@ -1428,40 +1453,68 @@ func (s *ServiceImpl) removeRouterVlanConfig(vlan int) {
 		},
 	); err != nil {
 		log.Println("Error removing firewall filter: ", err.Error())
+	} else {
+		log.Println("Firewall filter removed for vlan: ", vlan)
 	}
-	if err := s.routerosService.RemoveFirewallFilter(
-		map[string]string{
-			"action":             "accept",
-			"chain":              "forward",
-			"in-interface-list":  fmt.Sprintf("VRF%d", vlan),
-			"out-interface-list": "WAN",
-		},
+
+	if err := s.routerosService.RemoveIPAddress(
+		fmt.Sprintf("%s/%d", getVpnGatewayIp(vlan), SUBNET_MASK),
+		fmt.Sprintf("wireguard%d", vlan),
 	); err != nil {
-		log.Println("Error removing firewall filter: ", err.Error())
+		log.Println("Error removing ip address: ", err.Error())
+	} else {
+		log.Println("IP address removed for vlan: ", vlan)
 	}
-	if err := s.routerosService.RemoveFirewallFilter(
-		map[string]string{
-			"action":             "accept",
-			"chain":              "forward",
-			"in-interface-list":  fmt.Sprintf("VRF%d", vlan),
-			"out-interface-list": fmt.Sprintf("VRF%d", vlan),
-		},
+
+	if err := s.routerosService.RemoveIPAddress(
+		fmt.Sprintf("%s/%d", getVlanGatewayIp(vlan), SUBNET_MASK),
+		fmt.Sprintf("vlan%d", vlan),
 	); err != nil {
-		log.Println("Error removing firewall filter: ", err.Error())
+		log.Println("Error removing ip address: ", err.Error())
+	} else {
+		log.Println("IP address removed for vlan: ", vlan)
 	}
-	if err := s.routerosService.RemoveRoute(
-		getVlanNetworkIpWithSubnet(vlan),
-		fmt.Sprintf("vlan%d@vrf%d", vlan, vlan),
-		"main",
-	); err != nil {
-		log.Println("Error removing route: ", err.Error())
+
+	if err := s.routerosService.RemoveListMember(fmt.Sprintf("VRF%d", vlan), fmt.Sprintf("wireguard%d", vlan)); err != nil {
+		log.Println("Error removing list member: ", err.Error())
+	} else {
+		log.Println("List member removed for vlan: ", vlan)
 	}
-	if err := s.routerosService.RemoveRoute(
-		"0.0.0.0/0",
-		s.routerosExternalGateway,
-		fmt.Sprintf("vrf%d", vlan),
-	); err != nil {
-		log.Println("Error removing route: ", err.Error())
+
+	if err := s.routerosService.RemoveListMember(fmt.Sprintf("VRF%d", vlan), fmt.Sprintf("vlan%d", vlan)); err != nil {
+		log.Println("Error removing list member: ", err.Error())
+	} else {
+		log.Println("List member removed for vlan: ", vlan)
+	}
+
+	if err := s.routerosService.RemoveBridgeVlan(s.routerosVlanBridge, vlan); err != nil {
+		log.Println("Error removing bridge vlan: ", err.Error())
+	} else {
+		log.Println("Bridge vlan removed for vlan: ", vlan)
+	}
+
+	if err := s.routerosService.RemoveVrf(fmt.Sprintf("vrf%d", vlan)); err != nil {
+		log.Println("Error removing vrf: ", err.Error())
+	} else {
+		log.Println("VRF removed for vlan: ", vlan)
+	}
+
+	if err := s.routerosService.RemoveInterfaceList(fmt.Sprintf("VRF%d", vlan)); err != nil {
+		log.Println("Error removing interface list: ", err.Error())
+	} else {
+		log.Println("Interface list removed for vlan: ", vlan)
+	}
+
+	if err := s.routerosService.RemoveVlan(fmt.Sprintf("VLAN%d", vlan)); err != nil {
+		log.Println("Error removing vlan: ", err.Error())
+	} else {
+		log.Println("Vlan removed for vlan: ", vlan)
+	}
+
+	if err := s.routerosService.RemoveWireguard(fmt.Sprintf("wireguard%d", vlan)); err != nil {
+		log.Println("Error removing wireguard: ", err.Error())
+	} else {
+		log.Println("Wireguard removed for vlan: ", vlan)
 	}
 }
 
