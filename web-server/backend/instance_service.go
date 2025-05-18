@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/curve25519"
@@ -654,8 +655,10 @@ func (s *InstanceServiceImpl) GetWireguardConfig(instanceId string) (string, err
 		return "", fmt.Errorf("error getting WireGuard config: %w", err)
 	}
 	var endpoint = "vpn.nethermir.cloud"
+	// Join the AllowedIPs with commas and spaces
+	allowedIPs := strings.Join(conf.PeerAllowedIps, ", ")
 	wgConfig := fmt.Sprintf("[Interface]\nPrivateKey = %s\nAddress = %s\n\n[Peer]\nPublicKey = %s\nAllowedIPs = %s\nEndpoint = %s:%d",
-		conf.PrivateKey, conf.InterfaceIp, conf.PublicKey, conf.PeerAllowedIps, endpoint, conf.PeerPort)
+		conf.PrivateKey, conf.InterfaceIp, conf.PublicKey, allowedIPs, endpoint, conf.PeerPort)
 	return wgConfig, nil
 }
 
