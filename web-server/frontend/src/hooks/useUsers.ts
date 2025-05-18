@@ -42,9 +42,29 @@ export function useUsers() {
     }
   }
 
+  const deleteUser = async (userId: string): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const apiUrl = getEnv().API_BASE_URL
+      const response = await fetch(`${apiUrl}/users/delete/${userId}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) {
+        const errorText = await response.text()
+        return { ok: false, error: errorText || 'Failed to delete user' }
+      }
+      await fetchUsers()
+      return { ok: true }
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      }
+    }
+  }
+
   useEffect(() => {
     fetchUsers()
   }, [])
 
-  return { users, loading, error, refresh: fetchUsers }
+  return { users, loading, error, refresh: fetchUsers, deleteUser }
 } 

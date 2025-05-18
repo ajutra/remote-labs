@@ -12,7 +12,7 @@ export function useUserInstances(userId: string) {
     setError(null)
     try {
       const apiUrl = getEnv().API_BASE_URL
-      const response = await fetch(`${apiUrl}/users/${userId}/instances`)
+      const response = await fetch(`${apiUrl}/instances/status/${userId}`)
       if (!response.ok) {
         throw new Error('Failed to fetch user instances')
       }
