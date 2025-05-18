@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"text/template"
 	"time"
 )
@@ -337,14 +338,22 @@ func (agent *ServerAgentImpl) GetResourceStatus() (GetResourceStatusResponse, er
 		return GetResourceStatusResponse{}, err
 	}
 
-	freeMemoryMB, err := getFreeMemory()
+	totalMemoryMB, freeMemoryMB, err := getMemoryInfo()
+	if err != nil {
+		return GetResourceStatusResponse{}, err
+	}
+
+	totalDiskMB, freeDiskMB, err := getDiskInfo()
 	if err != nil {
 		return GetResourceStatusResponse{}, err
 	}
 
 	return GetResourceStatusResponse{
-		CpuLoad:      cpuLoad,
-		FreeMemoryMB: freeMemoryMB,
+		CpuLoad:       cpuLoad,
+		TotalMemoryMB: totalMemoryMB,
+		FreeMemoryMB:  freeMemoryMB,
+		TotalDiskMB:   totalDiskMB,
+		FreeDiskMB:    freeDiskMB,
 	}, nil
 }
 
@@ -714,10 +723,13 @@ func getCpuLoad() (float64, error) {
 	return cpuLoad, nil
 }
 
-func getFreeMemory() (int, error) {
+func getMemoryInfo() (totalMemoryMB int, freeMemoryMB int, err error) {
+	totalMemoryMB = -1
+	freeMemoryMB = -1
+
 	file, err := os.Open("/proc/meminfo")
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	defer file.Close()
 
@@ -738,11 +750,35 @@ func getFreeMemory() (int, error) {
 
 		if key == "MemFree" {
 			// Return in MB
-			return value / 1024, nil
+			freeMemoryMB = value / 1024
+		} else if key == "MemTotal" {
+			totalMemoryMB = value / 1024
 		}
 	}
 
-	return 0, logAndReturnError("MemFree not found", "")
+	if totalMemoryMB == -1 || freeMemoryMB == -1 {
+		return 0, 0, logAndReturnError("MemFree or MemTotal not found", "")
+	}
+
+	return totalMemoryMB, freeMemoryMB, nil
+}
+
+func getDiskInfo() (totalDiskMB int, freeDiskMB int, err error) {
+	var stat syscall.Statfs_t
+
+	if err = syscall.Statfs("/", &stat); err != nil {
+		return
+	}
+
+	// Blocks * size-per-block = bytes
+	total := stat.Blocks * uint64(stat.Bsize)
+	free := stat.Bavail * uint64(stat.Bsize)
+
+	// Convert to MB
+	totalDiskMB = int(total / (1024 * 1024))
+	freeDiskMB = int(free / (1024 * 1024))
+
+	return totalDiskMB, freeDiskMB, nil
 }
 
 func NewServerAgent(
