@@ -26,7 +26,7 @@ const SUBNET_MASK = 24
 const INTERFACE_ADDRESS_SECOND_OCTET = 1
 const INTERFACE_ADDRESS_SUBNET_MASK = 32
 const MAX_CPU_USAGE = 0.9
-const MIN_AVAILABLE_RAM_MB = 256
+const MIN_AVAILABLE_RAM_MB = 128
 const CPU_USAGE_PENALTY_FACTOR = 10240 // 10240 MB of RAM for 100% of CPU Load, adjust this value to change the penalty for high CPU usage
 const VLAN_TO_ROUTER_PORT_OFFSET = 20000
 
@@ -40,6 +40,7 @@ type Service interface {
 	StopInstance(instanceId string) error
 	RestartInstance(instanceId string) error
 	ListInstancesStatus() ([]ListInstancesStatusResponse, error)
+	ListServersStatus() ([]ListServersStatusResponse, error)
 }
 
 type ServiceImpl struct {
@@ -742,6 +743,48 @@ func (s *ServiceImpl) ListInstancesStatus() ([]ListInstancesStatusResponse, erro
 	return globalStatuses, nil
 }
 
+func (s *ServiceImpl) ListServersStatus() ([]ListServersStatusResponse, error) {
+	var serversStatus []ListServersStatusResponse
+
+	for _, agentUrl := range s.serverAgentsURLs {
+		if err := s.checkIfServerAgentIsAlive(agentUrl); err != nil {
+			continue
+		}
+
+		resourceStatus, err := s.getResourceStatus(agentUrl)
+		if err != nil {
+			continue
+		}
+
+		serverStatus := ListServersStatusResponse{
+			ServerIP:      agentUrl,
+			CpuLoad:       resourceStatus.CpuLoad,
+			TotalMemoryMB: resourceStatus.TotalMemoryMB,
+			FreeMemoryMB:  resourceStatus.FreeMemoryMB,
+			TotalDiskMB:   resourceStatus.TotalDiskMB,
+			FreeDiskMB:    resourceStatus.FreeDiskMB,
+		}
+
+		instancesStatus, err := s.ListInstancesStatus()
+		if err != nil {
+			continue
+		}
+
+		runningInstances := []string{}
+		for _, instanceStatus := range instancesStatus {
+			if instanceStatus.Status == RUNNING_STATUS {
+				runningInstances = append(runningInstances, instanceStatus.InstanceId)
+			}
+		}
+
+		serverStatus.RunningInstances = runningInstances
+
+		serversStatus = append(serversStatus, serverStatus)
+	}
+
+	return serversStatus, nil
+}
+
 func (s *ServiceImpl) selectServerAgent() (string, error) {
 	var selectedAgent string
 
@@ -762,6 +805,7 @@ func (s *ServiceImpl) selectServerAgent() (string, error) {
 		}
 
 		score := getServerAgentScore(resourceStatus)
+
 		if score > bestScore {
 			bestScore = score
 			selectedAgent = agentUrl
