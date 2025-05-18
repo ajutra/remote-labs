@@ -1,4 +1,4 @@
-import SubjectList from '@/components/controlplane/SubjectList'
+import { SubjectsList } from '@/components/controlplane/SubjectsList'
 import UserManager from '@/components/controlplane/UserManager'
 import InstanceManager from '@/components/controlplane/InstanceManager'
 import ServerStatus from '@/components/controlplane/ServerStatus'
@@ -36,7 +36,7 @@ function ControlPlane() {
       <div className="grid min-h-[70vh] grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Left sidebar: Subjects */}
         <aside className="flex h-[70vh] flex-col lg:col-span-3">
-          <SubjectList />
+          <SubjectsList />
         </aside>
         {/* Center: Users and Instances, each half height */}
         <main className="flex h-[70vh] flex-col gap-6 lg:col-span-6">
