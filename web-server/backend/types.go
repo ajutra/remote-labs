@@ -107,3 +107,13 @@ type UpdateUserRequest struct {
 	Password      string   `json:"password"`
 	PublicSshKeys []string `json:"publicSshKeys"`
 }
+
+type ServerStatus struct {
+	ServerIP         string   `json:"serverIp"`
+	CpuLoad          float64  `json:"cpuLoad"`
+	TotalMemoryMB    int      `json:"totalMemoryMB"`
+	FreeMemoryMB     int      `json:"freeMemoryMB"`
+	TotalDiskMB      int      `json:"totalDiskMB"`
+	FreeDiskMB       int      `json:"freeDiskMB"`
+	RunningInstances []string `json:"runningInstances"`
+}

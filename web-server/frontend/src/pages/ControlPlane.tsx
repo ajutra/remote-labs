@@ -10,7 +10,7 @@ function ControlPlane() {
   const [showCreateProf, setShowCreateProf] = useState(false)
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto min-h-screen py-8">
       <Button
         className="fixed bottom-8 right-8 z-50 flex items-center gap-2 rounded-full bg-primary px-6 py-4 text-lg font-semibold text-primary-foreground shadow-lg hover:bg-primary/90"
         onClick={() => setShowCreateProf(true)}
@@ -32,21 +32,27 @@ function ControlPlane() {
           </div>
         </div>
       )}
-      <div className="grid min-h-[70vh] grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left sidebar: Subjects */}
-        <aside className="flex h-[70vh] flex-col lg:col-span-3">
-          <SubjectsList />
-        </aside>
-        {/* Center: Users with their instances */}
-        <main className="flex h-[70vh] flex-col lg:col-span-6">
-          <section className="flex min-h-0 flex-1 flex-col">
-            <UserManager />
-          </section>
-        </main>
-        {/* Right sidebar: Server status */}
-        <aside className="flex h-[70vh] flex-col lg:col-span-3">
+      <div className="flex flex-col gap-6">
+        {/* Server Status at the top */}
+        <div className="min-h-[300px]">
           <ServerStatus />
-        </aside>
+        </div>
+        
+        {/* Main content area */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* Left sidebar: Subjects */}
+          <aside className="lg:col-span-3">
+            <div className="h-full min-h-[500px]">
+              <SubjectsList />
+            </div>
+          </aside>
+          {/* Center: Users with their instances */}
+          <main className="lg:col-span-9">
+            <div className="h-full min-h-[500px]">
+              <UserManager />
+            </div>
+          </main>
+        </div>
       </div>
     </div>
   )

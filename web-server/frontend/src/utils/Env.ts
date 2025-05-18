@@ -24,6 +24,7 @@ export const getEnv = () => {
     API_DELETE_TEMPLATE: `${API_BASE_URL}/templates/delete/{templateId}/{subjectId}`,
     API_GET_SUBJECTS: `${API_BASE_URL}/subjects`,
     API_VERIFY_EMAIL: `${API_BASE_URL}/verify-email/{token}`,
+    API_GET_SERVER_STATUS: `${API_BASE_URL}/servers/status`,
     __vite__: otherViteConfig,
   }
 }
