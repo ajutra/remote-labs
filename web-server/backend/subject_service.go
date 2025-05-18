@@ -8,6 +8,7 @@ import (
 )
 
 type SubjectService interface {
+	GetAllSubjects() ([]SubjectResponse, error)
 	CreateSubject(request CreateSubjectRequest) (string, error)
 	ListAllSubjectsByUserId(userId string) ([]SubjectResponse, error)
 	EnrollUserInSubject(userEmail, subjectId string) error
@@ -131,6 +132,20 @@ func (s *SubjService) GetSubjectById(subjectId string) (SubjectResponse, error) 
 	}
 
 	return subject.toSubjectResponse(), nil
+}
+
+func (s *SubjService) GetAllSubjects() ([]SubjectResponse, error) {
+	subjects, err := s.db.GetAllSubjects()
+	if err != nil {
+		return nil, err
+	}
+
+	var subjectsResponse []SubjectResponse
+	for _, subject := range subjects {
+		subjectsResponse = append(subjectsResponse, subject.toSubjectResponse())
+	}
+
+	return subjectsResponse, nil
 }
 
 func (createSubjReq *CreateSubjectRequest) toSubject() Subject {

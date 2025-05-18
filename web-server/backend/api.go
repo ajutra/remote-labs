@@ -45,6 +45,14 @@ type ResetPasswordRequest struct {
 	Password string `json:"password"`
 }
 
+func (server *ApiServer) handleGetAllSubjects(w http.ResponseWriter, r *http.Request) error {
+	subjects, err := server.subjectService.GetAllSubjects()
+	if err != nil {
+		return err
+	}
+	return writeResponse(w, http.StatusOK, subjects)
+}
+
 func (server *ApiServer) handleCreateUser(w http.ResponseWriter, r *http.Request) error {
 	var request CreateUserRequest
 
@@ -583,6 +591,7 @@ func (server *ApiServer) corsMiddleware(next http.Handler) http.Handler {
 
 func (server *ApiServer) Run() {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /subjects", createHttpHandler(server.handleGetAllSubjects))
 	mux.HandleFunc("POST /users", createHttpHandler(server.handleCreateUser))
 	mux.HandleFunc("POST /users/professors", createHttpHandler(server.handleCreateProfessor))
 	mux.HandleFunc("PUT /users/update", createHttpHandler(server.handleUpdateUser))

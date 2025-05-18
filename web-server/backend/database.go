@@ -52,6 +52,7 @@ type Database interface {
 	CreatePasswordResetToken(email string, token uuid.UUID) error
 	ValidatePasswordResetToken(token string) (string, error)
 	UpdatePassword(userId string, password string) error
+	GetAllSubjects() ([]Subject, error)
 }
 
 type PostgresDatabase struct {
@@ -103,6 +104,35 @@ type wireguardConfig struct {
 	PeerPublicKey  string   `json:"peer_public_key"`
 	PeerAllowedIps []string `json:"peer_allowed_ips"`
 	PeerPort       int      `json:"peer_port"`
+}
+
+func (postgres *PostgresDatabase) GetAllSubjects() ([]Subject, error) {
+	query := `
+	SELECT s.id, s.name, s.code, u.name as professor_name, u.mail as professor_mail
+	FROM subjects s
+	JOIN users u ON s.main_professor_id = u.id`
+
+	log.Printf("Executing query to fetch all subjects")
+	rows, err := postgres.db.Query(context.Background(), query)
+	if err != nil {
+		return nil, fmt.Errorf("error getting all subjects: %w", err)
+	}
+	defer rows.Close()
+
+	var subjects []Subject
+	for rows.Next() {
+		var subject Subject
+		if err := rows.Scan(&subject.ID, &subject.Name, &subject.Code, &subject.ProfessorName, &subject.ProfessorMail); err != nil {
+			return nil, fmt.Errorf("error scanning subject: %w", err)
+		}
+		subjects = append(subjects, subject)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating subjects: %w", err)
+	}
+
+	return subjects, nil
 }
 
 func (postgres *PostgresDatabase) GetWireguardConfig(instanceId string) (wireguardConfig, error) {
