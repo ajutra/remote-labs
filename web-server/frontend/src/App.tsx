@@ -17,6 +17,7 @@ import { Layout } from '@/pages/Layout'
 import UserSettings from './pages/UserSettings'
 import { LoadingProvider } from '@/context/LoadingContext'
 import ResetPassword from './pages/ResetPassword'
+import ProtectedRoute from './components/ProtectedRoute'
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const isAdmin = useIsAdmin()
@@ -37,32 +38,34 @@ const App: React.FC = () => {
                 <Route
                   path="*"
                   element={
-                    <Layout>
-                      <Routes>
-                        <Route path={AppRoutes.HOME} element={<Home />} />
-                        <Route
-                          path={AppRoutes.SUBJECTS}
-                          element={<Subjects />}
-                        />
-                        <Route
-                          path={`${AppRoutes.SUBJECTS}/:id`}
-                          element={<SubjectDetail />}
-                        />
-                        <Route path={AppRoutes.MYLABS} element={<MyLabs />} />
-                        <Route
-                          path={AppRoutes.USER_SETTINGS}
-                          element={<UserSettings />}
-                        />
-                        <Route
-                          path={AppRoutes.CONTROL_PLANE}
-                          element={
-                            <AdminRoute>
-                              <ControlPlane />
-                            </AdminRoute>
-                          }
-                        />
-                      </Routes>
-                    </Layout>
+                    <ProtectedRoute>
+                      <Layout>
+                        <Routes>
+                          <Route path={AppRoutes.HOME} element={<Home />} />
+                          <Route
+                            path={AppRoutes.SUBJECTS}
+                            element={<Subjects />}
+                          />
+                          <Route
+                            path={`${AppRoutes.SUBJECTS}/:id`}
+                            element={<SubjectDetail />}
+                          />
+                          <Route path={AppRoutes.MYLABS} element={<MyLabs />} />
+                          <Route
+                            path={AppRoutes.USER_SETTINGS}
+                            element={<UserSettings />}
+                          />
+                          <Route
+                            path={AppRoutes.CONTROL_PLANE}
+                            element={
+                              <AdminRoute>
+                                <ControlPlane />
+                              </AdminRoute>
+                            }
+                          />
+                        </Routes>
+                      </Layout>
+                    </ProtectedRoute>
                   }
                 />
               </Routes>
