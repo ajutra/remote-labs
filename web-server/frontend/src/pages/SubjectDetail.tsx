@@ -17,8 +17,13 @@ const SubjectDetail: React.FC = () => {
   const navigate = useNavigate()
   const { subject, loading: subjectLoading } = useSubject(id!)
   const { vms, loading: vmsLoading, refresh: refreshVMs } = useSubjectVMs(id!)
-  const { templates, loading: templatesLoading } = useTemplates(id!)
+  const { templates, loading: templatesLoading, fetchTemplates } = useTemplates(id!)
   const isTeacherOrAdmin = useUserRole()
+
+  const handleRefresh = async () => {
+    await Promise.all([refreshVMs(), fetchTemplates()])
+    console.log('Refreshing all VMs and templates')
+  }
 
   if (subjectLoading || vmsLoading || templatesLoading) {
     return (
@@ -41,10 +46,7 @@ const SubjectDetail: React.FC = () => {
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={() => {
-              refreshVMs()
-              console.log('Refreshing all VMs and hooks')
-            }}
+            onClick={handleRefresh}
           >
             <RefreshCw className="mr-2 h-4 w-4" />
           </Button>
@@ -74,7 +76,7 @@ const SubjectDetail: React.FC = () => {
             templates={templates}
             loading={templatesLoading}
             subjectId={id!}
-            onRequestSuccess={refreshVMs}
+            onRequestSuccess={handleRefresh}
           />
         </div>
       )}

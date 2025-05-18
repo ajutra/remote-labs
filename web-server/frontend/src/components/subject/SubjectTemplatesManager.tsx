@@ -48,7 +48,7 @@ const STORAGE_OPTIONS = Array.from({ length: 49 }, (_, i) => String(i + 2)) // 2
 export const SubjectTemplatesManager: React.FC<SubjectTemplatesManagerProps> = ({
   subjectId,
 }) => {
-  const { templates, loading, deleteTemplate } = useTemplates(subjectId)
+  const { templates, loading, deleteTemplate, fetchTemplates } = useTemplates(subjectId)
   const { toast } = useToast()
   const [deleting, setDeleting] = React.useState<string | null>(null)
   const [open, setOpen] = React.useState(false)
@@ -58,8 +58,8 @@ export const SubjectTemplatesManager: React.FC<SubjectTemplatesManagerProps> = (
   const [templateDescription, setTemplateDescription] = React.useState('')
   const [vmRam, setVmRam] = React.useState('1')
   const [vmCpu, setVmCpu] = React.useState('2')
-  const [vmStorage, setVmStorage] = React.useState('1')
-  const { defineTemplate } = useDefineTemplate()
+  const [vmStorage, setVmStorage] = React.useState('2')
+  const { defineTemplate, loading: isDefiningTemplate } = useDefineTemplate()
 
   React.useEffect(() => {
     const fetchBases = async () => {
@@ -88,6 +88,7 @@ export const SubjectTemplatesManager: React.FC<SubjectTemplatesManagerProps> = (
     const result = await deleteTemplate(templateId)
     setDeleting(null)
     if (result.ok) {
+      await fetchTemplates()
       toast({
         title: 'Template deleted',
         description: 'Template deleted successfully.',
@@ -117,22 +118,23 @@ export const SubjectTemplatesManager: React.FC<SubjectTemplatesManagerProps> = (
         sizeMB: parseInt(vmStorage) * 1024,
         vcpuCount: parseInt(vmCpu),
         vramMB: parseInt(vmRam) * 1024,
-        subjectId,
+        subjectId: subjectId,
         description: templateDescription,
         isValidated: true,
       })
+
+      await fetchTemplates()
 
       toast({
         title: 'Success',
         description: 'Template created successfully',
       })
-      setOpen(false)
-      // Reset form
       setSelectedBase('')
       setTemplateDescription('')
       setVmRam('1')
       setVmCpu('2')
-      setVmStorage('1')
+      setVmStorage('2')
+      setOpen(false)
     } catch (error) {
       toast({
         title: 'Error',
@@ -256,9 +258,10 @@ export const SubjectTemplatesManager: React.FC<SubjectTemplatesManagerProps> = (
                 </div>
                 <Button
                   onClick={handleCreateTemplate}
-                  className="w-full bg-yellow-400 text-yellow-900 hover:bg-yellow-300 dark:bg-yellow-500 dark:text-yellow-900 dark:hover:bg-yellow-400"
+                  disabled={isDefiningTemplate || !selectedBase || !templateDescription}
+                  className="w-full"
                 >
-                  Create Template
+                  {isDefiningTemplate ? 'Creating...' : 'Create Template'}
                 </Button>
               </>
             )}

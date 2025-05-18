@@ -26,6 +26,11 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
 }) => {
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
 
+  // Reset selected template when templates change
+  React.useEffect(() => {
+    setSelectedTemplate('')
+  }, [templates])
+
   if (loading) {
     return (
       <Card>

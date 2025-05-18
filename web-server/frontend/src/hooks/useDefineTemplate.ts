@@ -30,7 +30,8 @@ export const useDefineTemplate = () => {
         }
       )
       if (!response.ok) {
-        throw new Error('Failed to create template')
+        const errorData = await response.text()
+        throw new Error(errorData || 'Failed to create template')
       }
       toast({
         title: 'Template created',
@@ -38,7 +39,6 @@ export const useDefineTemplate = () => {
       })
     } catch (error) {
       console.error('Error creating template:', error)
-
       throw error
     } finally {
       setLoading(false)
