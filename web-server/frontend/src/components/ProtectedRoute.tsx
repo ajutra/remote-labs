@@ -7,8 +7,13 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isLoggedIn } = useAuth()
+  const { isLoggedIn, isLoading } = useAuth()
   const location = useLocation()
+
+  // Si está cargando, no redirigir todavía
+  if (isLoading) {
+    return null // o un componente de loading si lo prefieres
+  }
 
   if (!isLoggedIn) {
     // Redirect to login page but save the attempted URL
