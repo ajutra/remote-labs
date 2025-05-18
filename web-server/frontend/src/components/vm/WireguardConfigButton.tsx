@@ -26,10 +26,25 @@ export const WireguardConfigButton: React.FC<WireguardConfigButtonProps> = ({
     setOpen(true)
   }
 
-  const handleCopyToClipboard = () => {
-    if (config) {
-      navigator.clipboard.writeText(config)
+  const handleCopyToClipboard = async () => {
+    if (!config) return
+
+    try {
+      await navigator.clipboard.writeText(config)
+      alert('Configuration copied to clipboard')
+    } catch (err) {
+      alert('Error copying configuration. You can also select and copy the text directly from the text area.')
     }
+  }
+
+  const getSSHInfo = (config: string) => {
+    const addressMatch = config.match(/Address = (\d+\.\d+\.\d+\.\d+)\/\d+/)
+    if (!addressMatch) return null
+
+    const ip = addressMatch[1]
+    const parts = ip.split('.')
+    parts[1] = '0' // Replace second octet with 0
+    return parts.join('.')
   }
 
   return (
@@ -48,17 +63,30 @@ export const WireguardConfigButton: React.FC<WireguardConfigButtonProps> = ({
           <DialogHeader>
             <DialogTitle>Wireguard Configuration</DialogTitle>
           </DialogHeader>
-          <Textarea
-            readOnly
-            value={config || ''}
-            className="h-40"
-            id="wireguard-config-description"
-          />
-          <DialogFooter>
-            <Button onClick={handleCopyToClipboard} variant="outline">
-              <Copy className="mr-2 h-4 w-4" /> Copy to Clipboard
-            </Button>
-          </DialogFooter>
+          {config && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Textarea
+                  readOnly
+                  value={config}
+                  className="h-40 font-mono text-sm"
+                  id="wireguard-config-description"
+                />
+                <Button onClick={handleCopyToClipboard} variant="outline" className="w-full">
+                  <Copy className="mr-2 h-4 w-4" /> Copy to Clipboard
+                </Button>
+              </div>
+              <div className="rounded-md bg-yellow-50 p-4">
+                <p className="text-sm text-yellow-800">
+                  <span className="font-semibold">Next step:</span> Once connected to the VPN, you can access the instance via SSH using:
+                  <br />
+                  <span className="font-mono font-bold mt-2 block">
+                    {getSSHInfo(config)}
+                  </span>
+                </p>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </>
