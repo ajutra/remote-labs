@@ -8,7 +8,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Search } from 'lucide-react'
+import { RefreshCw, Search, Trash } from 'lucide-react'
 import { useUsers } from '@/hooks/useUsers'
 import { useUserInstances } from '@/hooks/useUserInstances'
 import { VMStartButton } from '@/components/vm/VMStartButton'
@@ -16,41 +16,60 @@ import { VMStopButton } from '@/components/vm/VMStopButton'
 import { VMDeleteButton } from '@/components/vm/VMDeleteButton'
 import { useAuth } from '@/context/AuthContext'
 import { Input } from '@/components/ui/input'
+import { useToast } from '@/hooks/use-toast'
 
 const getStatusColor = (status: string) => {
   switch (status.toLowerCase()) {
     case 'running':
-      return 'text-green-500'
-    case 'stopped':
-      return 'text-red-500'
-    case 'creating':
-      return 'text-yellow-500'
+      return 'text-green-600'
+    case 'idle':
+      return 'text-blue-600'
+    case 'paused':
+      return 'text-yellow-600'
+    case 'in shutdown':
+      return 'text-orange-600'
+    case 'crashed':
+      return 'text-red-600'
+    case 'shut off':
+      return 'text-gray-600'
+    case 'pmsuspended':
+      return 'text-purple-600'
     default:
-      return 'text-gray-500'
+      return 'text-gray-600'
   }
 }
 
 const getStatusDisplay = (status: string) => {
   switch (status.toLowerCase()) {
     case 'running':
-      return 'Running'
-    case 'stopped':
-      return 'Stopped'
-    case 'creating':
-      return 'Creating'
+      return 'RUNNING'
+    case 'idle':
+      return 'IDLE'
+    case 'paused':
+      return 'PAUSED'
+    case 'in shutdown':
+      return 'SHUTTING DOWN'
+    case 'crashed':
+      return 'CRASHED'
+    case 'shut off':
+      return 'SHUT OFF'
+    case 'pmsuspended':
+      return 'SUSPENDED'
     default:
-      return status
+      return status.toUpperCase()
   }
 }
 
 const UserManager: React.FC = () => {
-  const { users, loading: usersLoading, error: usersError, refresh: refreshUsers } = useUsers()
+  const { users, loading: usersLoading, error: usersError, refresh: refreshUsers, deleteUser } = useUsers()
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const { instances, loading: instancesLoading, error: instancesError, refresh: refreshInstances } = useUserInstances(selectedUserId || '')
   const { user: currentUser } = useAuth()
   const isProfessorOrAdmin = currentUser?.role === 'professor' || currentUser?.role === 'admin'
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null)
+  const { toast } = useToast()
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -60,6 +79,24 @@ const UserManager: React.FC = () => {
 
   const handleUserClick = (userId: string) => {
     setSelectedUserId(selectedUserId === userId ? null : userId)
+  }
+
+  const handleDeleteUser = async (userId: string) => {
+    setDeleteLoading(userId)
+    const result = await deleteUser(userId)
+    setDeleteLoading(null)
+    if (result.ok) {
+      toast({
+        title: 'User deleted',
+        description: 'User has been deleted successfully.',
+      })
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to delete user',
+        variant: 'destructive',
+      })
+    }
   }
 
   // Filter users based on search query
@@ -110,6 +147,7 @@ const UserManager: React.FC = () => {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -124,6 +162,19 @@ const UserManager: React.FC = () => {
                   <TableCell>{user.name}</TableCell>
                   <TableCell>{user.mail}</TableCell>
                   <TableCell>{user.role}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteUser(user.id)
+                      }}
+                      disabled={deleteLoading === user.id || instances.length > 0 || user.id === currentUser?.id}
+                    >
+                      <Trash className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -167,12 +218,32 @@ const UserManager: React.FC = () => {
                         <TableCell>{instance.subjectName}</TableCell>
                         <TableCell>{new Date(instance.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell>
-                          {instance.template_vcpu_count} vCPU, {instance.template_vram_mb}MB RAM,{' '}
-                          {instance.template_size_mb}MB
+                          <div className="space-y-1 text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">vCPUs:</span>
+                              <span>{instance.template_vcpu_count || 'XX'}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">RAM:</span>
+                              <span>
+                                {instance.template_vram_mb
+                                  ? `${instance.template_vram_mb / 1024} GB`
+                                  : 'XX'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">Disk:</span>
+                              <span>
+                                {instance.template_size_mb
+                                  ? `${instance.template_size_mb / 1024} GB`
+                                  : 'XX'}
+                              </span>
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
-                            {instance.status.toLowerCase() === 'stopped' && canStart && (
+                            {instance.status.toLowerCase() === 'shut off' && canStart && (
                               <VMStartButton
                                 instanceId={instance.instanceId}
                                 onSuccess={refreshInstances}
@@ -184,7 +255,7 @@ const UserManager: React.FC = () => {
                                 onSuccess={refreshInstances}
                               />
                             )}
-                            {instance.status.toLowerCase() === 'stopped' && (
+                            {instance.status.toLowerCase() === 'shut off' && (
                               <VMDeleteButton
                                 instanceId={instance.instanceId}
                                 onSuccess={refreshInstances}
