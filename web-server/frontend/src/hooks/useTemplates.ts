@@ -80,5 +80,5 @@ export const useTemplates = (subjectId: string) => {
     fetchTemplates()
   }, [subjectId, toast])
 
-  return { templates, loading, deleteTemplate }
+  return { templates, loading, deleteTemplate, fetchTemplates }
 }
