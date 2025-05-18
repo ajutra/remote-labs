@@ -35,13 +35,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const navigate = useNavigate()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const storedUserId = getUserIdFromCookie()
     if (storedUserId) {
       // Obtener los detalles del usuario desde el backend
       fetchUserDetails(storedUserId)
+        .catch(() => {
+          // Si hay error al cargar los detalles, limpiamos el estado
+          setUser(null)
+          setIsLoggedIn(false)
+          Cookies.remove('userId')
+        })
+        .finally(() => {
+          setIsLoading(false)
+        })
+    } else {
+      setIsLoading(false)
     }
   }, [])
 
@@ -64,7 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       })
       setIsLoggedIn(true)
     } else {
-      console.error('Failed to fetch user details')
+      throw new Error('Failed to fetch user details')
     }
   }
 
