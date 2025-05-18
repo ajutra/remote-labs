@@ -1,6 +1,5 @@
 import { SubjectsList } from '@/components/controlplane/SubjectsList'
 import UserManager from '@/components/controlplane/UserManager'
-import InstanceManager from '@/components/controlplane/InstanceManager'
 import ServerStatus from '@/components/controlplane/ServerStatus'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -38,13 +37,10 @@ function ControlPlane() {
         <aside className="flex h-[70vh] flex-col lg:col-span-3">
           <SubjectsList />
         </aside>
-        {/* Center: Users and Instances, each half height */}
-        <main className="flex h-[70vh] flex-col gap-6 lg:col-span-6">
+        {/* Center: Users with their instances */}
+        <main className="flex h-[70vh] flex-col lg:col-span-6">
           <section className="flex min-h-0 flex-1 flex-col">
             <UserManager />
-          </section>
-          <section className="flex min-h-0 flex-1 flex-col">
-            <InstanceManager />
           </section>
         </main>
         {/* Right sidebar: Server status */}

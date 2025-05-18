@@ -541,6 +541,14 @@ func (server *ApiServer) handleResetPassword(w http.ResponseWriter, r *http.Requ
 	return writeResponse(w, http.StatusOK, "Password reset successfully")
 }
 
+func (server *ApiServer) handleGetAllUsers(w http.ResponseWriter, r *http.Request) error {
+	users, err := server.userService.GetAllUsers()
+	if err != nil {
+		return err
+	}
+	return writeResponse(w, http.StatusOK, users)
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -592,6 +600,7 @@ func (server *ApiServer) corsMiddleware(next http.Handler) http.Handler {
 func (server *ApiServer) Run() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /subjects", createHttpHandler(server.handleGetAllSubjects))
+	mux.HandleFunc("GET /users", createHttpHandler(server.handleGetAllUsers))
 	mux.HandleFunc("POST /users", createHttpHandler(server.handleCreateUser))
 	mux.HandleFunc("POST /users/professors", createHttpHandler(server.handleCreateProfessor))
 	mux.HandleFunc("PUT /users/update", createHttpHandler(server.handleUpdateUser))

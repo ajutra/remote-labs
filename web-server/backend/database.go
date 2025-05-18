@@ -25,6 +25,7 @@ type Database interface {
 	UserExistsById(userId string) error
 	ListAllSubjectsByUserId(userId string) ([]Subject, error)
 	ListAllUsersBySubjectId(subjectId string) ([]User, error)
+	GetAllUsers() ([]User, error)
 	ValidateUser(mail, password string) (User, error)
 	GetUser(userId string) (User, error)
 	SubjectExistsById(subjectId string) error
@@ -1130,4 +1131,28 @@ func (postgres *PostgresDatabase) UpdatePassword(userId string, password string)
 	}
 
 	return nil
+}
+
+func (postgres *PostgresDatabase) GetAllUsers() ([]User, error) {
+	query := `
+	SELECT u.id, r.role, u.name, u.mail, u.password, u.public_ssh_keys
+	FROM users u
+	JOIN roles r ON u.role_id = r.id`
+	
+	rows, err := postgres.db.Query(context.Background(), query)
+	if err != nil {
+		return nil, fmt.Errorf("error getting all users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var dbUser DatabaseUser
+		if err := rows.Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password, &dbUser.PublicSshKeys); err != nil {
+			return nil, fmt.Errorf("error scanning user: %w", err)
+		}
+		users = append(users, dbUser.toUser())
+	}
+
+	return users, nil
 }

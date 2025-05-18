@@ -13,6 +13,7 @@ type UserService interface {
 	CreateUnverifiedUser(request CreateUserRequest, verificationToken uuid.UUID) error
 	CreateProfessor(request CreateProfessorRequest) (User, string, error)
 	ListAllUsersBySubjectId(subjectId string) ([]UserResponse, error)
+	GetAllUsers() ([]UserResponse, error)
 	ValidateUser(request ValidateUserRequest) (ValidateUserResponse, error)
 	GetUser(userId string) (UserResponse, error)
 	DeleteUser(userId string) error
@@ -58,6 +59,20 @@ func (s *UserServiceImpl) CreateProfessor(request CreateProfessorRequest) (User,
 
 func (s *UserServiceImpl) ListAllUsersBySubjectId(subjectId string) ([]UserResponse, error) {
 	users, err := s.db.ListAllUsersBySubjectId(subjectId)
+	if err != nil {
+		return nil, err
+	}
+
+	var usersResponse []UserResponse
+	for _, user := range users {
+		usersResponse = append(usersResponse, user.toUserResponse())
+	}
+
+	return usersResponse, nil
+}
+
+func (s *UserServiceImpl) GetAllUsers() ([]UserResponse, error) {
+	users, err := s.db.GetAllUsers()
 	if err != nil {
 		return nil, err
 	}
