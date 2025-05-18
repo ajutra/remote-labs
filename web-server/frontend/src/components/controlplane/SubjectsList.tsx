@@ -45,7 +45,7 @@ export function SubjectsList() {
 
   return (
     <div className="flex flex-col h-full max-h-[calc(100vh-4rem)]">
-      <div className="space-y-4 p-4 border-b">
+      <div className="space-y-4 px-0 pb-4 border-b">
         <h2 className="text-2xl font-bold">Subjects</h2>
         <Input
           type="search"
