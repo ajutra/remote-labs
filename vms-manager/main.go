@@ -34,6 +34,7 @@ func main() {
 	routerosVlanBridge := os.Getenv("ROUTEROS_VLAN_BRIDGE")
 	routerosTaggedBridges := strings.Split(os.Getenv("ROUTEROS_TAGGED_BRIDGES"), ",")
 	routerosExternalGateway := os.Getenv("ROUTEROS_EXTERNAL_GATEWAY")
+	listServersStatusEndpoint := os.Getenv("LIST_SERVERS_STATUS_ENDPOINT")
 
 	database, err := NewDatabase(databaseURL)
 	if err != nil {
@@ -86,6 +87,7 @@ func main() {
 		stopInstanceEndpoint,
 		restartInstanceEndpoint,
 		listInstancesStatusEndpoint,
+		listServersStatusEndpoint,
 	)
 	server.Run()
 }
