@@ -549,6 +549,14 @@ func (server *ApiServer) handleGetAllUsers(w http.ResponseWriter, r *http.Reques
 	return writeResponse(w, http.StatusOK, users)
 }
 
+func (server *ApiServer) handleGetServerStatus(w http.ResponseWriter, r *http.Request) error {
+	status, err := server.instanceService.GetServerStatus()
+	if err != nil {
+		return err
+	}
+	return writeResponse(w, http.StatusOK, status)
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -631,6 +639,7 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("GET /instances/wireguard/{instanceId}", createHttpHandler(server.handleWireguard))
 	mux.HandleFunc("POST /auth/forgot-password", createHttpHandler(server.handleForgotPassword))
 	mux.HandleFunc("POST /auth/reset-password", createHttpHandler(server.handleResetPassword))
+	mux.HandleFunc("GET /servers/status", createHttpHandler(server.handleGetServerStatus))
 
 	log.Println("Starting server on port", server.listenAddr)
 

@@ -28,6 +28,7 @@ type InstanceService interface {
 	DeleteTemplate(templateId string, subjectId string) error
 	GetTemplatesBySubjectId(subjectId string) ([]Template, error)
 	GetWireguardConfig(instanceId string) (string, error)
+	GetServerStatus() ([]ServerStatus, error)
 }
 
 type InstanceStatus struct {
@@ -99,6 +100,8 @@ type Template struct {
 	VramMB      int    `json:"vramMB"`
 	SizeMB      int    `json:"sizeMB"`
 }
+
+
 
 func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendRequest) (CreateInstanceFrontendResponse, error) {
 	log.Printf("Starting instance creation process for user %s and subject %s", request.UserId, request.SubjectId)
@@ -683,4 +686,58 @@ func GenerateKeyPair() (string, string, error) {
 	pubB64 := base64.StdEncoding.EncodeToString(publicKey)
 
 	return privB64, pubB64, nil
+}
+
+func (s *InstanceServiceImpl) GetServerStatus() ([]ServerStatus, error) {
+	
+	log.Printf("Fetching server status from VM manager at %s/servers/status", s.vmManagerBaseUrl)
+	
+	resp, err := http.Get(fmt.Sprintf("%s/servers/status", s.vmManagerBaseUrl))
+	if err != nil {
+		log.Printf("Error calling VM manager for server status: %v", err)
+		return nil, fmt.Errorf("error calling VM manager: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("VM manager returned error status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("VM manager returned error status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Read the raw response body for debugging
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("Error reading response body: %v", err)
+		return nil, fmt.Errorf("error reading response body: %w", err)
+	}
+	log.Printf("Raw response from VM manager: %s", string(body))
+	log.Printf("Response content type: %s", resp.Header.Get("Content-Type"))
+
+	// Create a new reader with the body for JSON decoding
+	var status []ServerStatus
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&status); err != nil {
+		log.Printf("Error decoding server status response: %v", err)
+		log.Printf("Response content type: %s", resp.Header.Get("Content-Type"))
+		return nil, fmt.Errorf("error decoding response: %w", err)
+	}
+
+	log.Printf("Successfully retrieved status for %d servers", len(status))
+	for _, server := range status {
+		log.Printf("Server %s has %d running instances", server.ServerIP, len(server.RunningInstances))
+	}
+	/*
+	ip := "172.16.200.13:8081"
+
+	var status []ServerStatus
+	status = append(status, ServerStatus{
+		ServerIP:        strings.Split(ip, ":")[0],
+		CpuLoad:          0.2025,
+		TotalMemoryMB:    3914,
+		FreeMemoryMB:     197,
+		TotalDiskMB:      32046,
+		FreeDiskMB:       21295,
+		RunningInstances: []string{"instance1", "instance2"},
+	}) */
+	return status, nil
 }
