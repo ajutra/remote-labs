@@ -1,6 +1,6 @@
 export const getEnv = () => {
   const { VITE_API_URL, ...otherViteConfig } = import.meta.env
-  var API_BASE_URL = 'http://172.16.100.12:8080'
+  var API_BASE_URL = 'https://backend.nethermir.cloud'
   return {
     API_BASE_URL: `${API_BASE_URL}`,
     API_CREATE_USER: `${API_BASE_URL}/users`,

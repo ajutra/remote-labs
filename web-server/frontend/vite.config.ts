@@ -12,5 +12,6 @@ export default defineConfig({
   server: {
     host: '172.16.100.12',
     port: 5173,
+    allowedHosts: ['demo.nethermir.cloud'],
   },
 })
