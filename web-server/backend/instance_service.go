@@ -101,8 +101,6 @@ type Template struct {
 	SizeMB      int    `json:"sizeMB"`
 }
 
-
-
 func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendRequest) (CreateInstanceFrontendResponse, error) {
 	log.Printf("Starting instance creation process for user %s and subject %s", request.UserId, request.SubjectId)
 	log.Printf("Received request: %+v", request)
@@ -661,7 +659,7 @@ func (s *InstanceServiceImpl) GetWireguardConfig(instanceId string) (string, err
 	// Join the AllowedIPs with commas and spaces
 	allowedIPs := strings.Join(conf.PeerAllowedIps, ", ")
 	wgConfig := fmt.Sprintf("[Interface]\nPrivateKey = %s\nAddress = %s\n\n[Peer]\nPublicKey = %s\nAllowedIPs = %s\nEndpoint = %s:%d",
-		conf.PrivateKey, conf.InterfaceIp, conf.PublicKey, allowedIPs, endpoint, conf.PeerPort)
+		conf.PrivateKey, conf.InterfaceIp, conf.PeerPublicKey, allowedIPs, endpoint, conf.PeerPort)
 	return wgConfig, nil
 }
 
@@ -689,9 +687,9 @@ func GenerateKeyPair() (string, string, error) {
 }
 
 func (s *InstanceServiceImpl) GetServerStatus() ([]ServerStatus, error) {
-	
+
 	log.Printf("Fetching server status from VM manager at %s/servers/status", s.vmManagerBaseUrl)
-	
+
 	resp, err := http.Get(fmt.Sprintf("%s/servers/status", s.vmManagerBaseUrl))
 	if err != nil {
 		log.Printf("Error calling VM manager for server status: %v", err)
@@ -727,17 +725,17 @@ func (s *InstanceServiceImpl) GetServerStatus() ([]ServerStatus, error) {
 		log.Printf("Server %s has %d running instances", server.ServerIP, len(server.RunningInstances))
 	}
 	/*
-	ip := "172.16.200.13:8081"
+		ip := "172.16.200.13:8081"
 
-	var status []ServerStatus
-	status = append(status, ServerStatus{
-		ServerIP:        strings.Split(ip, ":")[0],
-		CpuLoad:          0.2025,
-		TotalMemoryMB:    3914,
-		FreeMemoryMB:     197,
-		TotalDiskMB:      32046,
-		FreeDiskMB:       21295,
-		RunningInstances: []string{"instance1", "instance2"},
-	}) */
+		var status []ServerStatus
+		status = append(status, ServerStatus{
+			ServerIP:        strings.Split(ip, ":")[0],
+			CpuLoad:          0.2025,
+			TotalMemoryMB:    3914,
+			FreeMemoryMB:     197,
+			TotalDiskMB:      32046,
+			FreeDiskMB:       21295,
+			RunningInstances: []string{"instance1", "instance2"},
+		}) */
 	return status, nil
 }
