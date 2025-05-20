@@ -16,7 +16,7 @@ const SubjectDetail: React.FC = () => {
   console.log('SubjectDetail: id from useParams:', id)
   const navigate = useNavigate()
   const { subject, loading: subjectLoading } = useSubject(id!)
-  const { vms, loading: vmsLoading, refresh: refreshVMs } = useSubjectVMs(id!)
+  const { vms, loading: vmsLoading, refresh: refreshVMs } = useSubjectVMs(id!, { filterByUser: true })
   const { templates, loading: templatesLoading, fetchTemplates } = useTemplates(id!)
   const isTeacherOrAdmin = useUserRole()
 
