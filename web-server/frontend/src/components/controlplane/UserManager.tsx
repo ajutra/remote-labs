@@ -17,6 +17,16 @@ import { VMDeleteButton } from '@/components/vm/VMDeleteButton'
 import { useAuth } from '@/context/AuthContext'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 const getStatusColor = (status: string) => {
   switch (status.toLowerCase()) {
@@ -63,12 +73,13 @@ const getStatusDisplay = (status: string) => {
 const UserManager: React.FC = () => {
   const { users, loading: usersLoading, error: usersError, refresh: refreshUsers, deleteUser } = useUsers()
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
-  const { instances, loading: instancesLoading, error: instancesError, refresh: refreshInstances } = useUserInstances(selectedUserId || '')
+  const { instances = [], loading: instancesLoading, error: instancesError, refresh: refreshInstances } = useUserInstances(selectedUserId || '')
   const { user: currentUser } = useAuth()
   const isProfessorOrAdmin = currentUser?.role === 'professor' || currentUser?.role === 'admin'
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null)
+  const [userToDelete, setUserToDelete] = useState<string | null>(null)
   const { toast } = useToast()
 
   const handleRefresh = async () => {
@@ -85,6 +96,7 @@ const UserManager: React.FC = () => {
     setDeleteLoading(userId)
     const result = await deleteUser(userId)
     setDeleteLoading(null)
+    setUserToDelete(null)
     if (result.ok) {
       toast({
         title: 'User deleted',
@@ -168,7 +180,7 @@ const UserManager: React.FC = () => {
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleDeleteUser(user.id)
+                        setUserToDelete(user.id)
                       }}
                       disabled={deleteLoading === user.id || instances.length > 0 || user.id === currentUser?.id}
                     >
@@ -182,6 +194,27 @@ const UserManager: React.FC = () => {
         </div>
       </div>
 
+      <AlertDialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the user
+              and all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => userToDelete && handleDeleteUser(userToDelete)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {selectedUserId && (
         <div className="flex-1 overflow-hidden">
           <div className="flex items-center justify-between">
@@ -191,6 +224,10 @@ const UserManager: React.FC = () => {
             <div>Loading instances...</div>
           ) : instancesError ? (
             <div>Error: {instancesError}</div>
+          ) : instances.length === 0 ? (
+            <div className="text-center py-4 text-muted-foreground">
+              This user has no instances.
+            </div>
           ) : (
             <div className="h-full overflow-auto">
               <Table>
