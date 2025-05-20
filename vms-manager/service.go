@@ -394,10 +394,7 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 	}
 
 	interfaceAddress := getInterfaceAddressWithSubnet(vmNetworkConfig.IpAddWithSubnet)
-	peerAllowedIps := []string{
-		getNetworkAddressWithSubnet(vmNetworkConfig.IpAddWithSubnet),
-		strings.Split(interfaceAddress, "/")[0] + "/30",
-	}
+	peerAllowedIps := getPeerAllowedIps(vmNetworkConfig.IpAddWithSubnet)
 
 	peerPublicKey, err := s.routerosService.GetWireguardPublicKey(fmt.Sprintf("wireguard%d", vlan))
 	if err != nil {
@@ -515,8 +512,8 @@ func (s *ServiceImpl) DeleteInstance(instanceId string) error {
 	s.routerosService.RemoveVmConfig(vlan, vmVlanIdentifier)
 
 	if isLastInstanceInSubject {
-		s.deleteSubjectFromDb(subjectId)
 		s.deleteVlanConfigWhenAvailable(vlan)
+		s.deleteSubjectFromDb(subjectId)
 	}
 
 	log.Printf("Instance %s deleted successfully", instanceId)
@@ -1217,6 +1214,13 @@ func getVlanEtiquete(vlan int, vmVlanIdentifier int) string {
 	return fmt.Sprintf("vlan%d-%d", vlan, vmVlanIdentifier)
 }
 
+func getPeerAllowedIps(vmIpAddWithSubnet string) []string {
+	return []string{
+		getNetworkAddressWithSubnet(vmIpAddWithSubnet),
+		getNetworkAddressWithSubnet(getInterfaceAddressWithSubnet(vmIpAddWithSubnet)),
+	}
+}
+
 func getInterfaceAddressWithSubnet(vmIpAddWithSubnet string) string {
 	ipParts := strings.Split(vmIpAddWithSubnet, ".")
 	return fmt.Sprintf(
@@ -1276,46 +1280,56 @@ func (s *ServiceImpl) addVlanConfigIfNotExists(vlan int) error {
 	s.routerVlanConfMutex.Lock()
 	defer s.routerVlanConfMutex.Unlock()
 
-	if !slices.Contains(s.routerVlanConfSharedMemory, vlan) {
-		s.routerVlanConfSharedMemory = append(s.routerVlanConfSharedMemory, vlan)
+	isConfigured, err := s.db.IsVlanConfigured(vlan)
+	if err != nil {
+		return err
 	}
 
-	if err := s.routerosService.ApplyVlanConfig(
-		vlan,
-		getVlanRouterPort(vlan),
-		s.routerosVlanBridge,
-		s.routerosTaggedBridges,
-		s.routerosExternalGateway,
-		SUBNET_MASK,
-	); err != nil {
-		log.Println("Error applying router vlan config: ", err.Error())
-		s.routerosService.RemoveVlanConfig(
+	if !isConfigured {
+		if err := s.routerosService.ApplyVlanConfig(
 			vlan,
 			getVlanRouterPort(vlan),
 			s.routerosVlanBridge,
+			s.routerosTaggedBridges,
 			s.routerosExternalGateway,
 			SUBNET_MASK,
-		)
-		return err
+		); err != nil {
+			log.Println("Error applying router vlan config: ", err.Error())
+			s.routerosService.RemoveVlanConfig(
+				vlan,
+				getVlanRouterPort(vlan),
+				s.routerosVlanBridge,
+				s.routerosExternalGateway,
+				SUBNET_MASK,
+			)
+			return err
+		}
+		if err := s.db.SetVlanAsConfigured(vlan); err != nil {
+			log.Println("Error setting vlan as configured: ", err.Error())
+			s.routerosService.RemoveVlanConfig(
+				vlan,
+				getVlanRouterPort(vlan),
+				s.routerosVlanBridge,
+				s.routerosExternalGateway,
+				SUBNET_MASK,
+			)
+			return err
+		}
 	}
 
 	return nil
 }
 
-func (s *ServiceImpl) deleteVlanConfigWhenAvailable(vlan int) {
+func (s *ServiceImpl) deleteVlanConfigWhenAvailable(vlan int) error {
 	s.routerVlanConfMutex.Lock()
 	defer s.routerVlanConfMutex.Unlock()
 
-	found := false
-	for i, v := range s.routerVlanConfSharedMemory {
-		if v == vlan {
-			s.routerVlanConfSharedMemory = slices.Delete(s.routerVlanConfSharedMemory, i, i)
-			found = true
-			break
-		}
+	isConfigured, err := s.db.IsVlanConfigured(vlan)
+	if err != nil {
+		return err
 	}
 
-	if found {
+	if isConfigured {
 		s.routerosService.RemoveVlanConfig(
 			vlan,
 			getVlanRouterPort(vlan),
@@ -1324,6 +1338,8 @@ func (s *ServiceImpl) deleteVlanConfigWhenAvailable(vlan int) {
 			SUBNET_MASK,
 		)
 	}
+
+	return nil
 }
 
 func getVlanRouterPort(vlan int) int {
