@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -59,19 +58,12 @@ func (s *SessionManagerImpl) monitorSessions() {
 		case <-ticker.C:
 			s.eventsMutex.Lock()
 			now := time.Now()
-			log.Printf("[SessionMonitor] Checking sessions at %v. Active sessions: %d", now, len(s.scheduledEvents))
 
 			// Check all sessions
 			for instanceId, event := range s.scheduledEvents {
-				log.Printf("[SessionMonitor] Checking instance %s: end time %v, time until end: %v",
-					instanceId, event.EndTime, event.EndTime.Sub(now))
-
 				// Check if we need to send a reminder (less than 30 minutes before end)
 				timeUntilEnd := event.EndTime.Sub(now)
 				if timeUntilEnd > 0 && timeUntilEnd <= 30*time.Minute {
-					log.Printf("[SessionMonitor] Checking reminder status for instance %s (%.2f minutes until end)",
-						instanceId, timeUntilEnd.Minutes())
-
 					// Get user email and reminder status
 					query := `
 					SELECT u.mail, i.session_reminder_sent
@@ -91,8 +83,6 @@ func (s *SessionManagerImpl) monitorSessions() {
 						renewalLink := fmt.Sprintf("%s/renew-session?token=%s", os.Getenv("FRONTEND_URL"), event.Token)
 						emailBody := fmt.Sprintf("Your session will end at %v. To renew your session, click here: %s", event.EndTime, renewalLink)
 
-						log.Printf("[SessionMonitor] Sending reminder email to %s (%.2f minutes until end)",
-							userEmail, timeUntilEnd.Minutes())
 						err = s.emailService.SendEmail(userEmail, "Session Ending Soon", emailBody)
 						if err != nil {
 							log.Printf("[SessionMonitor] Error sending reminder email: %v", err)
@@ -104,17 +94,11 @@ func (s *SessionManagerImpl) monitorSessions() {
 							"UPDATE instances SET session_reminder_sent = true WHERE id = $1", instanceId)
 						if err != nil {
 							log.Printf("[SessionMonitor] Error updating reminder status: %v", err)
-						} else {
-							log.Printf("[SessionMonitor] Successfully marked reminder as sent for instance %s", instanceId)
 						}
-					} else {
-						log.Printf("[SessionMonitor] Reminder already sent for instance %s", instanceId)
 					}
 				}
 
 				if now.After(event.EndTime) {
-					log.Printf("[SessionMonitor] Session expired for instance %s", instanceId)
-
 					// Get current session info to verify it hasn't been renewed
 					query := `
 					SELECT session_end_time
@@ -128,16 +112,10 @@ func (s *SessionManagerImpl) monitorSessions() {
 						continue
 					}
 
-					log.Printf("[SessionMonitor] Current end time in DB for instance %s: %v", instanceId, currentEndTime)
-					log.Printf("[SessionMonitor] Original end time for instance %s: %v", instanceId, event.EndTime)
-
 					// If the end time hasn't changed, the session wasn't renewed
 					if currentEndTime.Equal(event.EndTime) {
-						log.Printf("[SessionMonitor] Session not renewed, shutting down instance %s", instanceId)
-
 						// Stop the instance directly using VM manager
 						url := fmt.Sprintf("%s/instances/stop/%s", s.vmManagerBaseUrl, instanceId)
-						log.Printf("[SessionMonitor] Calling VM manager API at %s", url)
 
 						resp, err := http.Post(url, "application/json", nil)
 						if err != nil {
@@ -145,10 +123,6 @@ func (s *SessionManagerImpl) monitorSessions() {
 							continue
 						}
 						defer resp.Body.Close()
-
-						// Read response body for logging
-						body, _ := io.ReadAll(resp.Body)
-						log.Printf("[SessionMonitor] VM manager response status: %d, body: %s", resp.StatusCode, string(body))
 
 						if resp.StatusCode != http.StatusOK {
 							log.Printf("[SessionMonitor] VM manager returned error status %d", resp.StatusCode)
@@ -170,12 +144,9 @@ func (s *SessionManagerImpl) monitorSessions() {
 							continue
 						}
 
-						log.Printf("[SessionMonitor] Successfully stopped instance %s", instanceId)
 						// Remove from scheduled events
 						delete(s.scheduledEvents, instanceId)
-						log.Printf("[SessionMonitor] Removed instance %s from scheduled events", instanceId)
 					} else {
-						log.Printf("[SessionMonitor] Session was renewed for instance %s, new end time: %v", instanceId, currentEndTime)
 						// Update the event with new end time
 						event.EndTime = currentEndTime
 						s.scheduledEvents[instanceId] = event
@@ -192,8 +163,6 @@ func (s *SessionManagerImpl) monitorSessions() {
 }
 
 func (s *SessionManagerImpl) StartSession(instanceId string) error {
-	log.Printf("[SessionManager] Starting session for instance %s", instanceId)
-
 	s.eventsMutex.Lock()
 	defer s.eventsMutex.Unlock()
 
@@ -210,8 +179,6 @@ func (s *SessionManagerImpl) StartSession(instanceId string) error {
 	startTime := time.Now()
 	endTime := startTime.Add(time.Duration(sessionDuration) * time.Minute)
 	reminderToken := uuid.New().String()
-
-	log.Printf("[SessionManager] Session duration: %d minutes, will end at %v", sessionDuration, endTime)
 
 	// Get user email
 	query := `
@@ -245,11 +212,10 @@ func (s *SessionManagerImpl) StartSession(instanceId string) error {
 	// Send initial email
 	emailBody := fmt.Sprintf("Your session has started and will end at %v.", endTime)
 
-	log.Printf("[SessionManager] Sending initial email to %s", userEmail)
 	err = s.emailService.SendEmail(userEmail, "Session Started", emailBody)
 	if err != nil {
 		log.Printf("[SessionManager] Error sending initial email: %v", err)
-		// Don't return error here, as the session is already started
+		// Don't return error, continue with session start
 	}
 
 	// Add to scheduled events
@@ -258,7 +224,6 @@ func (s *SessionManagerImpl) StartSession(instanceId string) error {
 		Token:   reminderToken,
 	}
 
-	log.Printf("[SessionManager] Session started for instance %s, will end at %v", instanceId, endTime)
 	return nil
 }
 
