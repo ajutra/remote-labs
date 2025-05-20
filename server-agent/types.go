@@ -47,6 +47,9 @@ type ListInstancesStatusResponse struct {
 }
 
 type GetResourceStatusResponse struct {
-	CpuLoad      float64 `json:"cpuLoad"`
-	FreeMemoryMB int     `json:"freeMemoryMB"`
+	CpuLoad       float64 `json:"cpuLoad"`
+	TotalMemoryMB int     `json:"totalMemoryMB"`
+	FreeMemoryMB  int     `json:"freeMemoryMB"`
+	TotalDiskMB   int     `json:"totalDiskMB"`
+	FreeDiskMB    int     `json:"freeDiskMB"`
 }

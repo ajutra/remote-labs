@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"text/template"
 	"time"
 )
@@ -39,10 +40,10 @@ type ServerAgent interface {
 }
 
 type ServerAgentImpl struct {
-	vmsStoragePath       string
-	cloudInitImagesPath  string
-	defaultNetworkBridge string
-	vmNetworkBridge      string
+	vmsStoragePath      string
+	cloudInitImagesPath string
+	vmsBridge           string
+	vmNetworkInterface  string
 }
 
 type VmType string
@@ -337,14 +338,22 @@ func (agent *ServerAgentImpl) GetResourceStatus() (GetResourceStatusResponse, er
 		return GetResourceStatusResponse{}, err
 	}
 
-	freeMemoryMB, err := getFreeMemory()
+	totalMemoryMB, freeMemoryMB, err := getMemoryInfo()
+	if err != nil {
+		return GetResourceStatusResponse{}, err
+	}
+
+	totalDiskMB, freeDiskMB, err := getDiskInfo()
 	if err != nil {
 		return GetResourceStatusResponse{}, err
 	}
 
 	return GetResourceStatusResponse{
-		CpuLoad:      cpuLoad,
-		FreeMemoryMB: freeMemoryMB,
+		CpuLoad:       cpuLoad,
+		TotalMemoryMB: totalMemoryMB,
+		FreeMemoryMB:  freeMemoryMB,
+		TotalDiskMB:   totalDiskMB,
+		FreeDiskMB:    freeDiskMB,
 	}, nil
 }
 
@@ -384,7 +393,7 @@ func (agent *ServerAgentImpl) removeVidFromNetworkBridge(vid string) error {
 	log.Printf("Removing vlan etiquete from network bridge...")
 
 	removeVlanEtiqueteCmd := exec.Command(
-		"bridge", "vlan", "del", "vid", vid, "dev", agent.vmNetworkBridge, "self", // TODO: Remove self on production
+		"bridge", "vlan", "del", "vid", vid, "dev", agent.vmNetworkInterface,
 	)
 
 	if output, err := removeVlanEtiqueteCmd.CombinedOutput(); err != nil {
@@ -398,7 +407,7 @@ func (agent *ServerAgentImpl) setupVMNetwork(vid string, vlanEtiquete string) er
 	log.Printf("Setting up network...")
 
 	addVlanEtiqueteCmd := exec.Command(
-		"bridge", "vlan", "add", "vid", vid, "dev", agent.vmNetworkBridge, "self", // TODO: Remove self on production
+		"bridge", "vlan", "add", "vid", vid, "dev", agent.vmNetworkInterface,
 	)
 
 	if output, err := addVlanEtiqueteCmd.CombinedOutput(); err != nil {
@@ -600,7 +609,7 @@ func (agent *ServerAgentImpl) installVm(request CreateVmRequest) error {
 		"--disk", "path="+request.DirPath+"/"+request.VmId+".qcow2,format=qcow2",
 		"--disk", "path="+request.DirPath+"/cidata.iso,device=cdrom",
 		"--os-variant", DEFAULT_OS_VARIANT,
-		"--network", "bridge="+agent.defaultNetworkBridge+",target="+request.VlanEtiquete+",model=virtio",
+		"--network", "bridge="+agent.vmsBridge+",target="+request.VlanEtiquete+",model=virtio",
 		"--graphics", "vnc,listen=0.0.0.0",
 		"--noautoconsole",
 	)
@@ -714,10 +723,13 @@ func getCpuLoad() (float64, error) {
 	return cpuLoad, nil
 }
 
-func getFreeMemory() (int, error) {
+func getMemoryInfo() (totalMemoryMB int, freeMemoryMB int, err error) {
+	totalMemoryMB = -1
+	freeMemoryMB = -1
+
 	file, err := os.Open("/proc/meminfo")
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	defer file.Close()
 
@@ -738,23 +750,47 @@ func getFreeMemory() (int, error) {
 
 		if key == "MemFree" {
 			// Return in MB
-			return value / 1024, nil
+			freeMemoryMB = value / 1024
+		} else if key == "MemTotal" {
+			totalMemoryMB = value / 1024
 		}
 	}
 
-	return 0, logAndReturnError("MemFree not found", "")
+	if totalMemoryMB == -1 || freeMemoryMB == -1 {
+		return 0, 0, logAndReturnError("MemFree or MemTotal not found", "")
+	}
+
+	return totalMemoryMB, freeMemoryMB, nil
+}
+
+func getDiskInfo() (totalDiskMB int, freeDiskMB int, err error) {
+	var stat syscall.Statfs_t
+
+	if err = syscall.Statfs("/", &stat); err != nil {
+		return
+	}
+
+	// Blocks * size-per-block = bytes
+	total := stat.Blocks * uint64(stat.Bsize)
+	free := stat.Bavail * uint64(stat.Bsize)
+
+	// Convert to MB
+	totalDiskMB = int(total / (1024 * 1024))
+	freeDiskMB = int(free / (1024 * 1024))
+
+	return totalDiskMB, freeDiskMB, nil
 }
 
 func NewServerAgent(
 	vmsStoragePath string,
 	cloudInitImagesPath string,
-	defaultNetworkBridge string,
-	vmNetworkBridge string,
+	vmsBridge string,
+	vmNetworkInterface string,
 ) ServerAgent {
 	return &ServerAgentImpl{
-		vmsStoragePath:       vmsStoragePath,
-		cloudInitImagesPath:  cloudInitImagesPath,
-		defaultNetworkBridge: defaultNetworkBridge,
-		vmNetworkBridge:      vmNetworkBridge,
+		vmsStoragePath:      vmsStoragePath,
+		cloudInitImagesPath: cloudInitImagesPath,
+		vmsBridge:           vmsBridge,
+		vmNetworkInterface:  vmNetworkInterface,
 	}
 }
