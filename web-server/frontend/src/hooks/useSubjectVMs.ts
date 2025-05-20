@@ -36,9 +36,9 @@ export const useSubjectVMs = (subjectId: string) => {
       setVms(subjectVMs)
     } catch {
       toast({
-        title: 'Error',
-        description: 'Failed to load VMs',
-        variant: 'destructive',
+        title: 'Information',
+        description: 'No VMs found',
+        variant: 'default',
       })
     } finally {
       setLoading(false)
