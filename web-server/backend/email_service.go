@@ -13,6 +13,7 @@ type EmailService interface {
 
 type SMTPEmailService struct {
 	from     string
+	username string
 	password string
 	smtpHost string
 	smtpPort string
@@ -21,6 +22,7 @@ type SMTPEmailService struct {
 func NewEmailService() EmailService {
 	return &SMTPEmailService{
 		from:     os.Getenv("SMTP_FROM"),
+		username: os.Getenv("SMTP_USERNAME"),
 		password: os.Getenv("SMTP_PASSWORD"),
 		smtpHost: os.Getenv("SMTP_HOST"),
 		smtpPort: os.Getenv("SMTP_PORT"),
@@ -29,7 +31,7 @@ func NewEmailService() EmailService {
 
 func (s *SMTPEmailService) SendEmail(to, subject, body string) error {
 	// Configurar la autenticación
-	auth := smtp.PlainAuth("", s.from, s.password, s.smtpHost)
+	auth := smtp.PlainAuth("", s.username, s.password, s.smtpHost)
 
 	// Construir el mensaje
 	message := []byte(fmt.Sprintf("From: %s\r\n"+
