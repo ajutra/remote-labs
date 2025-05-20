@@ -4,6 +4,7 @@ import CreateSubjectSheet from '@/components/CreateSubjectSheet'
 import useUserRole from '@/hooks/useUserRole'
 import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 const Subjects: React.FC = () => {
   const { subjects, loading, error } = useSubjects()
@@ -33,7 +34,17 @@ const Subjects: React.FC = () => {
       {loading ? (
         <div>Loading...</div>
       ) : error ? (
-        <div>Error: {error}</div>
+        <Card>
+          <CardHeader>
+            <CardTitle>No Subjects Found</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              You are not currently enrolled in any subjects. Subject professors are responsible for granting access to their students.
+              Please contact your professor to get access to the relevant subjects.
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid w-full flex-grow grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {subjects.map((subject) => (
