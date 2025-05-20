@@ -40,10 +40,10 @@ type ServerAgent interface {
 }
 
 type ServerAgentImpl struct {
-	vmsStoragePath       string
-	cloudInitImagesPath  string
-	defaultNetworkBridge string
-	vmNetworkBridge      string
+	vmsStoragePath      string
+	cloudInitImagesPath string
+	vmsBridge           string
+	vmNetworkInterface  string
 }
 
 type VmType string
@@ -393,7 +393,7 @@ func (agent *ServerAgentImpl) removeVidFromNetworkBridge(vid string) error {
 	log.Printf("Removing vlan etiquete from network bridge...")
 
 	removeVlanEtiqueteCmd := exec.Command(
-		"bridge", "vlan", "del", "vid", vid, "dev", agent.vmNetworkBridge, "self", // TODO: Remove self on production
+		"bridge", "vlan", "del", "vid", vid, "dev", agent.vmNetworkInterface,
 	)
 
 	if output, err := removeVlanEtiqueteCmd.CombinedOutput(); err != nil {
@@ -407,7 +407,7 @@ func (agent *ServerAgentImpl) setupVMNetwork(vid string, vlanEtiquete string) er
 	log.Printf("Setting up network...")
 
 	addVlanEtiqueteCmd := exec.Command(
-		"bridge", "vlan", "add", "vid", vid, "dev", agent.vmNetworkBridge, "self", // TODO: Remove self on production
+		"bridge", "vlan", "add", "vid", vid, "dev", agent.vmNetworkInterface,
 	)
 
 	if output, err := addVlanEtiqueteCmd.CombinedOutput(); err != nil {
@@ -609,7 +609,7 @@ func (agent *ServerAgentImpl) installVm(request CreateVmRequest) error {
 		"--disk", "path="+request.DirPath+"/"+request.VmId+".qcow2,format=qcow2",
 		"--disk", "path="+request.DirPath+"/cidata.iso,device=cdrom",
 		"--os-variant", DEFAULT_OS_VARIANT,
-		"--network", "bridge="+agent.defaultNetworkBridge+",target="+request.VlanEtiquete+",model=virtio",
+		"--network", "bridge="+agent.vmsBridge+",target="+request.VlanEtiquete+",model=virtio",
 		"--graphics", "vnc,listen=0.0.0.0",
 		"--noautoconsole",
 	)
@@ -784,13 +784,13 @@ func getDiskInfo() (totalDiskMB int, freeDiskMB int, err error) {
 func NewServerAgent(
 	vmsStoragePath string,
 	cloudInitImagesPath string,
-	defaultNetworkBridge string,
-	vmNetworkBridge string,
+	vmsBridge string,
+	vmNetworkInterface string,
 ) ServerAgent {
 	return &ServerAgentImpl{
-		vmsStoragePath:       vmsStoragePath,
-		cloudInitImagesPath:  cloudInitImagesPath,
-		defaultNetworkBridge: defaultNetworkBridge,
-		vmNetworkBridge:      vmNetworkBridge,
+		vmsStoragePath:      vmsStoragePath,
+		cloudInitImagesPath: cloudInitImagesPath,
+		vmsBridge:           vmsBridge,
+		vmNetworkInterface:  vmNetworkInterface,
 	}
 }
