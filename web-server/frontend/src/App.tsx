@@ -20,6 +20,7 @@ import ResetPassword from './pages/ResetPassword'
 import ProtectedRoute from './components/ProtectedRoute'
 import RenewSession from './pages/RenewSession'
 import Tutorials from './pages/Tutorials'
+import AboutUs from './pages/AboutUs'
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const isAdmin = useIsAdmin()
@@ -69,6 +70,10 @@ const App: React.FC = () => {
                           <Route
                             path={AppRoutes.TUTORIALS}
                             element={<Tutorials />}
+                          />
+                          <Route
+                            path={AppRoutes.ABOUT_US}
+                            element={<AboutUs />}
                           />
                         </Routes>
                       </Layout>

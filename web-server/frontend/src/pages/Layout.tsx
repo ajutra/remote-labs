@@ -38,6 +38,56 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             </BreadcrumbItem>
           </BreadcrumbList>
         )
+      case AppRoutes.MYLABS:
+        return (
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href={AppRoutes.MYLABS}>
+                My Labs
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        )
+      case AppRoutes.TUTORIALS:
+        return (
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href={AppRoutes.TUTORIALS}>
+                Tutorials
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        )
+      case AppRoutes.ABOUT_US:
+        return (
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href={AppRoutes.ABOUT_US}>
+                About Us
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        )
+      case AppRoutes.CONTROL_PLANE:
+        return (
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href={AppRoutes.CONTROL_PLANE}>
+                Control Panel
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        )
+      case AppRoutes.USER_SETTINGS:
+        return (
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href={AppRoutes.USER_SETTINGS}>
+                User Settings
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        )
       default:
         return null
     }

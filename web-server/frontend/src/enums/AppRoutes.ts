@@ -7,4 +7,5 @@ export enum AppRoutes {
   USER_SETTINGS = '/user-settings',
   RESET_PASSWORD = '/reset-password',
   TUTORIALS = '/tutorials',
+  ABOUT_US = '/about-us',
 }
