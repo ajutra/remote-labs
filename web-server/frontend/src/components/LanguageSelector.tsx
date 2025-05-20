@@ -1,4 +1,14 @@
-import { useTranslation } from 'react-i18next'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { Button } from '@/components/ui/button'
+import { LanguagesIcon } from 'lucide-react'
+
+// Previous language selector implementation
+/*
 import {
   Select,
   SelectContent,
@@ -26,6 +36,29 @@ const LanguageSelector: React.FC = () => {
           <SelectItem value="ca">Català</SelectItem>
         </SelectContent>
       </Select>
+    </div>
+  )
+}
+*/
+
+const LanguageSelector: React.FC = () => {
+  return (
+    <div className="language-selector">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="outline" size="icon" className="h-9 w-9">
+              <LanguagesIcon className="h-[1.2rem] w-[1.2rem]" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="max-w-[250px]">
+              We are currently translating our content to better communicate in your language. 
+              For now, please use your browser's built-in translation feature.
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   )
 }
