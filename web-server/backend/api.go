@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 type apiFunc func(w http.ResponseWriter, r *http.Request) error
@@ -557,6 +560,44 @@ func (server *ApiServer) handleGetServerStatus(w http.ResponseWriter, r *http.Re
 	return writeResponse(w, http.StatusOK, status)
 }
 
+func (server *ApiServer) handleRenewSession(w http.ResponseWriter, r *http.Request) error {
+	// Get token from URL path
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) != 4 {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("invalid URL format"))
+	}
+	token := parts[3]
+	if token == "" {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("missing token"))
+	}
+
+	// Find instance by token
+	query := `
+	SELECT id
+	FROM instances
+	WHERE session_reminder_token = $1`
+
+	var instanceId string
+	err := server.instanceService.(*InstanceServiceImpl).db.(*PostgresDatabase).db.QueryRow(context.Background(), query, token).Scan(&instanceId)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return NewHttpError(http.StatusNotFound, fmt.Errorf("invalid token"))
+		}
+		return NewHttpError(http.StatusInternalServerError, fmt.Errorf("database error: %w", err))
+	}
+
+	// Renew session
+	instanceService := server.instanceService.(*InstanceServiceImpl)
+	err = instanceService.sessionManager.RenewSession(instanceId)
+	if err != nil {
+		return NewHttpError(http.StatusInternalServerError, fmt.Errorf("error renewing session: %w", err))
+	}
+
+	return writeResponse(w, http.StatusOK, map[string]string{
+		"message": "Session renewed successfully",
+	})
+}
+
 func writeResponse(w http.ResponseWriter, status int, value any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -589,7 +630,7 @@ func NewApiServer(listenAddr string, userService UserService, subjectService Sub
 }
 
 func (server *ApiServer) enableCors(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", server.frontendUrl)
+	w.Header().Set("Access-Control-Allow-Origin", strings.TrimSuffix(server.frontendUrl, ":5173"))
 	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 }
@@ -640,6 +681,7 @@ func (server *ApiServer) Run() {
 	mux.HandleFunc("POST /auth/forgot-password", createHttpHandler(server.handleForgotPassword))
 	mux.HandleFunc("POST /auth/reset-password", createHttpHandler(server.handleResetPassword))
 	mux.HandleFunc("GET /servers/status", createHttpHandler(server.handleGetServerStatus))
+	mux.HandleFunc("PUT /sessions/renew/{token}", createHttpHandler(server.handleRenewSession))
 
 	log.Println("Starting server on port", server.listenAddr)
 

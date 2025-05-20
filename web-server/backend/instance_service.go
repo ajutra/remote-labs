@@ -54,13 +54,18 @@ type Base struct {
 type InstanceServiceImpl struct {
 	db               Database
 	vmManagerBaseUrl string
+	sessionManager   SessionManager
+	emailService     EmailService
 }
 
-func NewInstanceService(db Database, vmManagerBaseUrl string) InstanceService {
-	return &InstanceServiceImpl{
+func NewInstanceService(db Database, vmManagerBaseUrl string, emailService EmailService) InstanceService {
+	service := &InstanceServiceImpl{
 		db:               db,
 		vmManagerBaseUrl: vmManagerBaseUrl,
+		emailService:     emailService,
 	}
+	service.sessionManager = NewSessionManager(db, emailService, vmManagerBaseUrl)
+	return service
 }
 
 type CreateInstanceRequest struct {
@@ -235,38 +240,62 @@ func (s *InstanceServiceImpl) CreateInstance(request CreateInstanceFrontendReque
 }
 
 func (s *InstanceServiceImpl) StartInstance(instanceId string) error {
+	// Call VM manager to start the instance
 	resp, err := http.Post(
 		fmt.Sprintf("%s/instances/start/%s", s.vmManagerBaseUrl, instanceId),
 		"application/json",
 		nil,
 	)
 	if err != nil {
-		return fmt.Errorf("error calling VM manager API: %w", err)
+		return fmt.Errorf("error calling VM manager: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("VM manager API returned status code %d", resp.StatusCode)
+		return fmt.Errorf("VM manager returned status code %d", resp.StatusCode)
+	}
+
+	// Start session management
+	err = s.sessionManager.StartSession(instanceId)
+	if err != nil {
+		log.Printf("Error starting session: %v", err)
+		// Don't return error here as the instance is already started
 	}
 
 	return nil
 }
 
 func (s *InstanceServiceImpl) StopInstance(instanceId string) error {
-	resp, err := http.Post(
-		fmt.Sprintf("%s/instances/stop/%s", s.vmManagerBaseUrl, instanceId),
-		"application/json",
-		nil,
-	)
+	log.Printf("[InstanceService] Attempting to stop instance %s", instanceId)
+
+	// Stop session management first
+	err := s.sessionManager.StopSession(instanceId)
 	if err != nil {
-		return fmt.Errorf("error calling VM manager API: %w", err)
+		log.Printf("[InstanceService] Error stopping session: %v", err)
+		// Don't return error here as we still want to stop the instance
+	}
+
+	// Call VM manager to stop the instance
+	url := fmt.Sprintf("%s/instances/stop/%s", s.vmManagerBaseUrl, instanceId)
+	log.Printf("[InstanceService] Calling VM manager API at %s", url)
+
+	resp, err := http.Post(url, "application/json", nil)
+	if err != nil {
+		log.Printf("[InstanceService] Error calling VM manager API: %v", err)
+		return fmt.Errorf("error calling VM manager: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// Read response body for logging
+	body, _ := io.ReadAll(resp.Body)
+	log.Printf("[InstanceService] VM manager response status: %d, body: %s", resp.StatusCode, string(body))
+
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("VM manager API returned status code %d", resp.StatusCode)
+		log.Printf("[InstanceService] VM manager returned error status %d", resp.StatusCode)
+		return fmt.Errorf("VM manager returned status code %d: %s", resp.StatusCode, string(body))
 	}
 
+	log.Printf("[InstanceService] Successfully stopped instance %s", instanceId)
 	return nil
 }
 

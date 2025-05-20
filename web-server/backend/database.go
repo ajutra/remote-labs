@@ -992,7 +992,12 @@ func getDDLStatements() string {
 			peer_allowed_ips TEXT[] NOT NULL,
 			peer_endpoint_port INTEGER NOT NULL,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			session_start_time TIMESTAMP,
+			session_end_time TIMESTAMP,
+			session_reminder_sent BOOLEAN DEFAULT false,
+			session_reminder_token TEXT,
 			FOREIGN KEY (template_id, subject_id) REFERENCES templates(id, subject_id) ON DELETE SET NULL
+			
 		);
 
 		CREATE TABLE IF NOT EXISTS user_subjects (
@@ -1138,7 +1143,7 @@ func (postgres *PostgresDatabase) GetAllUsers() ([]User, error) {
 	SELECT u.id, r.role, u.name, u.mail, u.password, u.public_ssh_keys
 	FROM users u
 	JOIN roles r ON u.role_id = r.id`
-	
+
 	rows, err := postgres.db.Query(context.Background(), query)
 	if err != nil {
 		return nil, fmt.Errorf("error getting all users: %w", err)

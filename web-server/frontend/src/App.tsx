@@ -18,6 +18,7 @@ import UserSettings from './pages/UserSettings'
 import { LoadingProvider } from '@/context/LoadingContext'
 import ResetPassword from './pages/ResetPassword'
 import ProtectedRoute from './components/ProtectedRoute'
+import RenewSession from './pages/RenewSession'
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const isAdmin = useIsAdmin()
@@ -35,6 +36,7 @@ const App: React.FC = () => {
                 <Route path={AppRoutes.LOGIN} element={<LoginPage />} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path={AppRoutes.RESET_PASSWORD} element={<ResetPassword />} />
+                <Route path="/renew-session" element={<RenewSession />} />
                 <Route
                   path="*"
                   element={
