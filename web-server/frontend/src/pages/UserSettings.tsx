@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Plus, Trash2, KeyRound } from 'lucide-react'
+import { Plus, Trash2, KeyRound, ArrowLeft } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,9 +23,11 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useUserSettings } from '@/hooks/useUserSettings'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 const UserSettings: React.FC = () => {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [showPasswordForm, setShowPasswordForm] = useState(false)
   const {
     password,
@@ -53,6 +55,14 @@ const UserSettings: React.FC = () => {
 
   return (
     <div className="container mx-auto p-4 max-w-5xl">
+      <Button
+        variant="ghost"
+        className="mb-4 flex items-center gap-2"
+        onClick={() => navigate(-1)}
+      >
+        <ArrowLeft className="h-4 w-4" />
+        {t('Back')}
+      </Button>
       <Card className="shadow-lg">
         <CardHeader className="pb-6">
           <CardTitle className="text-2xl">{t('User Settings')}</CardTitle>
