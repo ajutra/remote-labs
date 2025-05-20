@@ -26,7 +26,7 @@ export const SubjectInstancesManager: React.FC<
     vms: initialInstances,
     loading: vmsLoading,
     refresh,
-  } = useSubjectVMs(subjectId)
+  } = useSubjectVMs(subjectId, { filterByUser: false })
   const [instances, setInstances] = useState(initialInstances)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const { user } = useAuth()

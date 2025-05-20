@@ -4,7 +4,11 @@ import { VMListItem } from '@/types/vm'
 import { useAuth } from '@/context/AuthContext'
 import { getEnv } from '@/utils/Env'
 
-export const useSubjectVMs = (subjectId: string) => {
+interface UseSubjectVMsOptions {
+  filterByUser?: boolean;
+}
+
+export const useSubjectVMs = (subjectId: string, options: UseSubjectVMsOptions = {}) => {
   const [vms, setVms] = useState<VMListItem[]>([])
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
@@ -18,9 +22,12 @@ export const useSubjectVMs = (subjectId: string) => {
 
     setLoading(true)
     try {
-      const response = await fetch(
-        getEnv().API_GET_INSTANCE_STATUS.replace('{userId}', user.id)
-      )
+      // Si filterByUser es true, usamos el endpoint específico del usuario
+      const endpoint = options.filterByUser 
+        ? getEnv().API_GET_INSTANCE_STATUS.replace('{userId}', user.id)
+        : getEnv().API_BASE_URL + '/instances/status'
+
+      const response = await fetch(endpoint)
       if (!response.ok) {
         throw new Error('Failed to fetch VMs')
       }
@@ -43,7 +50,7 @@ export const useSubjectVMs = (subjectId: string) => {
     } finally {
       setLoading(false)
     }
-  }, [user?.id, subjectId, toast])
+  }, [user?.id, subjectId, toast, options.filterByUser])
 
   useEffect(() => {
     fetchVMs()
