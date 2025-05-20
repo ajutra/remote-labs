@@ -111,7 +111,7 @@ function Home() {
           {
             title: t('Linux & macOS'),
             description: t(
-              'Open Terminal and run: ssh-keygen -t ed25519 -C "your_email@example.com"'
+              'Open Terminal and run: ssh-keygen -t ed25519'
             ),
             details: t(
               'Press Enter to accept the default file location. Optionally set a passphrase for extra security.\n\nYour keys will be saved in:\n- Private key: ~/.ssh/id_ed25519\n- Public key: ~/.ssh/id_ed25519.pub\n\nNote: Only share the .pub file (public key) in your profile settings.'
@@ -121,7 +121,7 @@ function Home() {
           {
             title: t('Windows'),
             description: t(
-              'Use Git Bash or PowerShell and run: ssh-keygen -t ed25519 -C "your_email@example.com"'
+              'Use Git Bash or PowerShell and run: ssh-keygen -t ed25519'
             ),
             details: t(
               'Press Enter to accept the default file location. Optionally set a passphrase for extra security.\n\nYour keys will be saved in:\n- Private key: C:\\Users\\YourUsername\\.ssh\\id_ed25519\n- Public key: C:\\Users\\YourUsername\\.ssh\\id_ed25519.pub\n\nNote: Only share the .pub file (public key) in your profile settings.'
