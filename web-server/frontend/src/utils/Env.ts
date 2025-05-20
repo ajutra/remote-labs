@@ -25,6 +25,7 @@ export const getEnv = () => {
     API_GET_SUBJECTS: `${API_BASE_URL}/subjects`,
     API_VERIFY_EMAIL: `${API_BASE_URL}/verify-email/{token}`,
     API_GET_SERVER_STATUS: `${API_BASE_URL}/servers/status`,
+    API_RENEW_SESSION: `${API_BASE_URL}/sessions/renew/{token}`,
     __vite__: otherViteConfig,
   }
 }
