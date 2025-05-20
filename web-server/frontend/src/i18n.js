@@ -13,7 +13,7 @@ const resources = {
       Password: 'Password',
       '******': '******',
       'user@edu.tecnocampus.cat': 'user@edu.tecnocampus.cat',
-      'professsor@tecnocampus.cat': 'proffessor@tecnocampus.cat',
+      'professsor@tecnocampus.cat': 'professor@tecnocampus.cat',
       103111: '103111',
       'Subject ID': 'Subject ID',
       'User ID': 'User ID',
