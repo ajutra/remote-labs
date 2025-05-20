@@ -393,21 +393,6 @@ const CreateSubjectSheet: React.FC = () => {
 
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <Label htmlFor="vmRam">RAM (GB)</Label>
-                    <Select value={vmRam} onValueChange={setVmRam} required>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select RAM" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[1, 2, 4, 8, 16, 32].map((value) => (
-                          <SelectItem key={value} value={value.toString()}>
-                            {value} GB
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
                     <Label htmlFor="vmCpu">CPU Cores</Label>
                     <Select value={vmCpu} onValueChange={setVmCpu} required>
                       <SelectTrigger>
@@ -417,6 +402,21 @@ const CreateSubjectSheet: React.FC = () => {
                         {[2, 4, 6, 8, 10, 12, 14, 16].map((value) => (
                           <SelectItem key={value} value={value.toString()}>
                             {value} Cores
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="vmRam">RAM (GB)</Label>
+                    <Select value={vmRam} onValueChange={setVmRam} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select RAM" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 4, 8, 16, 32].map((value) => (
+                          <SelectItem key={value} value={value.toString()}>
+                            {value} GB
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -446,24 +446,6 @@ const CreateSubjectSheet: React.FC = () => {
                 </div>
 
                 <div className="mt-4">
-                  <Label htmlFor="templateDescription">
-                    Template Description
-                  </Label>
-                  <Textarea
-                    id="templateDescription"
-                    value={templateDescription}
-                    onChange={(e) => setTemplateDescription(e.target.value)}
-                    placeholder="Enter a description for this template"
-                    className="mt-1"
-                    required
-                  />
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    This description will help identify this template if there
-                    are multiple templates for this subject.
-                  </p>
-                </div>
-
-                <div className="mt-4">
                   <Checkbox
                     id="customizeVm"
                     checked={customizeVm}
@@ -477,6 +459,26 @@ const CreateSubjectSheet: React.FC = () => {
                     according to your needs.
                   </p>
                 </div>
+
+                {!customizeVm && (
+                  <div className="mt-4">
+                    <Label htmlFor="templateDescription">
+                      Template Description
+                    </Label>
+                    <Textarea
+                      id="templateDescription"
+                      value={templateDescription}
+                      onChange={(e) => setTemplateDescription(e.target.value)}
+                      placeholder="Enter a description for this template"
+                      className="mt-1"
+                      required
+                    />
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      This description will help identify this template if there
+                      are multiple templates for this subject.
+                    </p>
+                  </div>
+                )}
 
                 {customizeVm && (
                   <div className="mt-4">
