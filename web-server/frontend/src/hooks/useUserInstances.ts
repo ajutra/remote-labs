@@ -17,9 +17,10 @@ export function useUserInstances(userId: string) {
         throw new Error('Failed to fetch user instances')
       }
       const data = await response.json()
-      setInstances(data)
+      setInstances(data || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
+      setInstances([])
     } finally {
       setLoading(false)
     }
@@ -28,6 +29,9 @@ export function useUserInstances(userId: string) {
   useEffect(() => {
     if (userId) {
       fetchInstances()
+    } else {
+      setInstances([])
+      setLoading(false)
     }
   }, [userId])
 
