@@ -56,18 +56,14 @@ export const DefineTemplateButton: React.FC<DefineTemplateButtonProps> = ({
         description,
         isValidated: true,
       })
-      setTimeout(() => {
-        setLoading(false)
-        setOpen(false)
-        window.location.reload() // Refresh the page after completion
-      }, 60000) // Wait for 1 minute
+      setLoading(false)
+      setOpen(false)
+      window.location.reload() // Refresh the page after completion
     } catch (error) {
       console.error('Error defining template:', error)
-      setTimeout(() => {
-        setLoading(false)
-        setOpen(false)
-        window.location.reload() // Refresh the page after completion
-      }, 60000)
+      setLoading(false)
+      setOpen(false)
+      window.location.reload() // Refresh the page after completion
     }
   }
 
