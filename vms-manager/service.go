@@ -386,7 +386,12 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 		return CreateInstanceResponse{}, err
 	}
 
-	s.addVlanConfigIfNotExists(vlan)
+	if err := s.addVlanConfigIfNotExists(vlan); err != nil {
+		vmMutex.Unlock()
+		s.DeleteInstance(instanceId)
+		vmMutex.Lock()
+		return CreateInstanceResponse{}, err
+	}
 
 	interfaceAddress := getInterfaceAddressWithSubnet(vmNetworkConfig.IpAddWithSubnet)
 	peerAllowedIps := []string{
@@ -396,10 +401,18 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 
 	peerPublicKey, err := s.routerosService.GetWireguardPublicKey(fmt.Sprintf("wireguard%d", vlan))
 	if err != nil {
+		vmMutex.Unlock()
+		s.DeleteInstance(instanceId)
+		vmMutex.Lock()
 		return CreateInstanceResponse{}, err
 	}
 
-	s.routerosService.ApplyVmConfig(vmNetworkConfig, vlan, request.UserWgPubKey)
+	if err := s.routerosService.ApplyVmConfig(vmNetworkConfig, vlan, request.UserWgPubKey); err != nil {
+		vmMutex.Unlock()
+		s.DeleteInstance(instanceId)
+		vmMutex.Lock()
+		return CreateInstanceResponse{}, err
+	}
 
 	return CreateInstanceResponse{
 		InstanceId:       instanceId,
@@ -1259,7 +1272,7 @@ func (s *ServiceImpl) deleteVmMutex(vmId string) {
 	delete(s.vmsMutexMap, vmId)
 }
 
-func (s *ServiceImpl) addVlanConfigIfNotExists(vlan int) {
+func (s *ServiceImpl) addVlanConfigIfNotExists(vlan int) error {
 	s.routerVlanConfMutex.Lock()
 	defer s.routerVlanConfMutex.Unlock()
 
@@ -1267,28 +1280,26 @@ func (s *ServiceImpl) addVlanConfigIfNotExists(vlan int) {
 		s.routerVlanConfSharedMemory = append(s.routerVlanConfSharedMemory, vlan)
 	}
 
-	for {
-		if err := s.routerosService.ApplyVlanConfig(
+	if err := s.routerosService.ApplyVlanConfig(
+		vlan,
+		getVlanRouterPort(vlan),
+		s.routerosVlanBridge,
+		s.routerosTaggedBridges,
+		s.routerosExternalGateway,
+		SUBNET_MASK,
+	); err != nil {
+		log.Println("Error applying router vlan config: ", err.Error())
+		s.routerosService.RemoveVlanConfig(
 			vlan,
 			getVlanRouterPort(vlan),
 			s.routerosVlanBridge,
-			s.routerosTaggedBridges,
 			s.routerosExternalGateway,
 			SUBNET_MASK,
-		); err != nil {
-			log.Println("Error applying router vlan config: ", err.Error())
-			log.Println("Retrying...")
-			s.routerosService.RemoveVlanConfig(
-				vlan,
-				getVlanRouterPort(vlan),
-				s.routerosVlanBridge,
-				s.routerosExternalGateway,
-				SUBNET_MASK,
-			)
-			continue
-		}
-		break
+		)
+		return err
 	}
+
+	return nil
 }
 
 func (s *ServiceImpl) deleteVlanConfigWhenAvailable(vlan int) {
