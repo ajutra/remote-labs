@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { useWireguardConfig } from '@/hooks/useWireguardConfig'
-import { Copy } from 'lucide-react'
+import { Copy, Download } from 'lucide-react'
 
 interface WireguardConfigButtonProps {
   instanceId: string
@@ -35,6 +35,20 @@ export const WireguardConfigButton: React.FC<WireguardConfigButtonProps> = ({
     } catch (err) {
       alert('Error copying configuration. You can also select and copy the text directly from the text area.')
     }
+  }
+
+  const handleDownloadConfig = () => {
+    if (!config) return
+
+    const blob = new Blob([config], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `wireguard-${instanceId}.conf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   const getSSHInfo = (config: string) => {
@@ -69,12 +83,17 @@ export const WireguardConfigButton: React.FC<WireguardConfigButtonProps> = ({
                 <Textarea
                   readOnly
                   value={config}
-                  className="h-40 font-mono text-sm"
+                  className="h-64 font-mono text-sm"
                   id="wireguard-config-description"
                 />
-                <Button onClick={handleCopyToClipboard} variant="outline" className="w-full">
-                  <Copy className="mr-2 h-4 w-4" /> Copy to Clipboard
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={handleCopyToClipboard} variant="outline" className="flex-1">
+                    <Copy className="mr-2 h-4 w-4" /> Copy to Clipboard
+                  </Button>
+                  <Button onClick={handleDownloadConfig} variant="outline" className="flex-1">
+                    <Download className="mr-2 h-4 w-4" /> Download Config
+                  </Button>
+                </div>
               </div>
               <div className="rounded-md bg-yellow-50 p-4">
                 <p className="text-sm text-yellow-800">
