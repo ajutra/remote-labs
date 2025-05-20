@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-routeros/routeros/v3"
 )
@@ -28,8 +29,8 @@ type RouterOSService interface {
 		externalGateway string,
 		gatewaySubnetMask int,
 	) error
-	ApplyVmConfig(vmNetworkConfig VmNetworkConfig, vlan int, userPubKey string)
-	RemoveVmConfig(vlan int, vlanIdentifier int)
+	ApplyVmConfig(vmNetworkConfig VmNetworkConfig, vlan int, userPubKey string) error
+	RemoveVmConfig(vlan int, vlanIdentifier int) error
 	GetWireguardPublicKey(name string) (string, error)
 }
 
@@ -167,9 +168,23 @@ func (s *RouterOSServiceImpl) ApplyVlanConfig(
 		return err
 	}
 
-	if _, err := s.addRoutingTable(fmt.Sprintf("vrf%d", vlan)); err != nil {
+	if _, err := s.addFirewallFilter(
+		"accept",
+		"forward",
+		fmt.Sprintf("defconf: accept from WAN to VRF%d", vlan),
+		map[string]string{
+			"in-interface-list":  "WAN",
+			"out-interface-list": fmt.Sprintf("VRF%d", vlan),
+		},
+	); err != nil {
 		return err
 	}
+
+	/*
+		if _, err := s.addRoutingTable(fmt.Sprintf("vrf%d", vlan)); err != nil {
+			return err
+		}
+	*/
 
 	if _, err := s.addRoute(
 		getVlanNetworkIpWithSubnet(vlan),
@@ -198,12 +213,14 @@ func (s *RouterOSServiceImpl) RemoveVlanConfig(
 	gatewaySubnetMask int,
 ) error {
 	log.Println("Removing vlan config...")
+	var errFound error
 	if _, err := s.RemoveRoute(
 		"0.0.0.0/0",
 		externalGateway,
 		fmt.Sprintf("vrf%d", vlan),
 	); err != nil {
-		log.Println("Error removing route: ", err.Error())
+		// Append error to errFound
+		errFound = fmt.Errorf("%v\n%v", errFound, err)
 	}
 
 	if _, err := s.RemoveRoute(
@@ -211,7 +228,18 @@ func (s *RouterOSServiceImpl) RemoveVlanConfig(
 		fmt.Sprintf("vlan%d@vrf%d", vlan, vlan),
 		"main",
 	); err != nil {
-		log.Println("Error removing route: ", err.Error())
+		errFound = fmt.Errorf("%v\n%v", errFound, err)
+	}
+
+	if _, err := s.removeFirewallFilter(
+		map[string]string{
+			"action":             "accept",
+			"chain":              "forward",
+			"in-interface-list":  "WAN",
+			"out-interface-list": fmt.Sprintf("VRF%d", vlan),
+		},
+	); err != nil {
+		errFound = fmt.Errorf("%v\n%v", errFound, err)
 	}
 
 	if _, err := s.removeFirewallFilter(
@@ -222,7 +250,7 @@ func (s *RouterOSServiceImpl) RemoveVlanConfig(
 			"out-interface-list": fmt.Sprintf("VRF%d", vlan),
 		},
 	); err != nil {
-		log.Println("Error removing firewall filter: ", err.Error())
+		errFound = fmt.Errorf("%v\n%v", errFound, err)
 	}
 
 	if _, err := s.removeFirewallFilter(
@@ -233,7 +261,7 @@ func (s *RouterOSServiceImpl) RemoveVlanConfig(
 			"out-interface-list": "WAN",
 		},
 	); err != nil {
-		log.Println("Error removing firewall filter: ", err.Error())
+		errFound = fmt.Errorf("%v\n%v", errFound, err)
 	}
 
 	if _, err := s.removeFirewallFilter(
@@ -245,81 +273,84 @@ func (s *RouterOSServiceImpl) RemoveVlanConfig(
 			"protocol":          "udp",
 		},
 	); err != nil {
-		log.Println("Error removing firewall filter: ", err.Error())
+		errFound = fmt.Errorf("%v\n%v", errFound, err)
 	}
 
 	if _, err := s.removeIPAddress(
 		fmt.Sprintf("%s/%d", getVpnGatewayIp(vlan), gatewaySubnetMask),
 		fmt.Sprintf("wireguard%d", vlan),
 	); err != nil {
-		log.Println("Error removing ip address: ", err.Error())
+		errFound = fmt.Errorf("%v\n%v", errFound, err)
 	}
 
 	if _, err := s.removeIPAddress(
 		fmt.Sprintf("%s/%d", getVlanGatewayIp(vlan), gatewaySubnetMask),
 		fmt.Sprintf("vlan%d", vlan),
 	); err != nil {
-		log.Println("Error removing ip address: ", err.Error())
+		errFound = fmt.Errorf("%v\n%v", errFound, err)
 	}
 
 	if _, err := s.removeListMember(fmt.Sprintf("VRF%d", vlan), fmt.Sprintf("wireguard%d", vlan)); err != nil {
-		log.Println("Error removing list member: ", err.Error())
+		errFound = fmt.Errorf("%v\n%v", errFound, err)
 	}
 
 	if _, err := s.removeListMember(fmt.Sprintf("VRF%d", vlan), fmt.Sprintf("vlan%d", vlan)); err != nil {
-		log.Println("Error removing list member: ", err.Error())
+		errFound = fmt.Errorf("%v\n%v", errFound, err)
 	}
 
 	if _, err := s.removeBridgeVlan(vlanBridge, vlan); err != nil {
-		log.Println("Error removing bridge vlan: ", err.Error())
+		errFound = fmt.Errorf("%v\n%v", errFound, err)
 	}
 
 	if _, err := s.removeVrf(fmt.Sprintf("vrf%d", vlan)); err != nil {
-		log.Println("Error removing vrf: ", err.Error())
+		errFound = fmt.Errorf("%v\n%v", errFound, err)
 	}
 
 	if _, err := s.removeInterfaceList(fmt.Sprintf("VRF%d", vlan)); err != nil {
-		log.Println("Error removing interface list: ", err.Error())
+		errFound = fmt.Errorf("%v\n%v", errFound, err)
 	}
 
 	if _, err := s.removeVlan(fmt.Sprintf("vlan%d", vlan)); err != nil {
-		log.Println("Error removing vlan: ", err.Error())
+		errFound = fmt.Errorf("%v\n%v", errFound, err)
 	}
 
 	if _, err := s.removeWireguard(fmt.Sprintf("wireguard%d", vlan)); err != nil {
-		log.Println("Error removing wireguard: ", err.Error())
+		errFound = fmt.Errorf("%v\n%v", errFound, err)
 	}
 
-	if _, err := s.removeRoutingTable(fmt.Sprintf("vrf%d", vlan)); err != nil {
-		log.Println("Error removing routing table: ", err.Error())
+	/*
+		if _, err := s.removeRoutingTable(fmt.Sprintf("vrf%d", vlan)); err != nil {
+			errFound = fmt.Errorf("%v\n%v", errFound, err)
+		}
+	*/
+
+	if errFound != nil {
+		return errFound
+	}
+	return nil
+}
+
+func (s *RouterOSServiceImpl) ApplyVmConfig(vmNetworkConfig VmNetworkConfig, vlan int, userPubKey string) error {
+	if _, err := s.addWireguardPeer(
+		fmt.Sprintf("VPN%d", vlan),
+		fmt.Sprintf("wireguard%d", vlan),
+		fmt.Sprintf("peer%d-%d", vlan, vmNetworkConfig.VmVlanIdentifier),
+		userPubKey,
+		getNetworkAddressWithSubnet(vmNetworkConfig.IpAddWithSubnet),
+		getInterfaceAddressWithSubnet(vmNetworkConfig.IpAddWithSubnet),
+	); err != nil {
+		return fmt.Errorf("error adding wireguard peer: %v", err)
 	}
 
 	return nil
 }
 
-func (s *RouterOSServiceImpl) ApplyVmConfig(vmNetworkConfig VmNetworkConfig, vlan int, userPubKey string) {
-	for {
-		if _, err := s.addWireguardPeer(
-			fmt.Sprintf("VPN%d", vlan),
-			fmt.Sprintf("wireguard%d", vlan),
-			fmt.Sprintf("peer%d-%d", vlan, vmNetworkConfig.VmVlanIdentifier),
-			userPubKey,
-			getNetworkAddressWithSubnet(vmNetworkConfig.IpAddWithSubnet),
-			getInterfaceAddressWithSubnet(vmNetworkConfig.IpAddWithSubnet),
-		); err != nil {
-			log.Println("Error adding wireguard peer: ", err.Error())
-			log.Println("Retrying...")
-			s.RemoveVmConfig(vlan, vmNetworkConfig.VmVlanIdentifier)
-			continue
-		}
-		break
-	}
-}
-
-func (s *RouterOSServiceImpl) RemoveVmConfig(vlan int, vlanIdentifier int) {
+func (s *RouterOSServiceImpl) RemoveVmConfig(vlan int, vlanIdentifier int) error {
 	if _, err := s.removeWireguardPeer(fmt.Sprintf("peer%d-%d", vlan, vlanIdentifier)); err != nil {
-		log.Println("Error removing wireguard peer: ", err.Error())
+		return fmt.Errorf("error removing wireguard peer: %v", err)
 	}
+
+	return nil
 }
 
 func (s *RouterOSServiceImpl) removeByFilter(cmd string, filter ...string) (response *routeros.Reply, err error) {
@@ -394,7 +425,13 @@ func (s *RouterOSServiceImpl) addWireguard(comment string, listenPort, mtu int, 
 		fmt.Sprintf("=mtu=%d", mtu),
 	})
 	if addWireguardErr != nil {
-		return nil, fmt.Errorf("failed to add wireguard: %v", addWireguardErr)
+		return nil, fmt.Errorf(
+			"failed to add wireguard with name %s, listen port %d, mtu %d: %v",
+			name,
+			listenPort,
+			mtu,
+			addWireguardErr,
+		)
 	}
 
 	/*
@@ -426,7 +463,13 @@ func (s *RouterOSServiceImpl) addVlan(comment string, iface, name string, vlanID
 
 	addVlanResp, addVlanErr := s.client.RunArgs(args)
 	if addVlanErr != nil {
-		return nil, fmt.Errorf("failed to add vlan: %v", addVlanErr)
+		return nil, fmt.Errorf(
+			"failed to add vlan with name %s, interface %s, vlan id %d: %v",
+			name,
+			iface,
+			vlanID,
+			addVlanErr,
+		)
 	}
 
 	/*
@@ -453,7 +496,11 @@ func (s *RouterOSServiceImpl) addInterfaceList(name string) (response *routeros.
 		fmt.Sprintf("=name=%s", name),
 	})
 	if addInterfaceListErr != nil {
-		return nil, fmt.Errorf("failed to add interface list: %v", addInterfaceListErr)
+		return nil, fmt.Errorf(
+			"failed to add interface list with name %s: %v",
+			name,
+			addInterfaceListErr,
+		)
 	}
 
 	return addInterfaceListResp, nil
@@ -476,7 +523,12 @@ func (s *RouterOSServiceImpl) addVrf(comment string, name string, ifaces ...stri
 		fmt.Sprintf("=interfaces=%s", strings.Join(ifaces, ",")),
 	})
 	if addVrfErr != nil {
-		return nil, fmt.Errorf("failed to add vrf: %v", addVrfErr)
+		return nil, fmt.Errorf(
+			"failed to add vrf with name %s, interfaces %s: %v",
+			name,
+			strings.Join(ifaces, ","),
+			addVrfErr,
+		)
 	}
 
 	/*
@@ -507,7 +559,13 @@ func (s *RouterOSServiceImpl) addBridgeVlan(bridge, comment string, vlanID int, 
 
 	addBridgeVlanResp, addBridgeVlanErr := s.client.RunArgs(args)
 	if addBridgeVlanErr != nil {
-		return nil, fmt.Errorf("failed to add bridge vlan: %v", addBridgeVlanErr)
+		return nil, fmt.Errorf(
+			"failed to add bridge vlan with bridge %s, vlan id %d, tagged %s: %v",
+			bridge,
+			vlanID,
+			strings.Join(tagged, ","),
+			addBridgeVlanErr,
+		)
 	}
 
 	/*
@@ -541,7 +599,12 @@ func (s *RouterOSServiceImpl) addListMember(comment, iface, list string) (respon
 
 	addListMemberResp, addListMemberErr := s.client.RunArgs(args)
 	if addListMemberErr != nil {
-		return nil, fmt.Errorf("failed to add list member: %v", addListMemberErr)
+		return nil, fmt.Errorf(
+			"failed to add list member with list %s, interface %s: %v",
+			list,
+			iface,
+			addListMemberErr,
+		)
 	}
 
 	/*
@@ -582,7 +645,14 @@ func (s *RouterOSServiceImpl) addWireguardPeer(comment, iface, name, pubKey stri
 
 	addWireguardPeerResp, addWireguardPeerErr := s.client.RunArgs(args)
 	if addWireguardPeerErr != nil {
-		return nil, fmt.Errorf("failed to add wireguard peer: %v", addWireguardPeerErr)
+		return nil, fmt.Errorf(
+			"failed to add wireguard peer with interface %s, name %s, public key %s, allowed addresses %s: %v",
+			iface,
+			name,
+			pubKey,
+			strings.Join(allowedAddrs, ","),
+			addWireguardPeerErr,
+		)
 	}
 
 	/*
@@ -612,7 +682,12 @@ func (s *RouterOSServiceImpl) addIPAddress(addr, comment, iface string) (respons
 
 	addIPAddressResp, addIPAddressErr := s.client.RunArgs(args)
 	if addIPAddressErr != nil {
-		return nil, fmt.Errorf("failed to add ip address: %v", addIPAddressErr)
+		return nil, fmt.Errorf(
+			"failed to add ip address with interface %s, address %s: %v",
+			iface,
+			addr,
+			addIPAddressErr,
+		)
 	}
 
 	/*
@@ -646,7 +721,13 @@ func (s *RouterOSServiceImpl) addFirewallFilter(action, chain, comment string, p
 
 	addFirewallFilterResp, addFirewallFilterErr := s.client.RunArgs(args)
 	if addFirewallFilterErr != nil {
-		return nil, fmt.Errorf("failed to add firewall filter: %v", addFirewallFilterErr)
+		return nil, fmt.Errorf(
+			"failed to add firewall filter with chain %s, action %s, params %v: %v",
+			chain,
+			action,
+			params,
+			addFirewallFilterErr,
+		)
 	}
 
 	/*
@@ -686,7 +767,11 @@ func (s *RouterOSServiceImpl) addRoutingTable(name string) (response *routeros.R
 		fmt.Sprintf("=name=%s", name),
 	})
 	if addRoutingTableErr != nil {
-		return nil, fmt.Errorf("failed to add routing table: %v", addRoutingTableErr)
+		return nil, fmt.Errorf(
+			"failed to add routing table with name %s: %v",
+			name,
+			addRoutingTableErr,
+		)
 	}
 
 	return addRoutingTableResp, nil
@@ -713,17 +798,25 @@ func (s *RouterOSServiceImpl) addRoute(dst, gateway, table string) (response *ro
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	addRouteResp, addRouteErr := s.client.RunArgs([]string{
-		"/ip/route/add",
-		fmt.Sprintf("=dst-address=%s", dst),
-		fmt.Sprintf("=gateway=%s", gateway),
-		fmt.Sprintf("=routing-table=%s", table),
-	})
-	if addRouteErr != nil {
-		return nil, fmt.Errorf("failed to add route: %v", addRouteErr)
+	var addRouteErr error
+	for i := 0; i < 5; i++ {
+		addRouteResp, addRouteErr := s.client.RunArgs([]string{
+			"/ip/route/add",
+			fmt.Sprintf("=dst-address=%s", dst),
+			fmt.Sprintf("=gateway=%s", gateway),
+			fmt.Sprintf("=routing-table=%s", table),
+		})
+		if addRouteErr != nil {
+			log.Println("Error adding route: ", addRouteErr.Error())
+			log.Println("Retrying...")
+			time.Sleep(1 * time.Second)
+			continue
+		} else {
+			return addRouteResp, nil
+		}
 	}
 
-	return addRouteResp, nil
+	return nil, fmt.Errorf("failed to add route with dst %s, gateway %s, table %s: %v", dst, gateway, table, addRouteErr)
 }
 
 func (s *RouterOSServiceImpl) RemoveRoute(dst, gateway, table string) (response *routeros.Reply, err error) {
@@ -748,7 +841,11 @@ func (s *RouterOSServiceImpl) GetWireguardPublicKey(name string) (string, error)
 		"=.proplist=.id,public-key",
 	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf(
+			"failed to get wireguard public key with name %s: %v",
+			name,
+			err,
+		)
 	}
 
 	if len(resp.Re) == 0 {
