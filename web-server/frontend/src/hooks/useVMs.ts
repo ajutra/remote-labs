@@ -43,9 +43,9 @@ export const useVMs = () => {
     } catch (error) {
       console.error('Error fetching VMs:', error)
       toast({
-        title: 'Error',
-        description: 'Failed to load VMs',
-        variant: 'destructive',
+        title: 'Information',
+        description: 'No VMs found',
+        variant: 'default',
       })
       setVms([])
     } finally {
