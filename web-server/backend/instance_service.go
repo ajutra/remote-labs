@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -684,7 +685,7 @@ func (s *InstanceServiceImpl) GetWireguardConfig(instanceId string) (string, err
 	if err != nil {
 		return "", fmt.Errorf("error getting WireGuard config: %w", err)
 	}
-	var endpoint = "vpn.nethermir.cloud"
+	var endpoint = os.Getenv("ENDPOINT_URL")
 	// Join the AllowedIPs with commas and spaces
 	allowedIPs := strings.Join(conf.PeerAllowedIps, ", ")
 	wgConfig := fmt.Sprintf("[Interface]\nPrivateKey = %s\nAddress = %s\n\n[Peer]\nPublicKey = %s\nAllowedIPs = %s\nEndpoint = %s:%d",
