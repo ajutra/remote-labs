@@ -63,7 +63,7 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild>
                     <Link to={AppRoutes.CONTROL_PLANE}>
                       <Settings />
-                      <span>Control Plane</span>
+                      <span>Control Panel</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
