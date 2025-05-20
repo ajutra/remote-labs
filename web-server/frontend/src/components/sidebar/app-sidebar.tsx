@@ -9,7 +9,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { Home, Book, Laptop, Settings } from 'lucide-react'
+import { Home, Book, Laptop, Settings, Video } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { AppRoutes } from '@/enums/AppRoutes'
 import useIsAdmin from '@/hooks/useIsAdmin'
@@ -30,6 +30,11 @@ const items = [
     title: 'MyLabs',
     url: AppRoutes.MYLABS,
     icon: Laptop,
+  },
+  {
+    title: 'Tutorials',
+    url: AppRoutes.TUTORIALS,
+    icon: Video,
   },
 ]
 

@@ -19,6 +19,7 @@ import { LoadingProvider } from '@/context/LoadingContext'
 import ResetPassword from './pages/ResetPassword'
 import ProtectedRoute from './components/ProtectedRoute'
 import RenewSession from './pages/RenewSession'
+import Tutorials from './pages/Tutorials'
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const isAdmin = useIsAdmin()
@@ -64,6 +65,10 @@ const App: React.FC = () => {
                                 <ControlPlane />
                               </AdminRoute>
                             }
+                          />
+                          <Route
+                            path={AppRoutes.TUTORIALS}
+                            element={<Tutorials />}
                           />
                         </Routes>
                       </Layout>
