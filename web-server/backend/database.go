@@ -315,6 +315,7 @@ func (postgres *PostgresDatabase) UpdateUser(userId string, password string, pub
 		query = `
 		UPDATE users SET password = @password, public_ssh_keys = @public_ssh_keys WHERE id = @id`
 		args = pgx.NamedArgs{
+			"id":              userId,
 			"password":        password,
 			"public_ssh_keys": publicSshKeys,
 		}

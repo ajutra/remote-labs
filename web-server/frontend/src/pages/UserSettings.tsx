@@ -24,6 +24,7 @@ import {
 import { useUserSettings } from '@/hooks/useUserSettings'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { PasswordRequirements, isPasswordValid } from '@/components/forms/PasswordRequirements'
 
 const UserSettings: React.FC = () => {
   const { t } = useTranslation()
@@ -47,10 +48,6 @@ const UserSettings: React.FC = () => {
 
   const handlePasswordFormToggle = () => {
     setShowPasswordForm(!showPasswordForm)
-    if (!showPasswordForm) {
-      setPassword('')
-      setConfirmPassword('')
-    }
   }
 
   return (
@@ -97,25 +94,26 @@ const UserSettings: React.FC = () => {
                     <div className="space-y-2">
                       <Label htmlFor="password" className="text-base">{t('New Password')}</Label>
                       <Input
-                        id="password"
                         type="password"
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                         placeholder={t('Enter new password')}
                         className="h-10"
+                        required
                       />
+                      <PasswordRequirements password={password} />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="confirmPassword" className="text-base">
                         {t('Confirm New Password')}
                       </Label>
                       <Input
-                        id="confirmPassword"
                         type="password"
                         value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
                         placeholder={t('Confirm new password')}
                         className="h-10"
+                        required
                       />
                     </div>
                   </div>
@@ -204,7 +202,7 @@ const UserSettings: React.FC = () => {
             )}
             <Button 
               type="submit" 
-              disabled={isLoading} 
+              disabled={isLoading || (showPasswordForm && (!isPasswordValid(password) || password !== confirmPassword))} 
               className="w-full h-12 text-base"
             >
               {isLoading ? t('Saving...') : t('Save Changes')}

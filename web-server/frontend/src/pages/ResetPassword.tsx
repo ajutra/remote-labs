@@ -13,13 +13,14 @@ import { useTranslation } from 'react-i18next'
 import { useState, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { getEnv } from '@/utils/Env'
+import { PasswordRequirements, isPasswordValid } from '@/components/forms/PasswordRequirements'
 
 export default function ResetPassword() {
   const { t } = useTranslation()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const passwordRef = useRef<HTMLInputElement>(null)
+  const [password, setPassword] = useState('')
   const confirmPasswordRef = useRef<HTMLInputElement>(null)
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -47,13 +48,17 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!passwordRef.current || !confirmPasswordRef.current) return
+    if (!confirmPasswordRef.current) return
 
-    const password = passwordRef.current.value
     const confirmPassword = confirmPasswordRef.current.value
 
     if (password !== confirmPassword) {
       setError(t('Passwords do not match'))
+      return
+    }
+
+    if (!isPasswordValid(password)) {
+      setError(t('Password does not meet the requirements'))
       return
     }
 
@@ -121,10 +126,11 @@ export default function ResetPassword() {
               <Input
                 id="password"
                 type="password"
-                ref={passwordRef}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={8}
               />
+              <PasswordRequirements password={password} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="confirmPassword">{t('Confirm Password')}</Label>
@@ -133,7 +139,6 @@ export default function ResetPassword() {
                 type="password"
                 ref={confirmPasswordRef}
                 required
-                minLength={8}
               />
             </div>
             {error && (
@@ -141,7 +146,11 @@ export default function ResetPassword() {
                 {error}
               </CardDescription>
             )}
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={isLoading || !isPasswordValid(password)}
+            >
               {isLoading && <Loader2 className="mr-2 animate-spin" />}
               {t('Reset Password')}
             </Button>

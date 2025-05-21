@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { getEnv } from '@/utils/Env'
 
 export const useUserSettings = () => {
-  const { user } = useAuth()
+  const { user, fetchUserDetails } = useAuth()
   const { t } = useTranslation()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -34,29 +34,36 @@ export const useUserSettings = () => {
     }
 
     try {
+      const requestBody = {
+        userId: user?.id,
+        password: password || '',
+        publicSshKeys: sshKeys,
+      }
+
       const response = await fetch(`${getEnv().API_BASE_URL}/users/update`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          userId: user?.id,
-          password: password || '',
-          publicSshKeys: sshKeys,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
+        const errorData = await response.json()
         throw new Error('Failed to update user')
       }
+
+      const responseData = await response.json()
 
       setSuccess(t('Profile updated successfully'))
       setPassword('')
       setConfirmPassword('')
 
-      // Recargar la página para actualizar el contexto
-      window.location.reload()
-    } catch {
+      // Recargar los datos del usuario desde el servidor
+      if (user?.id) {
+        await fetchUserDetails(user.id)
+      }
+    } catch (err) {
       setError(t('Failed to update profile'))
     } finally {
       setIsLoading(false)
