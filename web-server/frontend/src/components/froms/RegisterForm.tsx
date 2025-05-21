@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -12,9 +12,11 @@ import { Label } from '@/components/ui/label'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useRegisterForm } from '@/hooks/forms/useRegisterForm'
+import { PasswordRequirements, isPasswordValid } from '@/components/forms/PasswordRequirements'
 
 export function RegisterForm({ onRegister }: { onRegister: () => void }) {
   const { t } = useTranslation()
+  const [password, setPassword] = useState('')
   const {
     nameRef,
     emailRef,
@@ -24,6 +26,13 @@ export function RegisterForm({ onRegister }: { onRegister: () => void }) {
     isLoading,
     handleSubmit,
   } = useRegisterForm(onRegister)
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPassword(e.target.value)
+    if (pwdRef.current) {
+      pwdRef.current.value = e.target.value
+    }
+  }
 
   return (
     <Card className="mx-auto max-w-sm border-none shadow-none">
@@ -60,7 +69,15 @@ export function RegisterForm({ onRegister }: { onRegister: () => void }) {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="password">{t('Password')}</Label>
-            <Input id="password" type="password" ref={pwdRef} required />
+            <Input 
+              id="password" 
+              type="password" 
+              ref={pwdRef} 
+              required 
+              value={password}
+              onChange={handlePasswordChange}
+            />
+            <PasswordRequirements password={password} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="passwordCheck">{t('Confirm Password')}</Label>
@@ -89,7 +106,11 @@ export function RegisterForm({ onRegister }: { onRegister: () => void }) {
             </CardDescription>
           )}
 
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button 
+            type="submit" 
+            className="w-full" 
+            disabled={isLoading || !isPasswordValid(password)}
+          >
             {isLoading && <Loader2 className="mr-2 animate-spin" />}
             {t('Sign Up')}
           </Button>
