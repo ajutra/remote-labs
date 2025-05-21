@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import useUserRole from '@/hooks/useUserRole';
 
 interface Tutorial {
   id: string;
@@ -61,6 +62,13 @@ const tutorials: Tutorial[] = [
 ];
 
 const Tutorials: React.FC = () => {
+  const isProfessorOrAdmin = useUserRole();
+  
+  // Filter tutorials based on user role
+  const filteredTutorials = tutorials.filter(tutorial => 
+    tutorial.category === 'technical' || (tutorial.category === 'academic' && isProfessorOrAdmin)
+  );
+
   return (
     <div className="container mx-auto py-8">
       <div className="mb-8">
@@ -71,7 +79,7 @@ const Tutorials: React.FC = () => {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {tutorials.map(tutorial => (
+        {filteredTutorials.map(tutorial => (
           <Card key={tutorial.id} className="hover:shadow-lg transition-shadow flex flex-col">
             <CardHeader className="flex-none">
               <div className="flex items-center gap-2">
