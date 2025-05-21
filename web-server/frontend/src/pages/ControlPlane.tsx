@@ -3,7 +3,7 @@ import UserManager from '@/components/controlplane/UserManager'
 import ServerStatus from '@/components/controlplane/ServerStatus'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import CreateProfessorForm from '@/components/froms/CreateProfessorForm'
+import CreateProfessorForm from '@/components/forms/CreateProfessorForm'
 import { Plus } from 'lucide-react'
 
 function ControlPlane() {
