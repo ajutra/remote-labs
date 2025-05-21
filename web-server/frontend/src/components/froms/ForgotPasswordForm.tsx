@@ -61,7 +61,7 @@ export function ForgotPasswordForm({
         <CardHeader>
           <CardTitle className="text-2xl">{t('Check Your Email')}</CardTitle>
           <CardDescription>
-            {t('We have sent you an email with instructions to reset your password.')}
+            {t('We are generating a secure token with a reset link that will be valid for 24 hours. The email may take a few minutes to arrive. If you request another reset link, a new token will be generated and the previous link will no longer be valid.')}
           </CardDescription>
         </CardHeader>
         <CardContent>
