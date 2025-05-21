@@ -7,8 +7,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { LoginForm } from '@/components/froms/LoginForm'
-import { RegisterForm } from '@/components/froms/RegisterForm'
+import { LoginForm } from '@/components/forms/LoginForm'
+import { RegisterForm } from '@/components/forms/RegisterForm'
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden'
 import { useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
