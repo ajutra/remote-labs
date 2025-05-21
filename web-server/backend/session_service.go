@@ -13,6 +13,26 @@ import (
 	"github.com/google/uuid"
 )
 
+// getSpainTime returns the current time in Spain's timezone (GMT+2)
+func getSpainTime() time.Time {
+	loc, err := time.LoadLocation("Europe/Madrid")
+	if err != nil {
+		log.Printf("Error loading timezone: %v, falling back to UTC+2", err)
+		return time.Now().UTC().Add(2 * time.Hour)
+	}
+	return time.Now().In(loc)
+}
+
+// formatTimeForDisplay formats a time.Time to a user-friendly string in Spain's timezone
+func formatTimeForDisplay(t time.Time) string {
+	loc, err := time.LoadLocation("Europe/Madrid")
+	if err != nil {
+		log.Printf("Error loading timezone: %v, falling back to UTC+2", err)
+		return t.UTC().Add(2 * time.Hour).Format("15:04")
+	}
+	return t.In(loc).Format("15:04")
+}
+
 type SessionManager interface {
 	StartSession(instanceId string) error
 	StopSession(instanceId string) error
@@ -57,7 +77,7 @@ func (s *SessionManagerImpl) monitorSessions() {
 		select {
 		case <-ticker.C:
 			s.eventsMutex.Lock()
-			now := time.Now()
+			now := getSpainTime()
 
 			// Check all sessions
 			for instanceId, event := range s.scheduledEvents {
@@ -81,7 +101,7 @@ func (s *SessionManagerImpl) monitorSessions() {
 
 					if !reminderSent {
 						renewalLink := fmt.Sprintf("%s/renew-session?token=%s", os.Getenv("FRONTEND_URL"), event.Token)
-						emailBody := fmt.Sprintf("Your session will end at %v. To renew your session, click here: %s", event.EndTime, renewalLink)
+						emailBody := fmt.Sprintf("Your session will end at %s. To renew your session, click here: %s", formatTimeForDisplay(event.EndTime), renewalLink)
 
 						err = s.emailService.SendEmail(userEmail, "Session Ending Soon", emailBody)
 						if err != nil {
@@ -176,7 +196,7 @@ func (s *SessionManagerImpl) StartSession(instanceId string) error {
 		return fmt.Errorf("invalid session duration: %w", err)
 	}
 
-	startTime := time.Now()
+	startTime := getSpainTime()
 	endTime := startTime.Add(time.Duration(sessionDuration) * time.Minute)
 	reminderToken := uuid.New().String()
 
@@ -209,8 +229,8 @@ func (s *SessionManagerImpl) StartSession(instanceId string) error {
 		return fmt.Errorf("error storing session info: %w", err)
 	}
 
-	// Send initial email
-	emailBody := fmt.Sprintf("Your session has started and will end at %v.", endTime)
+	// Send initial email with formatted time
+	emailBody := fmt.Sprintf("Your session has started and will end at %s.", formatTimeForDisplay(endTime))
 
 	err = s.emailService.SendEmail(userEmail, "Session Started", emailBody)
 	if err != nil {
@@ -286,8 +306,8 @@ func (s *SessionManagerImpl) RenewSession(instanceId string) error {
 		return fmt.Errorf("invalid session duration: %w", err)
 	}
 
-	// Calculate new end time
-	newEndTime := time.Now().Add(time.Duration(sessionDuration) * time.Minute)
+	// Calculate new end time using Spain's timezone
+	newEndTime := getSpainTime().Add(time.Duration(sessionDuration) * time.Minute)
 	log.Printf("[SessionManager] New session duration: %d minutes, will end at %v", sessionDuration, newEndTime)
 
 	// Update all session info in database
