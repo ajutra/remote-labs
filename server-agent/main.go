@@ -23,14 +23,16 @@ func main() {
 	stopInstanceEndpoint := os.Getenv("STOP_INSTANCE_ENDPOINT")
 	restartInstanceEndpoint := os.Getenv("RESTART_INSTANCE_ENDPOINT")
 	listInstancesStatusEndpoint := os.Getenv("LIST_INSTANCES_STATUS_ENDPOINT")
-	defaultNetworkBridge := os.Getenv("DEFAULT_NETWORK_BRIDGE")
-	vmNetworkBridge := os.Getenv("VM_NETWORK_BRIDGE")
+	vmsBridge := os.Getenv("VMS_BRIDGE")
+	vmNetworkInterface := os.Getenv("VM_NETWORK_INTERFACE")
+	getResourceStatusEndpoint := os.Getenv("GET_RESOURCE_STATUS_ENDPOINT")
+	isAliveEndpoint := os.Getenv("IS_ALIVE_ENDPOINT")
 
 	serverAgent := NewServerAgent(
 		vmsStoragePath,
 		cloudInitImagesPath,
-		defaultNetworkBridge,
-		vmNetworkBridge,
+		vmsBridge,
+		vmNetworkInterface,
 	)
 
 	listenAddr := getListenAddr()
@@ -46,6 +48,8 @@ func main() {
 		stopInstanceEndpoint,
 		restartInstanceEndpoint,
 		listInstancesStatusEndpoint,
+		getResourceStatusEndpoint,
+		isAliveEndpoint,
 	)
 	apiServer.Run()
 }

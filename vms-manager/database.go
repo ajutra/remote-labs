@@ -30,6 +30,9 @@ type Database interface {
 	VmIsLastInstanceInSubject(vmId string) (bool, error)
 	GetSubjectIdByVmId(vmId string) (string, error)
 	DeleteSubject(subjectId string) error
+	GetAllVmIds() ([]string, error)
+	SetVlanAsConfigured(vlan int) error
+	IsVlanConfigured(vlan int) (bool, error)
 }
 
 type PostgresDatabase struct {
@@ -389,6 +392,49 @@ func (postgres *PostgresDatabase) DeleteSubject(subjectId string) error {
 	return nil
 }
 
+func (postgres *PostgresDatabase) GetAllVmIds() ([]string, error) {
+	query := "SELECT id FROM vms WHERE is_base = false"
+	rows, err := postgres.db.Query(context.Background(), query)
+	if err != nil {
+		return nil, logAndReturnError("Error getting all vm ids: ", err.Error())
+	}
+	defer rows.Close()
+
+	var vmIds []string
+	for rows.Next() {
+		var vmId string
+		if err := rows.Scan(&vmId); err != nil {
+			return nil, logAndReturnError("Error getting all vm ids: ", err.Error())
+		}
+		vmIds = append(vmIds, vmId)
+	}
+
+	return vmIds, nil
+}
+
+func (postgres *PostgresDatabase) SetVlanAsConfigured(vlan int) error {
+	query := "UPDATE subjects SET vlan_is_configured = true WHERE vlan = @vlan"
+	args := pgx.NamedArgs{"vlan": vlan}
+
+	if _, err := postgres.db.Exec(context.Background(), query, args); err != nil {
+		return logAndReturnError("Error setting vlan as configured: ", err.Error())
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) IsVlanConfigured(vlan int) (bool, error) {
+	query := "SELECT vlan_is_configured FROM subjects WHERE vlan = @vlan"
+	args := pgx.NamedArgs{"vlan": vlan}
+
+	var isConfigured bool
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&isConfigured); err != nil {
+		return false, logAndReturnError("Error checking if vlan is configured: ", err.Error())
+	}
+
+	return isConfigured, nil
+}
+
 func (dbVm *DatabaseVM) toVm() Vm {
 	return Vm{
 		ID:               dbVm.ID,
@@ -455,6 +501,7 @@ func (postgres *PostgresDatabase) createTablesIfNotExist() error {
 		CREATE TABLE IF NOT EXISTS subjects (
 			subject_id TEXT PRIMARY KEY,
 			vlan INTEGER NOT NULL,
+			vlan_is_configured BOOLEAN NOT NULL DEFAULT false,
 			UNIQUE(subject_id),
 			UNIQUE(vlan)
 		)

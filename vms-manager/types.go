@@ -42,6 +42,16 @@ type ListInstancesStatusResponse struct {
 	Status     string `json:"status"`
 }
 
+type ListServersStatusResponse struct {
+	ServerIP         string   `json:"serverIp"`
+	CpuLoad          float64  `json:"cpuLoad"`
+	TotalMemoryMB    int      `json:"totalMemoryMB"`
+	FreeMemoryMB     int      `json:"freeMemoryMB"`
+	TotalDiskMB      int      `json:"totalDiskMB"`
+	FreeDiskMB       int      `json:"freeDiskMB"`
+	RunningInstances []string `json:"runningInstances"`
+}
+
 type ApiError struct {
 	Error string `json:"error"`
 }
@@ -86,6 +96,14 @@ type DeleteVmAgentRequest struct {
 	VmId           string `json:"vmId"`
 	RemoveEtiquete bool   `json:"removeEtiquete"`
 	Vid            string `json:"vid"`
+}
+
+type GetResourceStatusAgentResponse struct {
+	CpuLoad       float64 `json:"cpuLoad"`
+	TotalMemoryMB int     `json:"totalMemoryMB"`
+	FreeMemoryMB  int     `json:"freeMemoryMB"`
+	TotalDiskMB   int     `json:"totalDiskMB"`
+	FreeDiskMB    int     `json:"freeDiskMB"`
 }
 
 // Model
