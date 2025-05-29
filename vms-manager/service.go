@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -16,12 +17,18 @@ import (
 )
 
 const RUNNING_STATUS = "running"
+const SHUTOFF_STATUS = "shut off"
 const FIRST_VLAN = 100
 const MAX_VLANS = 255
 const MAX_VMS_PER_VLAN = 253 // 255 total IPs in the subnet, minus the first IP (gateway) and the last IP (broadcast)
 const FIRST_IP_IN_SUBNET = 1
 const SUBNET_MASK = 24
 const INTERFACE_ADDRESS_SECOND_OCTET = 1
+const INTERFACE_ADDRESS_SUBNET_MASK = 32
+const MAX_CPU_USAGE = 0.9
+const MIN_AVAILABLE_RAM_MB = 128
+const CPU_USAGE_PENALTY_FACTOR = 10240 // 10240 MB of RAM for 100% of CPU Load, adjust this value to change the penalty for high CPU usage
+const VLAN_TO_ROUTER_PORT_OFFSET = 20000
 
 type Service interface {
 	ListBaseImages() ([]ListBaseImagesResponse, error)
@@ -33,11 +40,12 @@ type Service interface {
 	StopInstance(instanceId string) error
 	RestartInstance(instanceId string) error
 	ListInstancesStatus() ([]ListInstancesStatusResponse, error)
+	ListServersStatus() ([]ListServersStatusResponse, error)
 }
 
 type ServiceImpl struct {
 	db                          Database
-	serverAgentsURLs            string
+	serverAgentsURLs            []string
 	listBaseImagesEndpoint      string
 	defineTemplateEndpoint      string
 	deleteTemplateEndpoint      string
@@ -47,10 +55,18 @@ type ServiceImpl struct {
 	stopInstanceEndpoint        string
 	restartInstanceEndpoint     string
 	listInstancesStatusEndpoint string
+	getResourceStatusEndpoint   string
+	serverAgentIsAliveEndpoint  string
 	vmsDns1                     string
 	vmsDns2                     string
-	mutexMap                    map[string]*sync.Mutex
+	routerosService             RouterOSService
+	routerosVlanBridge          string
+	routerosTaggedBridges       []string
+	routerosExternalGateway     string
+	vmsMutexMap                 map[string]*sync.Mutex
 	mutex                       sync.Mutex
+	routerVlanConfSharedMemory  []int
+	routerVlanConfMutex         sync.Mutex
 }
 
 type VmNetworkConfig struct {
@@ -129,12 +145,17 @@ func (s *ServiceImpl) DefineTemplate(request DefineTemplateRequest) (DefineTempl
 		return DefineTemplateResponse{}, logAndReturnError("Error marshalling define template agent request: ", err.Error())
 	}
 
-	vmMutex := s.getMutex(request.SourceInstanceId)
+	agentUrl, err := s.selectServerAgent()
+	if err != nil {
+		return DefineTemplateResponse{}, err
+	}
+
+	vmMutex := s.getVmMutex(request.SourceInstanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
 	resp, err := http.Post(
-		s.serverAgentsURLs+s.defineTemplateEndpoint,
+		agentUrl+s.defineTemplateEndpoint,
 		"application/json",
 		bytes.NewBuffer(jsonData),
 	)
@@ -198,34 +219,50 @@ func (s *ServiceImpl) DeleteTemplate(templateId string) error {
 		return logAndReturnError("Error marshalling delete template agent request: ", err.Error())
 	}
 
-	vmMutex := s.getMutex(templateId)
+	// We need to call the deleteInstanceEndpoint for each server agent
+	// because the template might not exist in all of them
+	agentsCalled := 0
+	vmMutex := s.getVmMutex(templateId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
+	for _, agentUrl := range s.serverAgentsURLs {
+		if err := s.checkIfServerAgentIsAlive(agentUrl); err != nil {
+			continue
+		}
+		agentsCalled++
 
-	// Calling deleteInstaceEndpoint because the server agent
-	// makes no difference between a template and an instance
-	req, err := http.NewRequest(
-		http.MethodDelete,
-		s.serverAgentsURLs+s.deleteInstanceEndpoint,
-		bytes.NewBuffer(jsonData),
-	)
-	if err != nil {
-		return logAndReturnError("Error creating delete template request: ", err.Error())
+		// Calling deleteInstaceEndpoint because the server agent
+		// makes no difference between a template and an instance
+		req, err := http.NewRequest(
+			http.MethodDelete,
+			agentUrl+s.deleteInstanceEndpoint,
+			bytes.NewBuffer(jsonData),
+		)
+		if err != nil {
+			return logAndReturnError("Error creating delete template request: ", err.Error())
+		}
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			return logAndReturnError("Error sending delete template request: ", err.Error())
+		}
+
+		if err := checkIfStatusCodeIsOk(resp); err != nil {
+			return err
+		}
+
+		resp.Body.Close()
 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return logAndReturnError("Error sending delete template request: ", err.Error())
+	if agentsCalled == 0 {
+		return NewHttpError(
+			http.StatusInternalServerError,
+			fmt.Errorf("no server agents available to delete template"),
+		)
 	}
-	defer resp.Body.Close()
-
-	if err := checkIfStatusCodeIsOk(resp); err != nil {
-		return err
-	}
-
 	s.deleteVmFromDb(templateId)
-	s.deleteMutex(templateId)
+	s.deleteVmMutex(templateId)
 
 	return nil
 }
@@ -312,12 +349,17 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 		return CreateInstanceResponse{}, logAndReturnError("Error marshalling create instance agent request: ", err.Error())
 	}
 
-	vmMutex := s.getMutex(request.SourceVmId)
+	agentUrl, err := s.selectServerAgent()
+	if err != nil {
+		return CreateInstanceResponse{}, err
+	}
+
+	vmMutex := s.getVmMutex(request.SourceVmId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
 	resp, err := http.Post(
-		s.serverAgentsURLs+s.createInstanceEndpoint,
+		agentUrl+s.createInstanceEndpoint,
 		"application/json",
 		bytes.NewBuffer(jsonData),
 	)
@@ -339,18 +381,42 @@ func (s *ServiceImpl) CreateInstance(request CreateInstanceRequest) (CreateInsta
 
 	s.addVmToDb(vm, false)
 
-	interfaceAddress := getInterfaceAddress(vmNetworkConfig.IpAddWithSubnet)
-	peerAllowedIps := []string{
-		vmNetworkConfig.IpAddWithSubnet,
-		interfaceAddress,
+	vlan, err := s.db.GetVlanByVmId(instanceId)
+	if err != nil {
+		return CreateInstanceResponse{}, err
+	}
+
+	if err := s.addVlanConfigIfNotExists(vlan); err != nil {
+		vmMutex.Unlock()
+		s.DeleteInstance(instanceId)
+		vmMutex.Lock()
+		return CreateInstanceResponse{}, err
+	}
+
+	interfaceAddress := getInterfaceAddressWithSubnet(vmNetworkConfig.IpAddWithSubnet)
+	peerAllowedIps := getPeerAllowedIps(vmNetworkConfig.IpAddWithSubnet)
+
+	peerPublicKey, err := s.routerosService.GetWireguardPublicKey(fmt.Sprintf("wireguard%d", vlan))
+	if err != nil {
+		vmMutex.Unlock()
+		s.DeleteInstance(instanceId)
+		vmMutex.Lock()
+		return CreateInstanceResponse{}, err
+	}
+
+	if err := s.routerosService.ApplyVmConfig(vmNetworkConfig, vlan, request.UserWgPubKey); err != nil {
+		vmMutex.Unlock()
+		s.DeleteInstance(instanceId)
+		vmMutex.Lock()
+		return CreateInstanceResponse{}, err
 	}
 
 	return CreateInstanceResponse{
 		InstanceId:       instanceId,
 		InterfaceAddress: interfaceAddress,
-		PeerPublicKey:    "Not implemented yet", // TODO: Implement this
+		PeerPublicKey:    peerPublicKey,
 		PeerAllowedIps:   peerAllowedIps,
-		PeerEndpointPort: 0, // TODO: Implement this
+		PeerEndpointPort: getVlanRouterPort(vlan),
 	}, nil
 }
 
@@ -390,28 +456,45 @@ func (s *ServiceImpl) DeleteInstance(instanceId string) error {
 		return logAndReturnError("Error marshalling delete instance agent request: ", err.Error())
 	}
 
-	vmMutex := s.getMutex(instanceId)
+	// We need to call the deleteInstanceEndpoint for each server agent
+	// because the instance might exist in some of them
+	agentsCalled := 0
+	vmMutex := s.getVmMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
+	for _, agentUrl := range s.serverAgentsURLs {
+		if err := s.checkIfServerAgentIsAlive(agentUrl); err != nil {
+			continue
+		}
+		agentsCalled++
 
-	req, err := http.NewRequest(
-		http.MethodDelete,
-		s.serverAgentsURLs+s.deleteInstanceEndpoint,
-		bytes.NewBuffer(jsonData),
-	)
-	if err != nil {
-		return logAndReturnError("Error creating delete instance request: ", err.Error())
+		req, err := http.NewRequest(
+			http.MethodDelete,
+			agentUrl+s.deleteInstanceEndpoint,
+			bytes.NewBuffer(jsonData),
+		)
+		if err != nil {
+			return logAndReturnError("Error creating delete instance request: ", err.Error())
+		}
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			return logAndReturnError("Error sending delete instance request: ", err.Error())
+		}
+
+		if err := checkIfStatusCodeIsOk(resp); err != nil {
+			return err
+		}
+
+		resp.Body.Close()
 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return logAndReturnError("Error sending delete instance request: ", err.Error())
-	}
-	defer resp.Body.Close()
-
-	if err := checkIfStatusCodeIsOk(resp); err != nil {
-		return err
+	if agentsCalled != len(s.serverAgentsURLs) {
+		return NewHttpError(
+			http.StatusInternalServerError,
+			fmt.Errorf("some server agents did not respond to delete instance request, please try again later"),
+		)
 	}
 
 	subjectId, err := s.db.GetSubjectIdByVmId(instanceId)
@@ -419,12 +502,21 @@ func (s *ServiceImpl) DeleteInstance(instanceId string) error {
 		return err
 	}
 
+	vmVlanIdentifier, err := s.db.GetVmVlanIdentifierByVmId(instanceId)
+	if err != nil {
+		return err
+	}
+
 	s.deleteVmFromDb(instanceId)
-	s.deleteMutex(instanceId)
+	s.deleteVmMutex(instanceId)
+	s.routerosService.RemoveVmConfig(vlan, vmVlanIdentifier)
 
 	if isLastInstanceInSubject {
+		s.deleteVlanConfigWhenAvailable(vlan)
 		s.deleteSubjectFromDb(subjectId)
 	}
+
+	log.Printf("Instance %s deleted successfully", instanceId)
 
 	return nil
 }
@@ -463,12 +555,17 @@ func (s *ServiceImpl) StartInstance(instanceId string) error {
 		return logAndReturnError("Error marshalling start instance agent request: ", err.Error())
 	}
 
-	vmMutex := s.getMutex(instanceId)
+	agentUrl, err := s.selectServerAgent()
+	if err != nil {
+		return err
+	}
+
+	vmMutex := s.getVmMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
 
 	resp, err := http.Post(
-		s.serverAgentsURLs+s.startInstanceEndpoint,
+		agentUrl+s.startInstanceEndpoint,
 		"application/json",
 		bytes.NewBuffer(jsonData),
 	)
@@ -492,21 +589,38 @@ func (s *ServiceImpl) StopInstance(instanceId string) error {
 		return err
 	}
 
-	vmMutex := s.getMutex(instanceId)
+	// We need to call the stopInstanceEndpoint for each server agent until we get a 200 response
+	// because we don't know which server agent the instance is running on
+	vmMutex := s.getVmMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
+	for _, agentUrl := range s.serverAgentsURLs {
+		if err := s.checkIfServerAgentIsAlive(agentUrl); err != nil {
+			continue
+		}
 
-	resp, err := http.Post(
-		s.serverAgentsURLs+s.stopInstanceEndpoint+"/"+instanceId,
-		"application/json",
-		nil,
-	)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if err := checkIfStatusCodeIsOk(resp); err != nil {
-		return err
+		resp, err := http.Post(
+			agentUrl+s.stopInstanceEndpoint+"/"+instanceId,
+			"application/json",
+			nil,
+		)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusBadRequest {
+			resp.Body.Close()
+			continue
+		}
+
+		if err := checkIfStatusCodeIsOk(resp); err != nil {
+			return err
+		}
+
+		// If we get a 200 response, we found the server agent that is running the instance
+		// and we can break the loop
+		break
 	}
 
 	return nil
@@ -521,19 +635,210 @@ func (s *ServiceImpl) RestartInstance(instanceId string) error {
 		return err
 	}
 
-	vmMutex := s.getMutex(instanceId)
+	// We need to call the restartInstanceEndpoint for each server agent until we get a 200 response
+	// because we don't know which server agent the instance is running on
+	correctServerFound := false
+	vmMutex := s.getVmMutex(instanceId)
 	vmMutex.Lock()
 	defer vmMutex.Unlock()
+	for _, agentUrl := range s.serverAgentsURLs {
+		if err := s.checkIfServerAgentIsAlive(agentUrl); err != nil {
+			continue
+		}
 
-	resp, err := http.Post(
-		s.serverAgentsURLs+s.restartInstanceEndpoint+"/"+instanceId,
-		"application/json",
-		nil,
-	)
+		resp, err := http.Post(
+			agentUrl+s.restartInstanceEndpoint+"/"+instanceId,
+			"application/json",
+			nil,
+		)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusBadRequest {
+			resp.Body.Close()
+			continue
+		}
+
+		if err := checkIfStatusCodeIsOk(resp); err != nil {
+			return err
+		}
+
+		correctServerFound = true
+
+		// If we get a 200 response, we found the server agent that is running the instance
+		// and we can break the loop
+		break
+	}
+
+	if !correctServerFound {
+		return NewHttpError(
+			http.StatusInternalServerError,
+			fmt.Errorf("server agent did not respond, please start the instance again"),
+		)
+	}
+
+	return nil
+}
+
+func (s *ServiceImpl) ListInstancesStatus() ([]ListInstancesStatusResponse, error) {
+	var globalStatuses []ListInstancesStatusResponse
+
+	// We need to call the listInstancesStatusEndpoint for each server agent to get the status of all instances
+	agentsCalled := 0
+	for _, agentUrl := range s.serverAgentsURLs {
+		if err := s.checkIfServerAgentIsAlive(agentUrl); err != nil {
+			continue
+		}
+		agentsCalled++
+		resp, err := http.Get(agentUrl + s.listInstancesStatusEndpoint)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := checkIfStatusCodeIsOk(resp); err != nil {
+			return nil, err
+		}
+
+		var statuses []ListInstancesStatusResponse
+		if err := json.NewDecoder(resp.Body).Decode(&statuses); err != nil {
+			return nil, logAndReturnError("Error decoding list instances status response: ", err.Error())
+		}
+
+		// We check if the vmId is already in the globalStatuses
+		// If it is, we update the status only if the new status is running
+		// If it is not, we add the status to the globalStatuses
+		for _, vmStatus := range statuses {
+			found := false
+			for i, existingStatus := range globalStatuses {
+				if existingStatus.InstanceId == vmStatus.InstanceId {
+					found = true
+					if vmStatus.Status == RUNNING_STATUS {
+						globalStatuses[i] = vmStatus
+					}
+					break
+				}
+			}
+			if !found {
+				globalStatuses = append(globalStatuses, vmStatus)
+			}
+		}
+	}
+
+	if agentsCalled != len(s.serverAgentsURLs) {
+		// In case some server agents did not respond, we need to add missing VMs with a status of "shut off"
+		vmIds, err := s.db.GetAllVmIds()
+		if err != nil {
+			return nil, err
+		}
+
+		for _, vmId := range vmIds {
+			found := false
+			for _, vmStatus := range globalStatuses {
+				if vmStatus.InstanceId == vmId {
+					found = true
+					break
+				}
+			}
+			if !found {
+				globalStatuses = append(globalStatuses, ListInstancesStatusResponse{
+					InstanceId: vmId,
+					Status:     SHUTOFF_STATUS,
+				})
+			}
+		}
+	}
+
+	return globalStatuses, nil
+}
+
+func (s *ServiceImpl) ListServersStatus() ([]ListServersStatusResponse, error) {
+	var serversStatus []ListServersStatusResponse
+
+	for _, agentUrl := range s.serverAgentsURLs {
+		if err := s.checkIfServerAgentIsAlive(agentUrl); err != nil {
+			continue
+		}
+
+		resourceStatus, err := s.getResourceStatus(agentUrl)
+		if err != nil {
+			continue
+		}
+
+		serverStatus := ListServersStatusResponse{
+			ServerIP:      agentUrl,
+			CpuLoad:       resourceStatus.CpuLoad,
+			TotalMemoryMB: resourceStatus.TotalMemoryMB,
+			FreeMemoryMB:  resourceStatus.FreeMemoryMB,
+			TotalDiskMB:   resourceStatus.TotalDiskMB,
+			FreeDiskMB:    resourceStatus.FreeDiskMB,
+		}
+
+		instancesStatus, err := s.ListInstancesStatus()
+		if err != nil {
+			continue
+		}
+
+		runningInstances := []string{}
+		for _, instanceStatus := range instancesStatus {
+			if instanceStatus.Status == RUNNING_STATUS {
+				runningInstances = append(runningInstances, instanceStatus.InstanceId)
+			}
+		}
+
+		serverStatus.RunningInstances = runningInstances
+
+		serversStatus = append(serversStatus, serverStatus)
+	}
+
+	return serversStatus, nil
+}
+
+func (s *ServiceImpl) selectServerAgent() (string, error) {
+	var selectedAgent string
+
+	bestScore := float64(math.Inf(-1))
+
+	for _, agentUrl := range s.serverAgentsURLs {
+		if err := s.checkIfServerAgentIsAlive(agentUrl); err != nil {
+			continue
+		}
+
+		resourceStatus, err := s.getResourceStatus(agentUrl)
+		if err != nil {
+			continue
+		}
+
+		if resourceStatus.FreeMemoryMB < MIN_AVAILABLE_RAM_MB || resourceStatus.CpuLoad > MAX_CPU_USAGE {
+			continue
+		}
+
+		score := getServerAgentScore(resourceStatus)
+
+		if score > bestScore {
+			bestScore = score
+			selectedAgent = agentUrl
+		}
+	}
+
+	if selectedAgent == "" {
+		return "", NewHttpError(
+			http.StatusInternalServerError,
+			fmt.Errorf("all servers are busy, please try again later"),
+		)
+	}
+
+	return selectedAgent, nil
+}
+
+func (s *ServiceImpl) checkIfServerAgentIsAlive(agentUrl string) error {
+	resp, err := http.Get(agentUrl + s.serverAgentIsAliveEndpoint)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+
 	if err := checkIfStatusCodeIsOk(resp); err != nil {
 		return err
 	}
@@ -541,27 +846,36 @@ func (s *ServiceImpl) RestartInstance(instanceId string) error {
 	return nil
 }
 
-func (s *ServiceImpl) ListInstancesStatus() ([]ListInstancesStatusResponse, error) {
-	resp, err := http.Get(s.serverAgentsURLs + s.listInstancesStatusEndpoint)
+func (s *ServiceImpl) getResourceStatus(agentUrl string) (GetResourceStatusAgentResponse, error) {
+	resp, err := http.Get(agentUrl + s.getResourceStatusEndpoint)
 	if err != nil {
-		return nil, err
+		return GetResourceStatusAgentResponse{}, err
 	}
 	defer resp.Body.Close()
 
 	if err := checkIfStatusCodeIsOk(resp); err != nil {
-		return nil, err
+		return GetResourceStatusAgentResponse{}, err
 	}
 
-	var statuses []ListInstancesStatusResponse
-	if err := json.NewDecoder(resp.Body).Decode(&statuses); err != nil {
-		return nil, logAndReturnError("Error decoding list instances status response: ", err.Error())
+	var resourceStatus GetResourceStatusAgentResponse
+	if err := json.NewDecoder(resp.Body).Decode(&resourceStatus); err != nil {
+		return GetResourceStatusAgentResponse{}, logAndReturnError("Error decoding get resource status response: ", err.Error())
 	}
 
-	return statuses, nil
+	return resourceStatus, nil
+}
+
+func getServerAgentScore(resourceStatus GetResourceStatusAgentResponse) float64 {
+	return float64(resourceStatus.FreeMemoryMB) - (CPU_USAGE_PENALTY_FACTOR * resourceStatus.CpuLoad)
 }
 
 func (s *ServiceImpl) getBaseImagesNames() ([]string, error) {
-	resp, err := http.Get(s.serverAgentsURLs + s.listBaseImagesEndpoint)
+	agentUrl, err := s.selectServerAgent()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.Get(agentUrl + s.listBaseImagesEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -801,7 +1115,7 @@ func (s *ServiceImpl) getVmNetworkConfigFromSubjectId(subjectId string) (VmNetwo
 		return VmNetworkConfig{}, err
 	}
 
-	gateway := getGatewayIp(vlan)
+	gateway := getVlanGatewayIp(vlan)
 	ipAddWithSubnet := getIpAddWithSubnet(vlan, vmVlanIdentifier)
 	vlanEtiquete := getVlanEtiquete(vlan, vmVlanIdentifier)
 
@@ -871,28 +1185,62 @@ func (s *ServiceImpl) getFirstAvailableVmVlanIdentifier(vlan int) (int, error) {
 	}
 }
 
-func getGatewayIp(vlan int) string {
-	return fmt.Sprintf("10.0.%d.%d", vlan, FIRST_IP_IN_SUBNET)
+func getVlanGatewayIp(vlan int) string {
+	return fmt.Sprintf("10.0.%d.%d", mapVlanToThirdIpOctet(vlan), FIRST_IP_IN_SUBNET)
+}
+
+func getVpnGatewayIp(vlan int) string {
+	return fmt.Sprintf("10.1.%d.%d", mapVlanToThirdIpOctet(vlan), FIRST_IP_IN_SUBNET)
+}
+
+func getVlanNetworkIpWithSubnet(vlan int) string {
+	return fmt.Sprintf("10.0.%d.0/%d", mapVlanToThirdIpOctet(vlan), SUBNET_MASK)
 }
 
 func getIpAddWithSubnet(vlan int, vmVlanIdentifier int) string {
 	return fmt.Sprintf(
-		"10.0.%d.%d/%d", vlan, vmVlanIdentifier+FIRST_IP_IN_SUBNET, SUBNET_MASK,
+		"10.0.%d.%d/%d",
+		mapVlanToThirdIpOctet(vlan),
+		vmVlanIdentifier+FIRST_IP_IN_SUBNET,
+		SUBNET_MASK,
 	)
+}
+
+func mapVlanToThirdIpOctet(vlan int) int {
+	return vlan - FIRST_VLAN
 }
 
 func getVlanEtiquete(vlan int, vmVlanIdentifier int) string {
 	return fmt.Sprintf("vlan%d-%d", vlan, vmVlanIdentifier)
 }
 
-func getInterfaceAddress(vmIpAddWithSubnet string) string {
+func getPeerAllowedIps(vmIpAddWithSubnet string) []string {
+	return []string{
+		getNetworkAddressWithSubnet(vmIpAddWithSubnet),
+		getNetworkAddressWithSubnet(getInterfaceAddressWithSubnet(vmIpAddWithSubnet)),
+	}
+}
+
+func getInterfaceAddressWithSubnet(vmIpAddWithSubnet string) string {
 	ipParts := strings.Split(vmIpAddWithSubnet, ".")
 	return fmt.Sprintf(
-		"%s.%d.%s.%s",
+		"%s.%d.%s.%s/%d",
 		ipParts[0],
 		INTERFACE_ADDRESS_SECOND_OCTET,
 		ipParts[2],
-		ipParts[3],
+		strings.Split(ipParts[3], "/")[0],
+		INTERFACE_ADDRESS_SUBNET_MASK,
+	)
+}
+
+func getNetworkAddressWithSubnet(vmIpAddWithSubnet string) string {
+	ipParts := strings.Split(vmIpAddWithSubnet, ".")
+	return fmt.Sprintf(
+		"%s.%s.%s.0/%d",
+		ipParts[0],
+		ipParts[1],
+		ipParts[2],
+		SUBNET_MASK,
 	)
 }
 
@@ -910,22 +1258,92 @@ func (s *ServiceImpl) deleteSubjectFromDb(subjectId string) {
 	}
 }
 
-func (s *ServiceImpl) getMutex(vmId string) *sync.Mutex {
+func (s *ServiceImpl) getVmMutex(vmId string) *sync.Mutex {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	if s.mutexMap[vmId] == nil {
-		s.mutexMap[vmId] = &sync.Mutex{}
+	if s.vmsMutexMap[vmId] == nil {
+		s.vmsMutexMap[vmId] = &sync.Mutex{}
 	}
 
-	return s.mutexMap[vmId]
+	return s.vmsMutexMap[vmId]
 }
 
-func (s *ServiceImpl) deleteMutex(vmId string) {
+func (s *ServiceImpl) deleteVmMutex(vmId string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	delete(s.mutexMap, vmId)
+	delete(s.vmsMutexMap, vmId)
+}
+
+func (s *ServiceImpl) addVlanConfigIfNotExists(vlan int) error {
+	s.routerVlanConfMutex.Lock()
+	defer s.routerVlanConfMutex.Unlock()
+
+	isConfigured, err := s.db.IsVlanConfigured(vlan)
+	if err != nil {
+		return err
+	}
+
+	if !isConfigured {
+		if err := s.routerosService.ApplyVlanConfig(
+			vlan,
+			getVlanRouterPort(vlan),
+			s.routerosVlanBridge,
+			s.routerosTaggedBridges,
+			s.routerosExternalGateway,
+			SUBNET_MASK,
+		); err != nil {
+			log.Println("Error applying router vlan config: ", err.Error())
+			s.routerosService.RemoveVlanConfig(
+				vlan,
+				getVlanRouterPort(vlan),
+				s.routerosVlanBridge,
+				s.routerosExternalGateway,
+				SUBNET_MASK,
+			)
+			return err
+		}
+		if err := s.db.SetVlanAsConfigured(vlan); err != nil {
+			log.Println("Error setting vlan as configured: ", err.Error())
+			s.routerosService.RemoveVlanConfig(
+				vlan,
+				getVlanRouterPort(vlan),
+				s.routerosVlanBridge,
+				s.routerosExternalGateway,
+				SUBNET_MASK,
+			)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *ServiceImpl) deleteVlanConfigWhenAvailable(vlan int) error {
+	s.routerVlanConfMutex.Lock()
+	defer s.routerVlanConfMutex.Unlock()
+
+	isConfigured, err := s.db.IsVlanConfigured(vlan)
+	if err != nil {
+		return err
+	}
+
+	if isConfigured {
+		s.routerosService.RemoveVlanConfig(
+			vlan,
+			getVlanRouterPort(vlan),
+			s.routerosVlanBridge,
+			s.routerosExternalGateway,
+			SUBNET_MASK,
+		)
+	}
+
+	return nil
+}
+
+func getVlanRouterPort(vlan int) int {
+	return vlan + VLAN_TO_ROUTER_PORT_OFFSET
 }
 
 func NewService(
@@ -940,12 +1358,18 @@ func NewService(
 	stopInstanceEndpoint string,
 	restartInstanceEndpoint string,
 	listInstancesStatusEndpoint string,
+	getResourceStatusEndpoint string,
+	serverAgentIsAliveEndpoint string,
 	vmsDns1 string,
 	vmsDns2 string,
+	routerosService RouterOSService,
+	routerosVlanBridge string,
+	routerosTaggedBridges []string,
+	routerosExternalGateway string,
 ) (Service, error) {
 	service := &ServiceImpl{
 		db:                          db,
-		serverAgentsURLs:            serverAgentsURLs[0], // TODO: support multiple server agents
+		serverAgentsURLs:            serverAgentsURLs,
 		listBaseImagesEndpoint:      listBaseImagesEndpoint,
 		defineTemplateEndpoint:      defineTemplateEndpoint,
 		deleteTemplateEndpoint:      deleteTemplateEndpoint,
@@ -955,9 +1379,18 @@ func NewService(
 		stopInstanceEndpoint:        stopInstanceEndpoint,
 		restartInstanceEndpoint:     restartInstanceEndpoint,
 		listInstancesStatusEndpoint: listInstancesStatusEndpoint,
+		getResourceStatusEndpoint:   getResourceStatusEndpoint,
+		serverAgentIsAliveEndpoint:  serverAgentIsAliveEndpoint,
 		vmsDns1:                     vmsDns1,
 		vmsDns2:                     vmsDns2,
-		mutexMap:                    make(map[string]*sync.Mutex),
+		routerosService:             routerosService,
+		routerosVlanBridge:          routerosVlanBridge,
+		routerosTaggedBridges:       routerosTaggedBridges,
+		routerosExternalGateway:     routerosExternalGateway,
+		vmsMutexMap:                 make(map[string]*sync.Mutex),
+		mutex:                       sync.Mutex{},
+		routerVlanConfSharedMemory:  []int{},
+		routerVlanConfMutex:         sync.Mutex{},
 	}
 
 	if err := service.addBaseImagesToDb(); err != nil {
