@@ -44,7 +44,8 @@ export const WireguardConfigButton: React.FC<WireguardConfigButtonProps> = ({
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `wireguard-${instanceId}.conf`
+    const shortId = instanceId.slice(0, 5)
+    a.download = `wireguard-${shortId}.conf`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
