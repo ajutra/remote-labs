@@ -9,8 +9,8 @@ import (
 )
 
 func main() {
-	if err := godotenv.Load(".backend.env"); err != nil {
-		log.Fatal("Error loading .backend.env file")
+	if err := godotenv.Load(".env"); err != nil {
+		log.Fatal("Error loading .env file")
 	}
 
 	db, err := NewDatabase()

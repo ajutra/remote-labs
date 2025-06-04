@@ -900,7 +900,7 @@ func (dbUser *DatabaseUser) toUser() User {
 }
 
 func NewDatabase() (Database, error) {
-	if err := godotenv.Load(".backend.env"); err != nil {
+	if err := godotenv.Load(".env"); err != nil {
 		return nil, fmt.Errorf("error loading .env file: %w", err)
 	}
 
