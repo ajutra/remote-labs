@@ -8,32 +8,41 @@ import (
 )
 
 type SubjectService interface {
-	CreateSubject(request CreateSubjectRequest) error
+	GetAllSubjects() ([]SubjectResponse, error)
+	CreateSubject(request CreateSubjectRequest) (string, error)
 	ListAllSubjectsByUserId(userId string) ([]SubjectResponse, error)
-	EnrollUserInSubject(userId, subjectId string) error
-	RemoveUserFromSubject(userId, subjectId string) error
+	EnrollUserInSubject(userEmail, subjectId string) error
+	RemoveUserFromSubject(userEmail, subjectId string) error
 	DeleteSubject(subjectId string) error
+	GetSubjectById(subjectId string) (SubjectResponse, error)
 }
 
 type SubjService struct {
-	db Database
+	db              Database
+	instanceService InstanceService
 }
 
-func NewSubjectService(db Database) SubjectService {
+func NewSubjectService(db Database, instanceService InstanceService) SubjectService {
 	return &SubjService{
-		db: db,
+		db:              db,
+		instanceService: instanceService,
 	}
 }
 
-func (s *SubjService) CreateSubject(request CreateSubjectRequest) error {
+func (s *SubjService) CreateSubject(request CreateSubjectRequest) (string, error) {
 	subject := request.toSubject()
 
 	// Check if professor exists
 	if err := s.db.UserExistsByMail(subject.ProfessorMail); err != nil {
-		return err
+		return "", err
 	}
 
-	return s.db.CreateSubject(subject)
+	subjectId, err := s.db.CreateSubject(subject)
+	if err != nil {
+		return "", err
+	}
+
+	return subjectId, nil
 }
 
 func (s *SubjService) ListAllSubjectsByUserId(userId string) ([]SubjectResponse, error) {
@@ -55,9 +64,9 @@ func (s *SubjService) ListAllSubjectsByUserId(userId string) ([]SubjectResponse,
 	return subjectsResponse, nil
 }
 
-func (s *SubjService) EnrollUserInSubject(userId, subjectId string) error {
+func (s *SubjService) EnrollUserInSubject(userEmail, subjectId string) error {
 	// Check if user exists
-	if err := s.db.UserExistsById(userId); err != nil {
+	if err := s.db.UserExistsByMail(userEmail); err != nil {
 		return err
 	}
 
@@ -66,12 +75,12 @@ func (s *SubjService) EnrollUserInSubject(userId, subjectId string) error {
 		return err
 	}
 
-	return s.db.EnrollUserInSubject(userId, subjectId)
+	return s.db.EnrollUserInSubject(userEmail, subjectId)
 }
 
-func (s *SubjService) RemoveUserFromSubject(userId, subjectId string) error {
+func (s *SubjService) RemoveUserFromSubject(userEmail, subjectId string) error {
 	// Check if user exists
-	if err := s.db.UserExistsById(userId); err != nil {
+	if err := s.db.UserExistsByMail(userEmail); err != nil {
 		return err
 	}
 
@@ -80,12 +89,7 @@ func (s *SubjService) RemoveUserFromSubject(userId, subjectId string) error {
 		return err
 	}
 
-	// Check if user is main professor of the subject
-	if s.db.IsMainProfessorOfSubject(userId, subjectId) {
-		return NewHttpError(http.StatusBadRequest, fmt.Errorf("main professor cannot be removed from subject"))
-	}
-
-	return s.db.RemoveUserFromSubject(userId, subjectId)
+	return s.db.RemoveUserFromSubject(userEmail, subjectId)
 }
 
 func (s *SubjService) DeleteSubject(subjectId string) error {
@@ -94,13 +98,54 @@ func (s *SubjService) DeleteSubject(subjectId string) error {
 		return err
 	}
 
-	// Check if there are users enrolled in the subject
-	// An error means there are no users enrolled in the subject
-	if _, err := s.db.ListAllUsersBySubjectId(subjectId); err != nil {
-		return s.db.DeleteSubject(subjectId)
+	// Check for associated instances
+	instancesIds, err := s.db.ListAllInstancesBySubjectId(subjectId)
+	if err != nil {
+		return err
+	}
+	if len(instancesIds) > 0 {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("Cannot delete a subject with associated instances"))
 	}
 
-	return NewHttpError(http.StatusBadRequest, fmt.Errorf("cannot delete subject with users enrolled"))
+	// Check for associated templates
+	templatesIds, err := s.db.ListAllTemplatesBySubjectId(subjectId)
+	if err != nil {
+		return err
+	}
+	if len(templatesIds) > 0 {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("Cannot delete a subject with associated templates"))
+	}
+
+	// Remove all users from the subject
+	if err := s.db.DeleteAllUsersFromSubject(subjectId); err != nil {
+		return err
+	}
+
+	// Delete the subject
+	return s.db.DeleteSubject(subjectId)
+}
+
+func (s *SubjService) GetSubjectById(subjectId string) (SubjectResponse, error) {
+	subject, err := s.db.GetSubjectById(subjectId)
+	if err != nil {
+		return SubjectResponse{}, err
+	}
+
+	return subject.toSubjectResponse(), nil
+}
+
+func (s *SubjService) GetAllSubjects() ([]SubjectResponse, error) {
+	subjects, err := s.db.GetAllSubjects()
+	if err != nil {
+		return nil, err
+	}
+
+	var subjectsResponse []SubjectResponse
+	for _, subject := range subjects {
+		subjectsResponse = append(subjectsResponse, subject.toSubjectResponse())
+	}
+
+	return subjectsResponse, nil
 }
 
 func (createSubjReq *CreateSubjectRequest) toSubject() Subject {

@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -14,20 +16,44 @@ import (
 
 type Database interface {
 	Close()
+	CreateUnverifiedUser(user User, verificationToken uuid.UUID) error
+	VerifyUser(token string) error
 	CreateUser(user User) error
 	UserExistsByMail(mail string) error
-	CreateSubject(subject Subject) error
+	CreateSubject(subject Subject) (string, error)
+	UserExistsByEmailorError(userEmail string) error
 	UserExistsById(userId string) error
 	ListAllSubjectsByUserId(userId string) ([]Subject, error)
 	ListAllUsersBySubjectId(subjectId string) ([]User, error)
+	GetAllUsers() ([]User, error)
 	ValidateUser(mail, password string) (User, error)
 	GetUser(userId string) (User, error)
 	SubjectExistsById(subjectId string) error
-	EnrollUserInSubject(userId, subjectId string) error
-	IsMainProfessorOfSubject(userId, subjectId string) bool
-	RemoveUserFromSubject(userId, subjectId string) error
+	EnrollUserInSubject(userEmail, subjectId string) error
+	IsMainProfessorOfSubject(userEmail, subjectId string) bool
+	RemoveUserFromSubject(userEmail, subjectId string) error
 	DeleteSubject(subjectId string) error
 	DeleteUser(userId string) error
+	UpdateVerificationToken(email string, token uuid.UUID) error
+	GetTemplateConfig(templateId string, subjectId string) (TemplateConfig, error)
+	CreateInstance(instanceId string, userId string, subjectId string, templateId *string, wgPrivateKey string, wgPublicKey string, interfaceIp string, peerPublicKey string, peerAllowedIps []string, peerEndpointPort int) error
+	DeleteInstance(instanceId string) error
+	CreateTemplate(templateId string, subjectId string, sizeMB int, vcpuCount int, vramMB int, isValidated bool, description string) error
+	DeleteTemplate(templateId string, subjectId string) error
+	UpdateUser(userId string, password string, publicSshKeys []string) error
+	GetUserIdByEmail(userEmail string) (string, error)
+	DeleteAllUsersFromSubject(subjectId string) error
+	ListAllTemplatesBySubjectId(subjectId string) ([]string, error)
+	ListAllInstancesBySubjectId(subjectId string) ([]string, error)
+	GetInstanceInfo(instanceId string) (InstanceInfo, error)
+	GetInstanceIdsByUserId(userId string) ([]string, error)
+	GetTemplatesBySubjectId(subjectId string) ([]TemplateDb, error)
+	GetSubjectById(subjectId string) (Subject, error)
+	GetWireguardConfig(instanceId string) (wireguardConfig, error)
+	CreatePasswordResetToken(email string, token uuid.UUID) error
+	ValidatePasswordResetToken(token string) (string, error)
+	UpdatePassword(userId string, password string) error
+	GetAllSubjects() ([]Subject, error)
 }
 
 type PostgresDatabase struct {
@@ -35,11 +61,12 @@ type PostgresDatabase struct {
 }
 
 type DatabaseUser struct {
-	ID       uuid.UUID
-	Role     Role
-	Name     string
-	Mail     string
-	Password string
+	ID            uuid.UUID
+	Role          Role
+	Name          string
+	Mail          string
+	Password      string
+	PublicSshKeys []string
 }
 
 type DatabaseSubject struct {
@@ -47,6 +74,392 @@ type DatabaseSubject struct {
 	Name          string
 	Code          string
 	ProfessorMail string
+}
+
+type InstanceInfo struct {
+	UserId              string
+	SubjectId           string
+	TemplateId          *string
+	CreatedAt           time.Time // Changed from string to time.Time
+	UserMail            string
+	SubjectName         string
+	TemplateDescription *string
+	Template_vcpu_count *int
+	Template_vram_mb    *int
+	Template_size_mb    *int
+}
+
+type TemplateDb struct {
+	ID          string
+	SubjectId   string
+	Description string
+	SizeMB      int
+	VcpuCount   int
+	VramMB      int
+}
+
+type wireguardConfig struct {
+	PrivateKey     string   `json:"private_key"`
+	PublicKey      string   `json:"public_key"`
+	InterfaceIp    string   `json:"interface_ip"`
+	PeerPublicKey  string   `json:"peer_public_key"`
+	PeerAllowedIps []string `json:"peer_allowed_ips"`
+	PeerPort       int      `json:"peer_port"`
+}
+
+func (postgres *PostgresDatabase) GetAllSubjects() ([]Subject, error) {
+	query := `
+	SELECT s.id, s.name, s.code, u.name as professor_name, u.mail as professor_mail
+	FROM subjects s
+	JOIN users u ON s.main_professor_id = u.id`
+
+	log.Printf("Executing query to fetch all subjects")
+	rows, err := postgres.db.Query(context.Background(), query)
+	if err != nil {
+		return nil, fmt.Errorf("error getting all subjects: %w", err)
+	}
+	defer rows.Close()
+
+	var subjects []Subject
+	for rows.Next() {
+		var subject Subject
+		if err := rows.Scan(&subject.ID, &subject.Name, &subject.Code, &subject.ProfessorName, &subject.ProfessorMail); err != nil {
+			return nil, fmt.Errorf("error scanning subject: %w", err)
+		}
+		subjects = append(subjects, subject)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating subjects: %w", err)
+	}
+
+	return subjects, nil
+}
+
+func (postgres *PostgresDatabase) GetWireguardConfig(instanceId string) (wireguardConfig, error) {
+	query := `
+	SELECT wg_private_key, wg_public_key, interface_ip, peer_public_key, peer_allowed_ips, peer_endpoint_port
+	FROM instances
+	WHERE id = @id`
+	args := pgx.NamedArgs{"id": instanceId}
+
+	var config wireguardConfig
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&config.PrivateKey, &config.PublicKey, &config.InterfaceIp, &config.PeerPublicKey, &config.PeerAllowedIps, &config.PeerPort); err != nil {
+		return wireguardConfig{}, fmt.Errorf("error getting wireguard config: %w", err)
+	}
+
+	return config, nil
+}
+
+func (postgres *PostgresDatabase) GetSubjectById(subjectId string) (Subject, error) {
+	query := `
+	SELECT s.id, s.name, s.code, s.main_professor_id
+	FROM subjects s
+	WHERE s.id = @id`
+	args := pgx.NamedArgs{"id": subjectId}
+
+	var dbSubject DatabaseSubject
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&dbSubject.ID, &dbSubject.Name, &dbSubject.Code, &dbSubject.ProfessorMail); err != nil {
+		return Subject{}, fmt.Errorf("error getting subject: %w", err)
+	}
+
+	// Fetch professor details
+	professorQuery := `
+	SELECT name, mail
+	FROM users
+	WHERE id = @id`
+	professorArgs := pgx.NamedArgs{"id": dbSubject.ProfessorMail}
+
+	var professorName, professorMail string
+	if err := postgres.db.QueryRow(context.Background(), professorQuery, professorArgs).Scan(&professorName, &professorMail); err != nil {
+		return Subject{}, fmt.Errorf("error getting professor details: %w", err)
+	}
+
+	// Map to Subject
+	subject := dbSubject.toSubject()
+	subject.ProfessorName = professorName
+	subject.ProfessorMail = professorMail
+
+	return subject, nil
+}
+
+func (postgres *PostgresDatabase) GetTemplatesBySubjectId(subjectId string) ([]TemplateDb, error) {
+	log.Printf("Executing query to fetch templates for subject ID: %s", subjectId)
+	query := "SELECT id, subject_id, description, size_mb, vcpu_count, vram_mb FROM templates WHERE subject_id = @subject_id"
+	args := pgx.NamedArgs{"subject_id": subjectId}
+
+	rows, err := postgres.db.Query(context.Background(), query, args)
+	if err != nil {
+		log.Printf("Error executing query: %v", err)
+		return nil, fmt.Errorf("error executing query: %w", err)
+	}
+	defer rows.Close()
+
+	var templates []TemplateDb
+	for rows.Next() {
+		var template TemplateDb
+		if err := rows.Scan(&template.ID, &template.SubjectId, &template.Description, &template.SizeMB, &template.VcpuCount, &template.VramMB); err != nil {
+			log.Printf("Error scanning row: %v", err)
+			return nil, fmt.Errorf("error scanning row: %w", err)
+		}
+		templates = append(templates, template)
+	}
+
+	if rows.Err() != nil {
+		log.Printf("Error iterating rows: %v", rows.Err())
+		return nil, fmt.Errorf("error iterating rows: %w", rows.Err())
+	}
+
+	log.Printf("Fetched templates: %+v", templates)
+	return templates, nil
+}
+
+func (postgres *PostgresDatabase) GetInstanceIdsByUserId(userId string) ([]string, error) {
+	query := "SELECT id FROM instances WHERE user_id = $1"
+
+	rows, err := postgres.db.Query(context.Background(), query, userId)
+	if err != nil {
+		return nil, fmt.Errorf("error executing query: %w", err)
+	}
+	defer rows.Close()
+
+	var instanceIds []string
+	for rows.Next() {
+		var instanceId string
+		if err := rows.Scan(&instanceId); err != nil {
+			return nil, fmt.Errorf("error scanning row: %w", err)
+		}
+		instanceIds = append(instanceIds, instanceId)
+	}
+
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", rows.Err())
+	}
+
+	return instanceIds, nil
+}
+
+func (postgres *PostgresDatabase) ListAllTemplatesBySubjectId(subjectId string) ([]string, error) {
+	query := "SELECT id FROM templates WHERE subject_id = @subject_id"
+	args := pgx.NamedArgs{"subject_id": subjectId}
+
+	rows, err := postgres.db.Query(context.Background(), query, args)
+	if err != nil {
+		return nil, fmt.Errorf("error listing templates: %w", err)
+	}
+	defer rows.Close()
+
+	var templates []string
+	for rows.Next() {
+		var templateId string
+		if err := rows.Scan(&templateId); err != nil {
+			return nil, fmt.Errorf("error scanning template id: %w", err)
+		}
+		templates = append(templates, templateId)
+	}
+
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("error iterating template rows: %w", rows.Err())
+	}
+
+	return templates, nil
+}
+
+func (postgres *PostgresDatabase) ListAllInstancesBySubjectId(subjectId string) ([]string, error) {
+	query := "SELECT id FROM instances WHERE subject_id = @subject_id"
+	args := pgx.NamedArgs{"subject_id": subjectId}
+
+	rows, err := postgres.db.Query(context.Background(), query, args)
+	if err != nil {
+		return nil, fmt.Errorf("error listing instances: %w", err)
+	}
+	defer rows.Close()
+
+	var instances []string
+	for rows.Next() {
+		var instanceId string
+		if err := rows.Scan(&instanceId); err != nil {
+			return nil, fmt.Errorf("error scanning instance id: %w", err)
+		}
+		instances = append(instances, instanceId)
+	}
+
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("error iterating instance rows: %w", rows.Err())
+	}
+
+	return instances, nil
+}
+
+func (postgres *PostgresDatabase) UserExistsById(userId string) error {
+	query := "SELECT EXISTS(SELECT 1 FROM users WHERE id = @id)"
+	args := pgx.NamedArgs{"id": userId}
+
+	var exists bool
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
+		return fmt.Errorf("error checking if user exists: %w", err)
+	}
+
+	if !exists {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with id %s does not exist", userId))
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) UpdateUser(userId string, password string, publicSshKeys []string) error {
+	//if password is empty, don't update it
+	var query string
+	var args pgx.NamedArgs
+	if password != "" {
+		query = `
+		UPDATE users SET password = @password, public_ssh_keys = @public_ssh_keys WHERE id = @id`
+		args = pgx.NamedArgs{
+			"id":              userId,
+			"password":        password,
+			"public_ssh_keys": publicSshKeys,
+		}
+	} else {
+		query = `
+		UPDATE users SET public_ssh_keys = @public_ssh_keys WHERE id = @id`
+		args = pgx.NamedArgs{
+			"id":              userId,
+			"public_ssh_keys": publicSshKeys,
+		}
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error updating user: %w", err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) CreateTemplate(templateId string, subjectId string, sizeMB int, vcpuCount int, vramMB int, isValidated bool, description string) error {
+	// Convert subjectId to UUID
+	subjectUUID, err := uuid.Parse(subjectId)
+	if err != nil {
+		return fmt.Errorf("error parsing subject ID: %w", err)
+	}
+
+	query := `
+	INSERT INTO templates (id, subject_id, size_mb, vcpu_count, vram_mb, is_validated, description)
+	VALUES (@id, @subject_id, @size_mb, @vcpu_count, @vram_mb, @is_validated, @description)
+	ON CONFLICT (id, subject_id) DO NOTHING`
+
+	args := pgx.NamedArgs{
+		"id":           templateId,
+		"subject_id":   subjectUUID,
+		"size_mb":      sizeMB,
+		"vcpu_count":   vcpuCount,
+		"vram_mb":      vramMB,
+		"is_validated": isValidated,
+		"description":  description,
+	}
+
+	_, err = postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error creating template: %w", err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) DeleteTemplate(templateId string, subjectId string) error {
+	query := `
+	DELETE FROM templates WHERE id = @template_id AND subject_id = @subject_id`
+	args := pgx.NamedArgs{
+		"template_id": templateId,
+		"subject_id":  subjectId,
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error deleting template: %w", err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) GetTemplateConfig(templateId string, subjectId string) (TemplateConfig, error) {
+	query := `
+	SELECT size_mb, vcpu_count, vram_mb
+	FROM templates
+	WHERE id = @template_id AND subject_id = @subject_id`
+	args := pgx.NamedArgs{
+		"template_id": templateId,
+		"subject_id":  subjectId,
+	}
+
+	var templateConfig TemplateConfig
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&templateConfig.SizeMB, &templateConfig.VcpuCount, &templateConfig.VramMB); err != nil {
+		return TemplateConfig{}, fmt.Errorf("error getting template config: %w", err)
+	}
+
+	return templateConfig, nil
+}
+
+func (postgres *PostgresDatabase) CreateInstance(instanceId string, userId string, subjectId string, templateId *string, wgPrivateKey string, wgPublicKey string, interfaceIp string, peerPublicKey string, peerAllowedIps []string, peerEndpointPort int) error {
+	// Convertir los strings a UUID
+	instanceUUID, err := uuid.Parse(instanceId)
+	if err != nil {
+		return fmt.Errorf("error parsing instance ID: %w", err)
+	}
+
+	userUUID, err := uuid.Parse(userId)
+	if err != nil {
+		return fmt.Errorf("error parsing user ID: %w", err)
+	}
+
+	subjectUUID, err := uuid.Parse(subjectId)
+	if err != nil {
+		return fmt.Errorf("error parsing subject ID: %w", err)
+	}
+
+	var templateUUID *uuid.UUID
+	if templateId != nil {
+		parsedUUID, err := uuid.Parse(*templateId)
+		if err != nil {
+			return fmt.Errorf("error parsing template ID: %w", err)
+		}
+		templateUUID = &parsedUUID
+	}
+
+	query := `
+	INSERT INTO instances (id, user_id, subject_id, template_id, wg_private_key, wg_public_key, interface_ip, peer_public_key, peer_allowed_ips, peer_endpoint_port)
+	VALUES (@id, @user_id, @subject_id, @template_id, @wg_private_key, @wg_public_key, @interface_ip, @peer_public_key, @peer_allowed_ips, @peer_endpoint_port)`
+	args := pgx.NamedArgs{
+		"id":                 instanceUUID,
+		"user_id":            userUUID,
+		"subject_id":         subjectUUID,
+		"template_id":        templateUUID,
+		"wg_private_key":     wgPrivateKey,
+		"wg_public_key":      wgPublicKey,
+		"interface_ip":       interfaceIp,
+		"peer_public_key":    peerPublicKey,
+		"peer_allowed_ips":   peerAllowedIps,
+		"peer_endpoint_port": peerEndpointPort,
+	}
+
+	_, err = postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error creating instance: %w", err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) DeleteInstance(instanceId string) error {
+	query := `
+	DELETE FROM instances WHERE id = @id`
+	args := pgx.NamedArgs{"id": instanceId}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error deleting instance: %w", err)
+	}
+	return nil
 }
 
 func (postgres *PostgresDatabase) CreateUser(user User) error {
@@ -75,7 +488,36 @@ func (postgres *PostgresDatabase) CreateUser(user User) error {
 	return nil
 }
 
+func (postgres *PostgresDatabase) CreateUnverifiedUser(user User, verificationToken uuid.UUID) error {
+	dbUser := user.toDatabaseUser()
+	query := `
+	INSERT INTO unverified_users (id, role_id, name, mail, password, verification_token)
+	VALUES (
+		@id, 
+		(SELECT id FROM roles WHERE role = @role), 
+		@name, 
+		@mail, 
+		@password,
+		@verification_token)`
+	args := pgx.NamedArgs{
+		"id":                 dbUser.ID,
+		"role":               dbUser.Role,
+		"name":               dbUser.Name,
+		"mail":               dbUser.Mail,
+		"password":           dbUser.Password,
+		"verification_token": verificationToken,
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error creating unverified user: %w", err)
+	}
+
+	return nil
+}
+
 func (postgres *PostgresDatabase) UserExistsByMail(mail string) error {
+	// Check if user exists in users table
 	query := "SELECT EXISTS(SELECT 1 FROM users WHERE mail = @mail)"
 	args := pgx.NamedArgs{"mail": mail}
 
@@ -88,10 +530,20 @@ func (postgres *PostgresDatabase) UserExistsByMail(mail string) error {
 		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with mail %s does not exist", mail))
 	}
 
+	// Check if user exists in unverified_users table
+	query = "SELECT EXISTS(SELECT 1 FROM unverified_users WHERE mail = @mail)"
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
+		return fmt.Errorf("error checking if unverified user exists: %w", err)
+	}
+
+	if exists {
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with mail %s exists but is not verified", mail))
+	}
+
 	return nil
 }
 
-func (postgres *PostgresDatabase) CreateSubject(subject Subject) error {
+func (postgres *PostgresDatabase) CreateSubject(subject Subject) (string, error) {
 	dbSubject := subject.toDatabaseSubject()
 	query := `
 	INSERT INTO subjects (id, name, code, main_professor_id)
@@ -109,15 +561,15 @@ func (postgres *PostgresDatabase) CreateSubject(subject Subject) error {
 
 	_, err := postgres.db.Exec(context.Background(), query, args)
 	if err != nil {
-		return fmt.Errorf("error creating subject: %w", err)
+		return "", fmt.Errorf("error creating subject: %w", err)
 	}
 
-	return nil
+	return dbSubject.ID.String(), nil
 }
 
-func (postgres *PostgresDatabase) UserExistsById(userId string) error {
-	query := "SELECT EXISTS(SELECT 1 FROM users WHERE id = @id)"
-	args := pgx.NamedArgs{"id": userId}
+func (postgres *PostgresDatabase) UserExistsByEmailorError(userEmail string) error {
+	query := "SELECT EXISTS(SELECT 1 FROM users WHERE mail = @mail)"
+	args := pgx.NamedArgs{"mail": userEmail}
 
 	var exists bool
 	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
@@ -125,7 +577,7 @@ func (postgres *PostgresDatabase) UserExistsById(userId string) error {
 	}
 
 	if !exists {
-		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with id %s does not exist", userId))
+		return NewHttpError(http.StatusBadRequest, fmt.Errorf("user with email %s does not exist", userEmail))
 	}
 
 	return nil
@@ -195,16 +647,23 @@ func (postgres *PostgresDatabase) ListAllUsersBySubjectId(subjectId string) ([]U
 }
 
 func (postgres *PostgresDatabase) ValidateUser(mail, password string) (User, error) {
+
 	query := `
 	SELECT u.id, r.role, u.name, u.mail, u.password
 	FROM users u
 	JOIN roles r ON u.role_id = r.id
-	WHERE u.mail = @mail AND u.password = @password`
-	args := pgx.NamedArgs{"mail": mail, "password": password}
+	WHERE u.mail = @mail`
+	args := pgx.NamedArgs{"mail": mail}
 
 	var dbUser DatabaseUser
-	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password); err != nil {
+	err := postgres.db.QueryRow(context.Background(), query, args).Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password)
+	if err != nil {
 		return User{}, fmt.Errorf("error validating user: %w", err)
+	}
+
+	// Comparar la contraseña en texto plano con el hash almacenado
+	if !CheckPasswordHash(password, dbUser.Password) {
+		return User{}, fmt.Errorf("invalid password")
 	}
 
 	return dbUser.toUser(), nil
@@ -212,14 +671,14 @@ func (postgres *PostgresDatabase) ValidateUser(mail, password string) (User, err
 
 func (postgres *PostgresDatabase) GetUser(userId string) (User, error) {
 	query := `
-	SELECT u.id, r.role, u.name, u.mail, u.password
+	SELECT u.id, r.role, u.name, u.mail, u.password, u.public_ssh_keys
 	FROM users u
 	JOIN roles r ON u.role_id = r.id
 	WHERE u.id = @id`
 	args := pgx.NamedArgs{"id": userId}
 
 	var dbUser DatabaseUser
-	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password); err != nil {
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password, &dbUser.PublicSshKeys); err != nil {
 		return User{}, fmt.Errorf("error getting user: %w", err)
 	}
 
@@ -242,13 +701,18 @@ func (postgres *PostgresDatabase) SubjectExistsById(subjectId string) error {
 	return nil
 }
 
-func (postgres *PostgresDatabase) EnrollUserInSubject(userId, subjectId string) error {
+func (postgres *PostgresDatabase) EnrollUserInSubject(userEmail, subjectId string) error {
+	userId, err := postgres.GetUserIdByEmail(userEmail)
+	if err != nil {
+		return fmt.Errorf("error getting user id: %w", err)
+	}
+
 	query := `
 	INSERT INTO user_subjects (user_id, subject_id)
 	VALUES (@user_id, @subject_id)`
 	args := pgx.NamedArgs{"user_id": userId, "subject_id": subjectId}
 
-	_, err := postgres.db.Exec(context.Background(), query, args)
+	_, err = postgres.db.Exec(context.Background(), query, args)
 	if err != nil {
 		return fmt.Errorf("error enrolling user in subject: %w", err)
 	}
@@ -268,15 +732,32 @@ func (postgres *PostgresDatabase) IsMainProfessorOfSubject(userId, subjectId str
 	return isMainProfessor
 }
 
-func (postgres *PostgresDatabase) RemoveUserFromSubject(userId, subjectId string) error {
+func (postgres *PostgresDatabase) RemoveUserFromSubject(userEmail, subjectId string) error {
+	userId, err := postgres.GetUserIdByEmail(userEmail)
+	if err != nil {
+		return fmt.Errorf("error getting user id: %w", err)
+	}
+
 	query := `
 	DELETE FROM user_subjects
 	WHERE user_id = @user_id AND subject_id = @subject_id`
 	args := pgx.NamedArgs{"user_id": userId, "subject_id": subjectId}
 
-	_, err := postgres.db.Exec(context.Background(), query, args)
+	_, err = postgres.db.Exec(context.Background(), query, args)
 	if err != nil {
 		return fmt.Errorf("error removing user from subject: %w", err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) DeleteAllUsersFromSubject(subjectId string) error {
+	query := "DELETE FROM user_subjects WHERE subject_id = @subject_id"
+	args := pgx.NamedArgs{"subject_id": subjectId}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error deleting all users from subject: %w", err)
 	}
 
 	return nil
@@ -306,13 +787,86 @@ func (postgres *PostgresDatabase) DeleteUser(userId string) error {
 	return nil
 }
 
+func (postgres *PostgresDatabase) VerifyUser(token string) error {
+	// Start a transaction
+	tx, err := postgres.db.Begin(context.Background())
+	if err != nil {
+		return fmt.Errorf("error starting transaction: %w", err)
+	}
+	defer tx.Rollback(context.Background())
+
+	// Get the unverified user
+	query := `
+	SELECT id, role_id, name, mail, password
+	FROM unverified_users
+	WHERE verification_token = @token`
+	args := pgx.NamedArgs{"token": token}
+
+	var dbUser DatabaseUser
+	if err := tx.QueryRow(context.Background(), query, args).Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password); err != nil {
+		if err == pgx.ErrNoRows {
+			return fmt.Errorf("no unverified user found with this token")
+		}
+		return fmt.Errorf("error retrieving unverified user: %w", err)
+	}
+
+	// Check if user already exists in users table
+	query = "SELECT EXISTS(SELECT 1 FROM users WHERE mail = @mail)"
+	args = pgx.NamedArgs{"mail": dbUser.Mail}
+	var exists bool
+	if err := tx.QueryRow(context.Background(), query, args).Scan(&exists); err != nil {
+		return fmt.Errorf("error checking if user exists: %w", err)
+	}
+
+	if exists {
+		// User is already verified, just delete from unverified_users
+		query = "DELETE FROM unverified_users WHERE verification_token = @token"
+		args = pgx.NamedArgs{"token": token}
+		if _, err := tx.Exec(context.Background(), query, args); err != nil {
+			return fmt.Errorf("error deleting unverified user: %w", err)
+		}
+		return fmt.Errorf("user already verified")
+	}
+
+	// Insert into verified users
+	query = `
+	INSERT INTO users (id, role_id, name, mail, password)
+	VALUES (@id, @role_id, @name, @mail, @password)`
+	args = pgx.NamedArgs{
+		"id":       dbUser.ID,
+		"role_id":  dbUser.Role,
+		"name":     dbUser.Name,
+		"mail":     dbUser.Mail,
+		"password": dbUser.Password,
+	}
+
+	if _, err := tx.Exec(context.Background(), query, args); err != nil {
+		return fmt.Errorf("error inserting verified user: %w", err)
+	}
+
+	// Delete from unverified users
+	query = "DELETE FROM unverified_users WHERE verification_token = @token"
+	args = pgx.NamedArgs{"token": token}
+	if _, err := tx.Exec(context.Background(), query, args); err != nil {
+		return fmt.Errorf("error deleting unverified user: %w", err)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(context.Background()); err != nil {
+		return fmt.Errorf("error committing transaction: %w", err)
+	}
+
+	return nil
+}
+
 func (user *User) toDatabaseUser() DatabaseUser {
 	return DatabaseUser{
-		ID:       user.ID,
-		Role:     user.Role,
-		Name:     user.Name,
-		Mail:     user.Mail,
-		Password: user.Password,
+		ID:            user.ID,
+		Role:          user.Role,
+		Name:          user.Name,
+		Mail:          user.Mail,
+		Password:      user.Password,
+		PublicSshKeys: user.PublicSshKeys,
 	}
 }
 
@@ -336,11 +890,12 @@ func (dbSubject *DatabaseSubject) toSubject() Subject {
 
 func (dbUser *DatabaseUser) toUser() User {
 	return User{
-		ID:       dbUser.ID,
-		Role:     dbUser.Role,
-		Name:     dbUser.Name,
-		Mail:     dbUser.Mail,
-		Password: dbUser.Password,
+		ID:            dbUser.ID,
+		Role:          dbUser.Role,
+		Name:          dbUser.Name,
+		Mail:          dbUser.Mail,
+		Password:      dbUser.Password,
+		PublicSshKeys: dbUser.PublicSshKeys,
 	}
 }
 
@@ -382,44 +937,228 @@ func (postgres *PostgresDatabase) Close() {
 
 func getDDLStatements() string {
 	return `
-    CREATE TABLE IF NOT EXISTS roles (
-        id SERIAL PRIMARY KEY,
-        role VARCHAR(50) NOT NULL UNIQUE
-    );
+		CREATE TABLE IF NOT EXISTS roles (
+			id SERIAL PRIMARY KEY,
+			role VARCHAR(50) NOT NULL UNIQUE
+		);
 
-    CREATE TABLE IF NOT EXISTS users (
-        id UUID PRIMARY KEY,
-        role_id INTEGER NOT NULL,
-        name VARCHAR(100) NOT NULL,
-        mail VARCHAR(100) NOT NULL UNIQUE,
-        password VARCHAR(100) NOT NULL,
-        FOREIGN KEY (role_id) REFERENCES roles(id)
-    );
+		CREATE TABLE IF NOT EXISTS users (
+			id UUID PRIMARY KEY,
+			role_id INTEGER NOT NULL REFERENCES roles(id),
+			name VARCHAR(100) NOT NULL,
+			mail VARCHAR(100) NOT NULL UNIQUE,
+			password VARCHAR(100) NOT NULL,
+			public_ssh_keys TEXT[] DEFAULT NULL,
+			password_reset_token UUID,
+			password_reset_token_created_at TIMESTAMP
+		);
 
-    CREATE TABLE IF NOT EXISTS subjects (
-        id UUID PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        code VARCHAR(50) NOT NULL UNIQUE,
-        main_professor_id UUID,
-        FOREIGN KEY (main_professor_id) REFERENCES users(id)
-    );
+		CREATE TABLE IF NOT EXISTS unverified_users (
+			id UUID PRIMARY KEY,
+			role_id INTEGER NOT NULL REFERENCES roles(id),
+			name VARCHAR(100) NOT NULL,
+			mail VARCHAR(100) NOT NULL UNIQUE,
+			password VARCHAR(100) NOT NULL,
+			verification_token UUID NOT NULL UNIQUE,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
 
-    CREATE TABLE IF NOT EXISTS user_subjects (
-        user_id UUID NOT NULL,
-        subject_id UUID NOT NULL,
-        PRIMARY KEY (user_id, subject_id),
-        FOREIGN KEY (user_id) REFERENCES users(id),
-        FOREIGN KEY (subject_id) REFERENCES subjects(id)
-    );
-    `
+		CREATE TABLE IF NOT EXISTS subjects (
+			id UUID PRIMARY KEY,
+			name VARCHAR(100) NOT NULL,
+			code VARCHAR(50) NOT NULL UNIQUE,
+			main_professor_id UUID NOT NULL REFERENCES users(id)
+		);
+
+		CREATE TABLE IF NOT EXISTS templates (
+			id VARCHAR(100) NOT NULL,
+			subject_id UUID NOT NULL REFERENCES subjects(id),
+			description TEXT NOT NULL,
+			size_mb INTEGER NOT NULL,
+			vcpu_count INTEGER NOT NULL,
+			vram_mb INTEGER NOT NULL,
+			is_validated BOOLEAN NOT NULL DEFAULT FALSE,
+			PRIMARY KEY (id, subject_id)
+		);
+
+		CREATE TABLE IF NOT EXISTS instances (
+			id VARCHAR(100) PRIMARY KEY,
+			user_id UUID NOT NULL REFERENCES users(id),
+			subject_id UUID NOT NULL REFERENCES subjects(id),
+			template_id VARCHAR(100),
+			wg_private_key TEXT NOT NULL,
+			wg_public_key TEXT NOT NULL,
+			interface_ip TEXT NOT NULL,
+			peer_public_key TEXT NOT NULL,
+			peer_allowed_ips TEXT[] NOT NULL,
+			peer_endpoint_port INTEGER NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			session_start_time TIMESTAMP,
+			session_end_time TIMESTAMP,
+			session_reminder_sent BOOLEAN DEFAULT false,
+			session_reminder_token TEXT,
+			FOREIGN KEY (template_id, subject_id) REFERENCES templates(id, subject_id) ON DELETE SET NULL
+			
+		);
+
+		CREATE TABLE IF NOT EXISTS user_subjects (
+			user_id UUID NOT NULL REFERENCES users(id),
+			subject_id UUID NOT NULL REFERENCES subjects(id),
+			PRIMARY KEY (user_id, subject_id)
+		);
+	`
 }
 
 func getInsertRolesSQL() string {
 	return `
-    INSERT INTO roles (role) VALUES
-    ('admin'),
-    ('professor'),
-    ('student')
-    ON CONFLICT (role) DO NOTHING;
-    `
+		INSERT INTO roles (role) VALUES
+		('admin'),
+		('professor'),
+		('student')
+		ON CONFLICT (role) DO NOTHING;
+	`
+}
+
+func (postgres *PostgresDatabase) UpdateVerificationToken(email string, token uuid.UUID) error {
+	query := `
+	UPDATE unverified_users
+	SET verification_token = @token
+	WHERE mail = @mail`
+	args := pgx.NamedArgs{
+		"mail":  email,
+		"token": token,
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error updating verification token: %w", err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) GetUserIdByEmail(userEmail string) (string, error) {
+	query := "SELECT id FROM users WHERE mail = @mail"
+	args := pgx.NamedArgs{"mail": userEmail}
+
+	var userId string
+	if err := postgres.db.QueryRow(context.Background(), query, args).Scan(&userId); err != nil {
+		return "", fmt.Errorf("error getting user id: %w", err)
+	}
+
+	return userId, nil
+}
+
+func (postgres *PostgresDatabase) GetInstanceInfo(instanceId string) (InstanceInfo, error) {
+	query := `
+	SELECT i.user_id, i.subject_id, i.template_id, i.created_at, u.mail, s.name, t.description,
+	       COALESCE(t.vcpu_count, 0), COALESCE(t.vram_mb, 0), COALESCE(t.size_mb, 0)
+	FROM instances i
+	LEFT JOIN users u ON i.user_id = u.id
+	LEFT JOIN subjects s ON i.subject_id = s.id
+	LEFT JOIN templates t ON i.template_id = t.id AND i.subject_id = t.subject_id
+	WHERE i.id = $1`
+
+	var info InstanceInfo
+	if err := postgres.db.QueryRow(context.Background(), query, instanceId).Scan(
+		&info.UserId,
+		&info.SubjectId,
+		&info.TemplateId,
+		&info.CreatedAt,
+		&info.UserMail,
+		&info.SubjectName,
+		&info.TemplateDescription,
+		&info.Template_vcpu_count,
+		&info.Template_vram_mb,
+		&info.Template_size_mb,
+	); err != nil {
+		return InstanceInfo{}, fmt.Errorf("error fetching instance info: %w", err)
+	}
+
+	return info, nil
+}
+
+func (postgres *PostgresDatabase) CreatePasswordResetToken(email string, token uuid.UUID) error {
+	query := `
+	UPDATE users
+	SET password_reset_token = @token,
+		password_reset_token_created_at = NOW()
+	WHERE mail = @email`
+	args := pgx.NamedArgs{
+		"token": token,
+		"email": email,
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error creating password reset token: %w", err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) ValidatePasswordResetToken(token string) (string, error) {
+	query := `
+	SELECT id
+	FROM users
+	WHERE password_reset_token = @token
+	AND password_reset_token_created_at > NOW() - INTERVAL '24 hours'`
+	args := pgx.NamedArgs{
+		"token": token,
+	}
+
+	var userId string
+	err := postgres.db.QueryRow(context.Background(), query, args).Scan(&userId)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return "", fmt.Errorf("invalid or expired token")
+		}
+		return "", fmt.Errorf("error validating password reset token: %w", err)
+	}
+
+	return userId, nil
+}
+
+func (postgres *PostgresDatabase) UpdatePassword(userId string, password string) error {
+	query := `
+	UPDATE users
+	SET password = @password,
+		password_reset_token = NULL,
+		password_reset_token_created_at = NULL
+	WHERE id = @userId`
+	args := pgx.NamedArgs{
+		"password": password,
+		"userId":   userId,
+	}
+
+	_, err := postgres.db.Exec(context.Background(), query, args)
+	if err != nil {
+		return fmt.Errorf("error updating password: %w", err)
+	}
+
+	return nil
+}
+
+func (postgres *PostgresDatabase) GetAllUsers() ([]User, error) {
+	query := `
+	SELECT u.id, r.role, u.name, u.mail, u.password, u.public_ssh_keys
+	FROM users u
+	JOIN roles r ON u.role_id = r.id`
+
+	rows, err := postgres.db.Query(context.Background(), query)
+	if err != nil {
+		return nil, fmt.Errorf("error getting all users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var dbUser DatabaseUser
+		if err := rows.Scan(&dbUser.ID, &dbUser.Role, &dbUser.Name, &dbUser.Mail, &dbUser.Password, &dbUser.PublicSshKeys); err != nil {
+			return nil, fmt.Errorf("error scanning user: %w", err)
+		}
+		users = append(users, dbUser.toUser())
+	}
+
+	return users, nil
 }

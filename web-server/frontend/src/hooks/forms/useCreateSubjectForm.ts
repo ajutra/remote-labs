@@ -33,9 +33,7 @@ const useCreateSubjectForm = () => {
   // Define the submit handler for creating a subject
   const onSubmit = async (values: z.infer<typeof subjectFormSchema>) => {
     const apiUrl = getEnv().API_CREATE_SUBJECT
-    console.log('API URL:', apiUrl) // Log the API URL
     const jsonData = JSON.stringify(values)
-    console.log('Submitting JSON:', jsonData) // Log the JSON data being submitted
     try {
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -48,7 +46,6 @@ const useCreateSubjectForm = () => {
         throw new Error('Network response was not ok')
       }
       const data = await response.json()
-      console.log('Subject created:', data)
     } catch (error) {
       console.error('Error creating subject:', error)
     }
