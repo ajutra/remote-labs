@@ -26,4 +26,6 @@ go.work.sum
 
 # Docker database data
 web-server/backend/docker-postgres/
+
 vms-manager/docker-postgres/
+

@@ -32,10 +32,8 @@ const useCreateUserForm = () => {
 
   // Define the submit handler for creating a user
   const onSubmit = async (values: z.infer<typeof userFormSchema>) => {
-    const apiUrl = getEnv().API_CREATE_USER 
-    console.log('API URL:', apiUrl) // Log the API URL
+    const apiUrl = getEnv().API_CREATE_USER
     const jsonData = JSON.stringify(values)
-    console.log('Submitting JSON:', jsonData) // Log the JSON data being submitted
     try {
       const response = await fetch(`${apiUrl}`, {
         method: 'POST',
@@ -48,7 +46,6 @@ const useCreateUserForm = () => {
         throw new Error('Network response was not ok')
       }
       const data = await response.json()
-      console.log('User created:', data)
     } catch (error) {
       console.error('Error creating user:', error)
     }
