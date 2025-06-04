@@ -1,0 +1,34 @@
+# This file is used to start the server agent as a systemd service
+# To automate the steps, take a look at the install.sh script
+
+# Manual steps:
+# 1. Copy the binary to /usr/local/bin/server-agent
+# 2. Run `sudo chmod 755 /usr/local/bin/server-agent`
+# 3. Run `sudo chown root:root /usr/local/bin/server-agent`
+# 4. Copy the .env file to /etc/server-agent/.env
+# 5. Run `sudo chmod 644 /etc/server-agent/.env`
+# 6. Copy this file to /etc/systemd/system/server-agent.service
+# 7. Run `sudo chmod 644 /etc/systemd/system/server-agent.service`
+# 8. Run `sudo chown root:root /etc/systemd/system/server-agent.service`
+
+# Run `sudo systemctl daemon-reload` to reload the systemd daemon
+# Run `sudo systemctl enable server-agent` to enable the service
+# Run `sudo systemctl start server-agent` to start the service
+# Run `sudo systemctl status server-agent` to check the status of the service
+# Run `sudo systemctl stop server-agent` to stop the service
+# Run `sudo systemctl restart server-agent` to restart the service
+# Run `sudo journalctl -u server-agent -b` to see the logs
+
+[Unit]
+Description=Server Agent Service
+After=network.target
+
+[Service]
+WorkingDirectory=/etc/server-agent
+EnvironmentFile=/etc/server-agent/.env
+ExecStart=/usr/local/bin/server-agent
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
