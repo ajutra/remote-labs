@@ -29,10 +29,28 @@ services:
       - webserver-backend
       - webserver-frontend
       - vms-manager
+    ports:
+      - "8080:8080"
     depends_on:
       db:
         condition: service_healthy
     restart: always
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: frontend
+    env_file:
+      - .env
+    networks:
+      - webserver-frontend
+      - webserver-backend
+    depends_on:
+      - backend
+    restart: always
+    ports:
+      - "80:80"
 
 networks:
   webserver-db:
