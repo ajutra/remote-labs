@@ -1,6 +1,2 @@
-# DB stuff
-.env.db
-docker-postgres/*
-
 # Docker Compose
 compose.yaml
