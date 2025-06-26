@@ -26,6 +26,8 @@ services:
       - vms-manager
       - vms-manager-db
       - webserver-backend
+    ports:
+      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
