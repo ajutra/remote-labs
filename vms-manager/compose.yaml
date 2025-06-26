@@ -1,12 +1,37 @@
 services:
   db:
     image: postgres
-    container_name: postgres-dev-vms-manager
+    container_name: vms-manager-db
     restart: always
     shm_size: 128mb
-    ports:
-      - "5433:5432"
+    networks:
+      - manager-db
     env_file:
-      - .env.db
+      - .env
     volumes:
-      - ./docker-postgres:/var/lib/postgresql/data
+      - /dbstorage/vms-manager-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+
+  vms-manager:
+    build: .
+    container_name: vms-manager
+    env_file:
+      - .env
+    networks:
+      - webserver-manager
+      - manager-db
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+
+networks:
+  webserver-manager:
+    name: webserver-manager
+  manager-db:
+    name: manager-db
