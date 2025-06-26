@@ -25,15 +25,21 @@ services:
     env_file:
       - .env
     networks:
-      - webserver-manager
       - webserver-db
+      - webserver-backend
+      - webserver-frontend
+      - vms-manager
     depends_on:
       db:
         condition: service_healthy
     restart: always
 
 networks:
-  webserver-manager:
-    name: webserver-manager
   webserver-db:
     name: webserver-db
+  webserver-frontend:
+    name: webserver-frontend
+  webserver-backend:
+    name: webserver-backend
+  vms-manager:
+    name: vms-manager
