@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres
+    container_name: db
+    restart: always
+    shm_size: 128mb
+    networks:
+      - webserver-db
+    env_file:
+      - .env
+    volumes:
+      - /dbstorage/webserver-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: backend
+    env_file:
+      - .env
+    networks:
+      - webserver-manager
+      - webserver-db
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+
+networks:
+  webserver-manager:
+    name: webserver-manager
+  webserver-db:
+    name: webserver-db
