@@ -5,7 +5,7 @@ services:
     restart: always
     shm_size: 128mb
     networks:
-      - manager-db
+      - vms-manager-db
     env_file:
       - .env
     volumes:
@@ -23,15 +23,20 @@ services:
     env_file:
       - .env
     networks:
-      - webserver-manager
-      - manager-db
+      - vms-manager
+      - vms-manager-db
+      - webserver-backend
+    ports:
+      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
     restart: always
 
 networks:
-  webserver-manager:
-    name: webserver-manager
-  manager-db:
-    name: manager-db
+  vms-manager:
+    name: vms-manager
+  vms-manager-db:
+    name: vms-manager-db
+  webserver-backend:
+    name: webserver-backend
