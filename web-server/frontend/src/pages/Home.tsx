@@ -9,7 +9,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { AppRoutes } from '@/enums/AppRoutes'
 import { useNavigate } from 'react-router-dom'
-import useUserRole from '@/hooks/useUserRole'
 import {
   GraduationCap,
   BookOpen,
@@ -18,7 +17,6 @@ import {
   ChevronRight,
   ArrowRight,
   BookMarked,
-  Users,
   Terminal,
   Key,
   Shield,
@@ -36,7 +34,6 @@ import {
 function Home() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const isAdmin = useUserRole()
 
   const features = [
     {

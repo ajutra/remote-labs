@@ -10,8 +10,8 @@ export default defineConfig({
     },
   },
   server: {
-    host: '172.16.100.12',
+    host: '0.0.0.0', // listen on all interfaces, only for development in Docker
     port: 5173,
-    allowedHosts: ['demo.nethermir.cloud'],
+    allowedHosts: ['*'],
   },
 })

@@ -928,7 +928,21 @@ func NewDatabase() (Database, error) {
 		return nil, fmt.Errorf("error inserting default roles: %w", err)
 	}
 
-	return &PostgresDatabase{db: dbpool}, nil
+	// Insert admin user if it doesn't exist
+	adminEmail := os.Getenv("ADMIN_EMAIL")
+	adminName := os.Getenv("ADMIN_NAME")
+	adminPasswordHash := os.Getenv("ADMIN_PASSWORD_HASH")
+	if adminEmail == "" || adminName == "" || adminPasswordHash == "" {
+		return nil, fmt.Errorf("admin credentials are not set in environment variables")
+	}
+
+	db := &PostgresDatabase{db: dbpool}
+
+	if err := db.insertAdminUser(adminName, adminEmail, adminPasswordHash); err != nil {
+		return nil, fmt.Errorf("error inserting admin user: %w", err)
+	}
+
+	return db, nil
 }
 
 func (postgres *PostgresDatabase) Close() {
@@ -1017,6 +1031,38 @@ func getInsertRolesSQL() string {
 		('student')
 		ON CONFLICT (role) DO NOTHING;
 	`
+}
+
+func (postgres *PostgresDatabase) insertAdminUser(name string, mail string, password string) error {
+	query := `SELECT id FROM roles WHERE role = 'admin'`
+
+	var roleId string
+	if err := postgres.db.QueryRow(context.Background(), query).Scan(&roleId); err != nil {
+		return fmt.Errorf("Error fetching admin role ID: %v", err)
+	}
+
+	uuid, err := uuid.NewRandom()
+	if err != nil {
+		return fmt.Errorf("Error generating UUID: %v", err)
+	}
+
+	query = `
+		INSERT INTO users (id, role_id, name, mail, password)
+		VALUES (@uuid, @role_id, @name, @mail, @password)
+		ON CONFLICT (mail) DO NOTHING`
+	args := pgx.NamedArgs{
+		"uuid":     uuid,
+		"role_id":  roleId,
+		"name":     name,
+		"mail":     mail,
+		"password": password,
+	}
+
+	if _, err := postgres.db.Exec(context.Background(), query, args); err != nil {
+		return fmt.Errorf("Error inserting admin user: %v", err)
+	}
+
+	return nil
 }
 
 func (postgres *PostgresDatabase) UpdateVerificationToken(email string, token uuid.UUID) error {

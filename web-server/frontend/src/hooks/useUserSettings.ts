@@ -49,11 +49,8 @@ export const useUserSettings = () => {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
         throw new Error('Failed to update user')
       }
-
-      const responseData = await response.json()
 
       setSuccess(t('Profile updated successfully'))
       setPassword('')

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export function useSubjectTemplates(subjectId: string) {
+export function useSubjectTemplates() {
   // Mock de plantillas para UI
   const [templates] = useState([
     { id: 'tpl-1', description: 'Ubuntu 22.04 base' },
