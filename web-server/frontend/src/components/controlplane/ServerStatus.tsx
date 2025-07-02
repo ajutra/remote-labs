@@ -2,7 +2,7 @@ import React from 'react'
 import { useServerStatus } from '../../hooks/useServerStatus'
 import { AlertCircle, Cpu } from 'lucide-react'
 import { Card } from '@/components/ui/card'
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, TooltipProps } from 'recharts'
+import { Area, AreaChart, ResponsiveContainer, Tooltip, TooltipProps } from 'recharts'
 
 const ServerStatus: React.FC = () => {
   const { serverStatus, loading, error, history } = useServerStatus()
@@ -57,7 +57,7 @@ const ServerStatus: React.FC = () => {
   const gridCols = serverStatus.length <= 2 ? 'grid-cols-1' : 
                   serverStatus.length <= 4 ? 'grid-cols-2' : 'grid-cols-3'
 
-  const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
+  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
     if (active && payload && payload.length) {
       return (
         <div className="rounded-lg border bg-background p-2 shadow-sm">
