@@ -748,7 +748,7 @@ func getMemoryInfo() (totalMemoryMB int, freeMemoryMB int, err error) {
 			continue
 		}
 
-		if key == "MemFree" {
+		if key == "MemAvailable" {
 			// Return in MB
 			freeMemoryMB = value / 1024
 		} else if key == "MemTotal" {
@@ -757,7 +757,7 @@ func getMemoryInfo() (totalMemoryMB int, freeMemoryMB int, err error) {
 	}
 
 	if totalMemoryMB == -1 || freeMemoryMB == -1 {
-		return 0, 0, logAndReturnError("MemFree or MemTotal not found", "")
+		return 0, 0, logAndReturnError("MemAvailable or MemTotal not found", "")
 	}
 
 	return totalMemoryMB, freeMemoryMB, nil
